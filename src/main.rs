@@ -1,0 +1,119 @@
+#![feature(min_specialization)]
+#[macro_use]
+extern crate bitflags;
+#[macro_use]
+extern crate clap;
+
+use std::collections::hash_map::RandomState;
+use std::collections::HashMap;
+use std::env;
+use std::sync::{Arc, Mutex};
+
+use arrow::datatypes::DataType as ArrowDataType;
+use clap::{Arg, App, SubCommand};
+use log4rs;
+use sqlparser::ast::{DataType as SQLDataType, Ident, ObjectName};
+use tokio::net::TcpListener;
+
+use crate::meta::def::TableDef;
+use crate::meta::initial::initial_util;
+use crate::mysql::error::MysqlError;
+use crate::core::global_context::GlobalContext;
+use crate::meta::meta_util;
+use crate::mysql::handle;
+use crate::mysql::metadata::MysqlType;
+use config::def::MyConfig;
+use config::util::get_config_path;
+use config::util::read_config;
+
+pub mod core;
+pub mod config;
+pub mod datafusion_impl;
+pub mod meta;
+pub mod mysql;
+pub mod physical_plan;
+pub mod store;
+pub mod util;
+pub mod test;
+pub mod variable;
+
+#[tokio::main]
+async fn main() {
+    let config_path = get_config_path();
+    println!("Value for config path: {}", config_path);
+
+    let my_config = read_config(config_path.as_str());
+
+    log4rs::init_file(my_config.server.log_file.to_string(), Default::default()).unwrap();
+
+    // Parse the address we're going to run this server on
+    // and set up our TCP listener to accept connections.
+    let addr = env::args()
+        .nth(1)
+        .unwrap_or_else(|| my_config.server.bind_host.to_string());
+
+    let listener = TcpListener::bind(&addr).await.unwrap();
+    log::info!("Listening on: {}", addr);
+
+    let global_context = Arc::new(Mutex::new(GlobalContext::new(my_config)));
+
+    let result = meta_util::init_meta(global_context.clone());
+    if let Err(e) = result {
+        log::error!("init meta error: {}", e);
+        return;
+    }
+
+    let result = meta_util::load_global_variable(global_context.clone());
+    if let Err(e) = result {
+        log::error!("load global variable error: {}", e);
+        return;
+    }
+
+    let result = meta_util::read_all_schema(global_context.clone());
+    match result {
+        Ok(schema_map) => {
+            global_context.lock().unwrap().meta_cache.add_all_schema(schema_map);
+        }
+        Err(e) => {
+            log::error!("init meta schema error: {}", e);
+            return;
+        }
+    }
+
+    // table def
+    let result = initial_util::read_all_table(global_context.clone());
+    match result {
+        Ok(table_def_map) => {
+            global_context.lock().unwrap().meta_cache.add_all_table(table_def_map);
+        }
+        Err(e) => {
+            log::error!("init meta table error: {}", e);
+            return;
+        }
+    }
+
+    // column index
+    let result = initial_util::read_column_index(global_context.clone());
+    match result {
+        Ok(table_column_index) => {
+            global_context.lock().unwrap().meta_cache.add_all_serial_number(table_column_index);
+        }
+        Err(e) => {
+            log::error!("init meta column index error: {}", e);
+            return;
+        }
+    }
+
+    loop {
+        match listener.accept().await {
+            Ok((socket, _)) => {
+                let mut handler = handle::Handle::new(socket, global_context.clone()).await.unwrap();
+                tokio::spawn(async move {
+                    handler.run().await;
+                    log::debug!("closed");
+                });
+            }
+            Err(e) => log::error!("error accepting socket; error = {:?}", e),
+        }
+    }
+}

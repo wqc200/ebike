@@ -1,0 +1,6 @@
+[submodule "components/arrow-datafusion"]
+	path = components/arrow-datafusion
+	url = https://github.com/wqc200/arrow-datafusion.git
+[submodule "components/sqlparser-rs"]
+	path = components/sqlparser-rs
+	url = https://github.com/wqc200/sqlparser-rs.git

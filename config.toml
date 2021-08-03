@@ -1,0 +1,9 @@
+
+[server]
+log_file = "./log4rs.yaml"
+bind_host = "0.0.0.0:3307"
+schema_engine = "sled"
+
+[engine]
+[sled]
+data_path = "F:/Data/sparrow"
