@@ -9,6 +9,8 @@ use datafusion::logical_plan::{Expr, LogicalPlan, LogicalPlanBuilder};
 use sqlparser::ast::{AlterTableOperation, Assignment, ColumnDef, Ident, ObjectName, SetVariableValue, SqlOption, TableConstraint};
 
 use crate::meta::{def, meta_util};
+use std::collections::HashMap;
+use datafusion::scalar::ScalarValue;
 
 #[derive(Clone)]
 pub struct CoreSelectFrom {
@@ -99,10 +101,11 @@ pub enum CoreLogicalPlan {
         assignments: Vec<Assignment>,
     },
     Insert {
-        table_name: ObjectName,
+        full_table_name: ObjectName,
         table_def: def::TableDef,
-        column_name_vec: Vec<String>,
-        column_value_vec: Vec<Vec<Expr>>,
+        column_name_list: Vec<String>,
+        index_keys_list: Vec<Vec<(String, usize, String)>>,
+        column_value_map_list: Vec<HashMap<Ident, ScalarValue>>,
     },
     CreateDb {
         db_name: ObjectName,

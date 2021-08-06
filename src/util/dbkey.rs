@@ -75,6 +75,33 @@ pub fn create_record_rowid(full_table_name: ObjectName, uuid: &str) -> Box<[u8]>
     key(k.as_bytes())
 }
 
+pub fn create_column_rowid_key(full_table_name: ObjectName, uuid: &str) -> String {
+    let mut k = String::from("/Table/rowid");
+
+    k.push_str("/");
+    k.push_str(full_table_name.to_string().as_str());
+
+    k.push_str("/");
+    k.push_str(uuid);
+
+    k
+}
+
+pub fn create_column_key(full_table_name: ObjectName, orm_id: usize, uuid: &str) -> String {
+    let mut k = String::from("/Table/index/column");
+
+    k.push_str("/");
+    k.push_str(full_table_name.to_string().as_str());
+
+    k.push_str("/");
+    k.push_str(orm_id.to_string().as_str());
+
+    k.push_str("/");
+    k.push_str(&uuid);
+
+    k
+}
+
 pub fn parse_record_rowid(key: String) -> Result<String> {
     let v: Vec<&str> = key.split("/").collect();
     if v.len() < 6 {

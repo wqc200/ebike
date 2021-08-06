@@ -32,6 +32,7 @@ pub mod datafusion_impl;
 pub mod meta;
 pub mod mysql;
 pub mod physical_plan;
+pub mod logical_plan;
 pub mod store;
 pub mod util;
 pub mod test;

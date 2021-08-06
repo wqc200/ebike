@@ -1,104 +1,97 @@
+use std::borrow::Borrow;
 use std::collections::HashMap;
 use std::ops::{Deref, DerefMut};
 use std::sync::{Arc, Mutex};
 
+use arrow::datatypes::{Schema, SchemaRef};
+use arrow::record_batch::RecordBatch;
+use bstr::{ByteSlice, ByteVec};
+use datafusion::error::DataFusionError;
+use datafusion::execution::context::{ExecutionContext, ExecutionContextState};
+use datafusion::logical_plan::{Expr, LogicalPlan, ToDFSchema};
+use datafusion::physical_plan::{ColumnarValue, PhysicalExpr};
+use datafusion::physical_plan::planner::DefaultPhysicalPlanner;
+use datafusion::scalar::ScalarValue;
+use sqlparser::ast::{Assignment, ColumnDef, ObjectName, SqlOption, TableConstraint, Ident};
 use uuid::Uuid;
 
-use arrow::datatypes::{Schema, SchemaRef};
-use datafusion::execution::context::{ExecutionContext, ExecutionContextState};
-use datafusion::logical_plan::{LogicalPlan, Expr, ToDFSchema};
-use datafusion::physical_plan::planner::DefaultPhysicalPlanner;
-use sqlparser::ast::{Assignment, ColumnDef, ObjectName, SqlOption, TableConstraint};
-
+use crate::core::{core_util as CoreUtil, core_util};
 use crate::core::global_context::GlobalContext;
 use crate::core::output::CoreOutput;
 use crate::core::output::FinalCount;
-use crate::core::core_util as CoreUtil;
+use crate::core::session_context::SessionContext;
+use crate::meta::def::TableDef;
 use crate::meta::meta_util;
-use crate::mysql::error::{MysqlResult, MysqlError};
-use crate::util;
+use crate::mysql::error::{MysqlError, MysqlResult};
+use crate::store::engine::engine_util;
 use crate::store::engine::sled::SledOperator;
 use crate::test;
-
-use crate::store::engine::engine_util;
-use crate::core::session_context::SessionContext;
-use arrow::record_batch::RecordBatch;
-use std::borrow::Borrow;
-use datafusion::physical_plan::{PhysicalExpr, ColumnarValue};
-use datafusion::error::DataFusionError;
-use crate::meta::def::TableDef;
+use crate::util;
+use crate::util::convert::ToIdent;
 
 pub struct Insert {
-    core_context: Arc<Mutex<GlobalContext>>,
-    table_name: ObjectName,
-    table_schema: TableDef,
-    column_name: Vec<String>,
-    column_value: Vec<Vec<Expr>>,
+    global_context: Arc<Mutex<GlobalContext>>,
+    full_table_name: ObjectName,
+    table_def: TableDef,
+    column_name_list: Vec<String>,
+    index_keys_list: Vec<Vec<(String, usize, String)>>,
+    column_value_map_list: Vec<HashMap<Ident, ScalarValue>>,
 }
 
 impl Insert {
-    pub fn new(core_context: Arc<Mutex<GlobalContext>>, table_name: ObjectName, table_schema: TableDef, column_name: Vec<String>, column_value: Vec<Vec<Expr>>) -> Self {
+    pub fn new(global_context: Arc<Mutex<GlobalContext>>, full_table_name: ObjectName, table_def: TableDef, column_name_list: Vec<String>, index_keys_list: Vec<Vec<(String, usize, String)>>, column_value_map_list: Vec<HashMap<Ident, ScalarValue>>) -> Self {
         Self {
-            core_context,
-            table_name,
-            table_schema,
-            column_name,
-            column_value,
+            global_context,
+            full_table_name,
+            table_def,
+            column_name_list,
+            index_keys_list,
+            column_value_map_list,
         }
     }
 
-    pub fn execute(&self, datafusion_context: &mut ExecutionContext, session_context: &mut SessionContext) -> MysqlResult<u64> {
-        let full_table_name = meta_util::fill_up_table_name(session_context, self.table_name.clone()).unwrap();
+    pub fn execute(&self) -> MysqlResult<u64> {
+        for row_index in 0..self.column_value_map_list.len() {
+            let rowid = Uuid::new_v4().to_simple().encode_lower(&mut Uuid::encode_buffer()).to_string();
+            let index_keys = self.index_keys_list[row_index].clone();
+            let column_value_map = self.column_value_map_list[row_index].clone();
 
-        let schema = Schema::empty();
-        let batch = RecordBatch::new_empty(Arc::new(schema.clone()));
+            let rowid_key = util::dbkey::create_column_rowid_key(self.full_table_name.clone(), rowid.as_str());
+            log::debug!("rowid_key: {:?}", String::from_utf8_lossy(rowid_key.to_vec().as_slice()));
+            engine.put_key(rowid_key, rowid.as_bytes());
 
-        let dfschema = schema.clone().to_dfschema().unwrap();
+            if index_keys.len() > 0 {
+                for (index_name, level, index_key) in index_keys {
+                    engine.put_key(index_key, rowid.as_bytes());
+                }
+            }
 
-        let mut state = datafusion_context.state.lock().unwrap();
-        let planner = DefaultPhysicalPlanner::default();
-
-        let mut new_rows = vec![];
-        for (row_index, row) in self.column_value.iter().enumerate() {
-            let mut new_row = vec![];
-            for (column_index, value) in row.iter().enumerate() {
-                let result = planner.create_physical_expr(value, &dfschema, &schema, &state);
-                let physical_expr = match result {
-                    Ok(v) => v,
-                    Err(e) => {
-                        return Err(MysqlError::from(e));
-                    }
-                };
-                let result = physical_expr.evaluate(&batch);
-                let columnar_value = match result {
-                    Ok(v) => v,
-                    Err(e) => {
-                        return Err(MysqlError::from(e));
-                    }
-                };
-                match columnar_value {
-                    ColumnarValue::Scalar(v) => {
-                        new_row.push(v)
-                    }
-                    _ => {
+            for column_index in 0..self.column_name_list.to_vec().len() {
+                let column_name = self.column_name_list[column_index].to_ident();
+                let result = column_value_map.get(&column_name);
+                let column_value = match result {
+                    None => {
                         return Err(MysqlError::new_global_error(1105, format!(
-                            "Value is not a scalar value. An error occurred while evaluate the value, row_index: {:?}, column_index: {:?}",
+                            "Column value not found, row_index: {:?}, column_index: {:?}",
                             row_index,
                             column_index,
                         ).as_str()));
                     }
+                    Some(column_value) => column_value.clone(),
+                };
+
+
+                let column_orm_id = self.global_context.lock().unwrap().meta_cache.get_serial_number(self.full_table_name.clone(), column_name.clone()).unwrap();
+                let column_key = util::dbkey::create_column_key(full_table_name.clone(), column_orm_id, rowid.as_str());
+                log::debug!("column_key: {:?}", String::from_utf8_lossy(column_key.to_vec().as_slice()));
+                let result = core_util::convert_scalar_value(column_value.clone()).unwrap();
+                log::debug!("column_value: {:?}", result);
+                if let Some(value) = result {
+                    engine.put_key(column_key, value.as_bytes());
                 }
             }
-
-            new_rows.push(new_row);
         }
 
-        let engine = engine_util::EngineFactory::try_new(self.core_context.clone(), full_table_name.clone(), self.table_schema.clone());
-        match engine {
-            Ok(engine) => {
-                engine.insert(self.column_name.clone(), new_rows)
-            }
-            Err(mysql_error) => Err(mysql_error),
-        }
+        Ok(rows.len() as u64)
     }
 }

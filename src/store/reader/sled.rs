@@ -9,7 +9,7 @@ use arrow::datatypes::{Field, Schema, DataType, ToByteSlice, SchemaRef};
 use arrow::record_batch::RecordBatch;
 use datafusion::logical_plan::Expr;
 use uuid::Uuid;
-use sled::Db as SledDb;
+use sled::{Db as SledDb, Iter, IVec, Error};
 use sled::Iter as SledIter;
 
 use crate::core::global_context::GlobalContext;
@@ -36,6 +36,7 @@ pub struct Reader {
     projection: Option<Vec<usize>>,
     projected_schema: SchemaRef,
     batch_size: usize,
+    sled_db: SledDb,
     sled_iter: Option<SledIter>,
     start_scan_key: CreateScanKey,
     end_scan_key: CreateScanKey,
@@ -92,6 +93,7 @@ impl Reader {
             projection,
             projected_schema,
             batch_size,
+            sled_db,
             sled_iter,
             start_scan_key,
             end_scan_key,
@@ -107,14 +109,34 @@ impl Iterator for Reader {
     type Item = Result<RecordBatch>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.sled_iter.is_none() {
-            return None;
-        }
+        let mut sled_iter = match self.sled_iter.clone() {
+            None => return None,
+            Some(sled_iter) => {
+                sled_iter
+            }
+        };
 
         let mut rowids: Vec<String> = vec![];
 
-        while true {
-            let key = self.rocksdb_iter.key().unwrap();
+        loop {
+            let result = sled_iter.next();
+            let (key, value) = match result {
+                Some(item) => {
+                    match item {
+                        Ok((key, value)) => {
+                            (key, value)
+                        }
+                        Err(error) => {
+                            return Some(Err(ArrowError::IoError(format!(
+                                "Error iter from sled: '{:?}'",
+                                error
+                            ))));
+                        }
+                    }
+                }
+                _ => break,
+            };
+
             let key = String::from_utf8(key.to_vec()).expect("Found invalid UTF-8");
             log::debug!("row key: {:?}", key);
 
@@ -147,13 +169,10 @@ impl Iterator for Reader {
                 }
             }
 
-            let value = self.rocksdb_iter.value().unwrap();
             let value = String::from_utf8(value.to_vec()).expect("Found invalid UTF-8");
             log::debug!("row value: {:?}", value);
 
             rowids.push(value);
-
-            self.rocksdb_iter.next();
 
             if rowids.len() == self.batch_size {
                 break;
@@ -196,7 +215,7 @@ impl Iterator for Reader {
 
                 for rowid in rowids.clone() {
                     let db_key = util::dbkey::create_record_column(self.full_table_name.clone(), column_index, rowid.as_str());
-                    let db_value = self.global_context.lock().unwrap().rocksdb_db.get(db_key.clone());
+                    let db_value = self.sled_db.get(db_key.clone());
 
                     match db_value {
                         Ok(value) => {
@@ -256,7 +275,7 @@ impl Iterator for Reader {
                         }
                         Err(error) => {
                             return Some(Err(ArrowError::IoError(format!(
-                                "Error get '{:?}' from rocksdb: {:?}",
+                                "Error get key from sled, key: {:?}, error: {:?}",
                                 db_key,
                                 error
                             ))));

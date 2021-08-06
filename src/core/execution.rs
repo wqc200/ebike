@@ -1353,8 +1353,8 @@ impl Execution {
                 let mut create_table = physical_plan::create_table::CreateTable::new(self.global_context.clone(), table_name.clone(), columns.clone(), constraints.clone(), with_options.clone());
                 Ok(CorePhysicalPlan::CreateTable(create_table))
             }
-            CoreLogicalPlan::Insert { table_name, table_def: table_schema, column_name_vec: column_name, column_value_vec: column_value } => {
-                let cd = physical_plan::insert::Insert::new(self.global_context.clone(), table_name.clone(), table_schema.clone(), column_name.clone(), column_value.clone());
+            CoreLogicalPlan::Insert { full_table_name, table_def, column_name_list, index_keys_list, column_value_map_list } => {
+                let cd = physical_plan::insert::Insert::new(self.global_context.clone(), full_table_name.clone(), table_def.clone(), column_name_list.clone(), index_keys_list.clone(), column_value_map_list.clone());
                 Ok(CorePhysicalPlan::Insert(cd))
             }
             CoreLogicalPlan::Update { logical_plan, table_name, assignments } => {

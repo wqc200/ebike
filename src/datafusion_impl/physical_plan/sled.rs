@@ -26,14 +26,14 @@ use std::task::{Context, Poll};
 
 use bitflags::_core::any::Any;
 
-use datafusion::error::{ExecutionError, Result};
-use datafusion::physical_plan::{common, Partitioning, RecordBatchStream};
-use datafusion::logical_plan::Expr;
+
 use arrow::datatypes::{Schema, SchemaRef};
 use arrow::record_batch::{RecordBatch, RecordBatchReader};
 use arrow::error::Result as ArrowResult;
-//use rocksdb::{Error, IteratorMode, Options, SliceTransform, Snapshot, WriteBatch, DB, DBRawIterator, ReadOptions};
+use datafusion::logical_plan::Expr;
+use datafusion::error::{DataFusionError, Result};
 use datafusion::physical_plan::ExecutionPlan;
+use datafusion::physical_plan::{Partitioning, RecordBatchStream, SendableRecordBatchStream};
 use futures::Stream;
 
 use crate::store::reader::sled::Reader;
@@ -46,48 +46,50 @@ use crate::meta::def;
 use sqlparser::ast::ObjectName;
 
 #[derive(Debug, Clone)]
-pub struct SledExec {
-    core_context: CoreContext,
-    schema: SchemaRef,
+pub struct RocksdbExec {
+    core_context: Arc<Mutex<GlobalContext>>,
+    schema: def::TableDef,
     path: String,
-    db_name: String,
-    table_name: String,
+    full_table_name: ObjectName,
     projection: Option<Vec<usize>>,
     /// Schema after the projection has been applied
     projected_schema: SchemaRef,
     batch_size: usize,
+    filters: Vec<Expr>,
 }
 
-impl SledExec {
+impl RocksdbExec {
     /// Create a new execution plan for reading a set of CSV files
     pub fn try_new(
-        core_context: CoreContext,
-        schema: SchemaRef,
+        core_context: Arc<Mutex<GlobalContext>>,
+        schema: def::TableDef,
         path: &str,
-        db_name: &str,
-        table_name: &str,
+        full_table_name: ObjectName,
         projection: Option<Vec<usize>>,
         batch_size: usize,
+        filters: &[Expr],
     ) -> Result<Self> {
+        let schema_ref = schema.to_schemaref();
         let projected_schema = match &projection {
-            None => schema.clone(),
-            Some(p) => SchemaRef::new(Schema::new(p.iter().map(|i| schema.field(*i).clone()).collect())),
+            None => schema_ref,
+            Some(p) => SchemaRef::new(Schema::new(p.iter().map(|i| schema_ref.field(*i).clone()).collect())),
         };
 
         Ok(Self {
             core_context,
             path: path.to_string(),
-            db_name: db_name.to_string(),
-            table_name: table_name.to_string(),
+            full_table_name,
             schema,
             projection,
             projected_schema,
             batch_size,
+            filters: filters.to_vec(),
         })
     }
 }
 
-impl ExecutionPlan for SledExec {
+#[async_trait]
+impl ExecutionPlan for RocksdbExec {
     fn as_any(&self) -> &dyn Any {
         self
     }
@@ -114,26 +116,24 @@ impl ExecutionPlan for SledExec {
         if children.is_empty() {
             Ok(Arc::new(self.clone()))
         } else {
-            Err(ExecutionError::General(format!(
+            Err(DataFusionError::Execution(format!(
                 "Children cannot be replaced in {:?}",
                 self
             )))
         }
     }
 
-    async fn execute(
-        &self,
-        partition: usize,
-    ) -> Result<Arc<Mutex<dyn RecordBatchReader + Send + Sync>>> {
-        Ok(Arc::new(Mutex::new(SledIterator::try_new(
+    async fn execute(&self, partition: usize) -> Result<SendableRecordBatchStream> {
+        let reader = Reader::new(
             self.core_context.clone(),
             self.schema.clone(),
-            self.path.as_str(),
-            self.db_name.as_str(),
-            self.table_name.as_str(),
-            self.projection.clone(),
+            self.full_table_name.clone(),
             self.batch_size,
-        )?)))
+            self.projection.clone(),
+            self.filters.as_slice(),
+        );
+
+        Ok(Box::pin(RocksdbStream { reader}))
     }
 }
 
@@ -154,7 +154,6 @@ impl SledStream {
         let reader = Reader::new(
             core_context,
             schema.clone(),
-            path,
             full_table_name,
             batch_size,
             projection.clone(),

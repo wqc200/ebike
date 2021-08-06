@@ -14,9 +14,11 @@ use crate::meta::def::{ColumnDef, DbDef, StatisticsColumn, TableDef};
 use crate::meta::initial::information_schema;
 use crate::mysql::error::{MysqlError, MysqlResult};
 use crate::store::engine::engine_util;
-use crate::store::engine::engine_util::Engine;
+use crate::store::engine::engine_util::{Engine, ADD_ENTRY_TYPE};
 use crate::store::reader::rocksdb::Reader;
 use crate::util::convert::{ToIdent, ToObjectName};
+use sparrow::physical_plan;
+use crate::physical_plan::util::add_rows;
 
 #[derive(Debug, Clone)]
 pub struct SaveTableConstraints {
@@ -130,7 +132,7 @@ pub struct SaveStatistics {
     catalog_name: String,
     schema_name: String,
     table_name: String,
-    rows: Vec<Vec<Expr>>,
+    column_rows: Vec<Vec<Expr>>,
 }
 
 impl SaveStatistics {
@@ -140,7 +142,7 @@ impl SaveStatistics {
             catalog_name: catalog_name.to_string(),
             schema_name: schema_name.to_string(),
             table_name: table_name.to_string(),
-            rows: vec![],
+            column_rows: vec![],
         }
     }
 
@@ -154,22 +156,25 @@ impl SaveStatistics {
             Expr::Literal(ScalarValue::Int32(Some(seq_in_index))),
             Expr::Literal(ScalarValue::Utf8(Some(column_name.to_string()))),
         ];
-        self.rows.push(row);
+        self.column_rows.push(row);
     }
 
     pub fn save(&mut self) -> MysqlResult<u64> {
-        let mut column_name = vec![];
+        let mut column_names = vec![];
         for column_def in initial::information_schema::table_statistics().get_columns() {
-            column_name.push(column_def.sql_column.name.to_string());
+            column_names.push(column_def.sql_column.name.to_string());
         }
 
         let table_def = initial::information_schema::table_statistics();
         let table_name = meta_util::convert_to_object_name(meta_const::FULL_TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_STATISTICS);
         let engine = engine_util::EngineFactory::try_new(self.global_context.clone(), table_name, table_def.clone());
         match engine {
-            Ok(engine) => return engine.add_rows(column_name.clone(), self.rows.clone()),
+            Ok(engine) => return engine.add_rows(column_names.clone(), self.column_rows.clone()),
             Err(mysql_error) => return Err(mysql_error),
         }
+
+        let full_table_name = meta_const::FULL_TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_STATISTICS.to_object_name();
+        let total = add_rows(self.global_context.clone(), full_table_name, ADD_ENTRY_TYPE::INSERT, column_names.clone(), new_rows).unwrap();
     }
 }
 
