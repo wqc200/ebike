@@ -51,18 +51,36 @@ impl Insert {
     }
 
     pub fn execute(&self) -> MysqlResult<u64> {
+        let result = engine_util::EngineFactory::try_new(self.global_context.clone(), self.full_table_name.clone(), self.table_def.clone());
+        let engine = match result {
+            Ok(engine) => engine,
+            Err(mysql_error) => return Err(mysql_error),
+        };
+
         for row_index in 0..self.column_value_map_list.len() {
             let rowid = Uuid::new_v4().to_simple().encode_lower(&mut Uuid::encode_buffer()).to_string();
-            let index_keys = self.index_keys_list[row_index].clone();
             let column_value_map = self.column_value_map_list[row_index].clone();
 
             let rowid_key = util::dbkey::create_column_rowid_key(self.full_table_name.clone(), rowid.as_str());
             log::debug!("rowid_key: {:?}", String::from_utf8_lossy(rowid_key.to_vec().as_slice()));
             engine.put_key(rowid_key, rowid.as_bytes());
 
-            if index_keys.len() > 0 {
-                for (index_name, level, index_key) in index_keys {
-                    engine.put_key(index_key, rowid.as_bytes());
+            if self.index_keys_list.len() > 0 {
+                let result = self.index_keys_list.get(row_index);
+                let index_keys = match result {
+                    None => {
+                        return Err(MysqlError::new_global_error(1105, format!(
+                            "Index keys not found, row_index: {:?}",
+                            row_index,
+                        ).as_str()));
+                    }
+                    Some(index_keys) => index_keys.clone(),
+                };
+
+                if index_keys.len() > 0 {
+                    for (index_name, level, index_key) in index_keys {
+                        engine.put_key(index_key, rowid.as_bytes());
+                    }
                 }
             }
 

@@ -18,23 +18,24 @@ use crate::core::session_context::SessionContext;
 use sqlparser::ast::ObjectName;
 use datafusion::scalar::ScalarValue;
 use crate::meta::def::TableDef;
+use crate::store::reader::sled::Reader;
 
 pub struct Sled {
     core_context: Arc<Mutex<GlobalContext>>,
-    table_name: ObjectName,
-    table_schema: TableDef,
+    full_table_name: ObjectName,
+    table_def: TableDef,
 }
 
 impl Sled {
     pub fn new(
         core_context: Arc<Mutex<GlobalContext>>,
-        table_name: ObjectName,
-        table_schema: TableDef,
+        full_table_name: ObjectName,
+        table_def: TableDef,
     ) -> Self {
         Self {
             core_context,
-            table_name,
-            table_schema,
+            full_table_name,
+            table_def,
         }
     }
 }

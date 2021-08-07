@@ -31,12 +31,12 @@ impl Rocksdb {
     pub fn new(
         global_context: Arc<Mutex<GlobalContext>>,
         full_table_name: ObjectName,
-        table_schema: TableDef,
+        table_def: TableDef,
     ) -> Self {
         Self {
             global_context,
             full_table_name,
-            table_def: table_schema,
+            table_def,
         }
     }
 }

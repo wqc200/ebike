@@ -36,12 +36,12 @@ pub trait Engine {
 pub struct EngineFactory;
 
 impl EngineFactory {
-    pub fn try_new(global_context: Arc<Mutex<GlobalContext>>, full_table_name: ObjectName, table_schema: TableDef) -> MysqlResult<Box<dyn Engine>> {
-        match table_schema.clone().get_engine() {
+    pub fn try_new(global_context: Arc<Mutex<GlobalContext>>, full_table_name: ObjectName, table_def: TableDef) -> MysqlResult<Box<dyn Engine>> {
+        match table_def.clone().get_engine() {
             Some(engine) => {
                 match engine.as_str() {
-                    meta_const::OPTION_ENGINE_NAME_ROCKSDB => Ok(Box::new(rocksdb::Rocksdb::new(global_context, full_table_name, table_schema))),
-                    meta_const::OPTION_ENGINE_NAME_SLED => Ok(Box::new(sled::Sled::new(global_context, full_table_name, table_schema))),
+                    meta_const::OPTION_ENGINE_NAME_ROCKSDB => Ok(Box::new(rocksdb::Rocksdb::new(global_context, full_table_name, table_def))),
+                    meta_const::OPTION_ENGINE_NAME_SLED => Ok(Box::new(sled::Sled::new(global_context, full_table_name, table_def))),
                     _ => {
                         Err(MysqlError::new_global_error(1105, format!(
                             "Unknown error. The table engine is not supported, table: {:?}, engine: {:?}",
