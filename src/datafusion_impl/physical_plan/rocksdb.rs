@@ -42,7 +42,7 @@ use sqlparser::ast::ObjectName;
 
 use crate::core::global_context::GlobalContext;
 use crate::meta::{def, meta_util};
-use crate::store::reader::rocksdb::Reader;
+use crate::store::reader::rocksdb::RocksdbReader;
 use crate::store::rocksdb::db::DB;
 use crate::store::rocksdb::option::{Options, ReadOptions};
 use crate::store::rocksdb::slice_transform::SliceTransform;
@@ -127,7 +127,7 @@ impl ExecutionPlan for RocksdbExec {
     }
 
     async fn execute(&self, partition: usize) -> Result<SendableRecordBatchStream> {
-        let reader = Reader::new(
+        let reader = RocksdbReader::new(
             self.core_context.clone(),
             self.schema.clone(),
             self.path.as_str(),
@@ -142,7 +142,7 @@ impl ExecutionPlan for RocksdbExec {
 }
 
 struct RocksdbStream {
-    reader: Reader,
+    reader: RocksdbReader,
 }
 
 impl RocksdbStream {
@@ -155,7 +155,7 @@ impl RocksdbStream {
         batch_size: usize,
         filters: &[Expr],
     ) -> Result<Self> {
-        let reader = Reader::new(
+        let reader = RocksdbReader::new(
             core_context,
             schema.clone(),
             path,

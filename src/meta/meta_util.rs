@@ -51,10 +51,10 @@ use crate::meta::initial::initial_util;
 use crate::mysql::error::{MysqlError, MysqlResult};
 use crate::physical_plan::create_table::CreateTable;
 use crate::physical_plan::delete::Delete;
-use crate::physical_plan::insert::Insert;
+use crate::physical_plan::insert::PhysicalPlanInsert;
 use crate::store::engine::engine_util;
 use crate::store::engine::engine_util::Engine;
-use crate::store::reader::rocksdb::Reader;
+use crate::store::reader::rocksdb::RocksdbReader;
 use crate::store::rocksdb::db::DB;
 use crate::store::rocksdb::option::Options;
 use crate::util::convert::{ToIdent, ToObjectName};
@@ -363,10 +363,16 @@ pub fn cache_delete_column_serial_number(global_context: Arc<Mutex<GlobalContext
 }
 
 pub fn get_current_serial_number(global_context: Arc<Mutex<GlobalContext>>, full_table_name: ObjectName) -> MysqlResult<usize> {
+    let result = engine_util::EngineFactory::try_new(global_context.clone(), full_table_name.clone());
+    let engine = match result {
+        Ok(engine) => engine,
+        Err(mysql_error) => return Err(mysql_error),
+    };
+
     let first = 0 as usize;
 
     let key = util::dbkey::create_current_serial_number(full_table_name);
-    let result = global_context.lock().unwrap().rocksdb_db.get(key);
+    let result = engine.get_key(key);
     match result {
         Ok(result) => {
             match result {
@@ -792,7 +798,7 @@ pub fn cache_add_all_table(global_context: Arc<Mutex<GlobalContext>>) {
 }
 
 pub fn read_information_schema_tables_record(global_context: Arc<Mutex<GlobalContext>>) -> MysqlResult<Vec<RecordBatch>> {
-    let mut reader = Reader::new(
+    let mut reader = RocksdbReader::new(
         global_context.clone(),
         initial::information_schema::table_tables(),
         "",

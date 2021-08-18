@@ -27,7 +27,7 @@ use crate::mysql::error::MysqlError;
 use crate::util::convert::{ToObjectName, ToIdent};
 use crate::meta::def::TableDef;
 
-pub struct Reader {
+pub struct RocksdbReader {
     core_context: Arc<Mutex<GlobalContext>>,
     table_schema: TableDef,
     rocksdb_path: String,
@@ -40,7 +40,7 @@ pub struct Reader {
     end_scan_key: CreateScanKey,
 }
 
-impl Reader {
+impl RocksdbReader {
     pub fn new(
         core_context: Arc<Mutex<GlobalContext>>,
         table_schema: TableDef,
@@ -103,7 +103,7 @@ impl Reader {
     }
 }
 
-impl Iterator for Reader {
+impl Iterator for RocksdbReader {
     type Item = Result<RecordBatch>;
 
     fn next(&mut self) -> Option<Self::Item> {

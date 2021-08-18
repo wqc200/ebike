@@ -36,7 +36,7 @@ use uuid::Uuid;
 use crate::core::global_context::GlobalContext;
 use crate::meta::{def, meta_const, meta_util};
 use crate::physical_plan::create_table::CreateTable;
-use crate::store::reader::rocksdb::Reader;
+use crate::store::reader::rocksdb::RocksdbReader;
 use crate::store::rocksdb::db::DB;
 use crate::store::rocksdb::option::Options;
 

@@ -8,7 +8,6 @@ use datafusion::logical_plan::Expr;
 use datafusion::scalar::ScalarValue;
 use futures::StreamExt;
 use sqlparser::ast::{ColumnDef as SQLColumnDef, ColumnOption, Ident, ObjectName, SqlOption, TableConstraint, Value};
-use sparrow::physical_plan;
 
 use crate::core::global_context::GlobalContext;
 use crate::meta::{initial, meta_const, meta_util};
@@ -17,9 +16,11 @@ use crate::meta::initial::information_schema;
 use crate::mysql::error::{MysqlError, MysqlResult};
 use crate::store::engine::engine_util;
 use crate::store::engine::engine_util::{Engine, ADD_ENTRY_TYPE};
-use crate::store::reader::rocksdb::Reader;
+use crate::store::reader::rocksdb::RocksdbReader;
 use crate::util::convert::{ToIdent, ToObjectName};
 use crate::physical_plan::util::add_rows;
+use crate::physical_plan;
+use crate::physical_plan::insert::PhysicalPlanInsert;
 
 #[derive(Debug, Clone)]
 pub struct SaveTableConstraints {
@@ -61,7 +62,7 @@ impl SaveTableConstraints {
 
         let table_def = initial::information_schema::table_constraints();
         let full_table_name = meta_const::FULL_TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_TABLE_CONSTRAINTS.to_object_name();
-        let insert = physical_plan::insert::Insert::new(
+        let insert = PhysicalPlanInsert::new(
             self.global_context.clone(),
             full_table_name,
             table_def,
@@ -120,7 +121,7 @@ impl SaveKeyColumnUsage {
 
         let table_def = initial::information_schema::key_column_usage();
         let full_table_name = meta_const::FULL_TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_KEY_COLUMN_USAGE.to_object_name();
-        let insert = physical_plan::insert::Insert::new(
+        let insert = physical_plan::insert::PhysicalPlanInsert::new(
             self.global_context.clone(),
             full_table_name,
             table_def,
@@ -173,7 +174,7 @@ impl SaveStatistics {
 
         let table_def = initial::information_schema::table_statistics();
         let full_table_name = meta_const::FULL_TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_STATISTICS.to_object_name();
-        let insert = physical_plan::insert::Insert::new(
+        let insert = physical_plan::insert::PhysicalPlanInsert::new(
             self.global_context.clone(),
             full_table_name,
             table_def,
@@ -197,7 +198,6 @@ pub fn delete_db_form_information_schema(global_context: Arc<Mutex<GlobalContext
     let result = engine_util::EngineFactory::try_new(
         global_context.clone(),
         meta_const::FULL_TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_SCHEMATA.to_object_name(),
-        table_def.clone()
     );
     let engine = match result {
         Ok(engine) => engine,
@@ -284,7 +284,7 @@ pub fn add_information_schema_tables(global_context: Arc<Mutex<GlobalContext>>, 
 
     let table_def = initial::information_schema::table_tables();
     let full_table_name = meta_const::FULL_TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_TABLES.to_object_name();
-    let insert = physical_plan::insert::Insert::new(
+    let insert = physical_plan::insert::PhysicalPlanInsert::new(
         global_context.clone(),
         full_table_name,
         table_def,
@@ -395,7 +395,7 @@ pub fn add_information_schema_columns(global_context: Arc<Mutex<GlobalContext>>,
 
     let table_def = initial::information_schema::table_columns();
     let full_table_name = meta_const::FULL_TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_COLUMNS.to_object_name();
-    let insert = physical_plan::insert::Insert::new(
+    let insert = physical_plan::insert::PhysicalPlanInsert::new(
         global_context.clone(),
         full_table_name,
         table_def,
@@ -428,7 +428,7 @@ pub fn create_schema(global_context: Arc<Mutex<GlobalContext>>, full_schema_name
 
     let table_def = initial::information_schema::table_schemata();
     let full_table_name = meta_const::FULL_TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_SCHEMATA.to_object_name();
-    let insert = physical_plan::insert::Insert::new(
+    let insert = physical_plan::insert::PhysicalPlanInsert::new(
         global_context.clone(),
         full_table_name,
         table_def,
@@ -477,12 +477,9 @@ pub fn read_all_table(global_context: Arc<Mutex<GlobalContext>>) -> MysqlResult<
 }
 
 pub fn read_information_schema_tables(global_context: Arc<Mutex<GlobalContext>>) -> MysqlResult<HashMap<ObjectName, Vec<SqlOption>>> {
-    let table_def = initial::information_schema::table_tables();
-
     let result = engine_util::EngineFactory::try_new(
         global_context.clone(),
         meta_const::FULL_TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_TABLES.to_object_name(),
-        table_def.clone()
     );
     let engine = match result {
         Ok(engine) => engine,
@@ -540,12 +537,9 @@ pub fn read_information_schema_tables(global_context: Arc<Mutex<GlobalContext>>)
 }
 
 pub fn read_information_schema_schemata(global_context: Arc<Mutex<GlobalContext>>) -> MysqlResult<HashMap<ObjectName, DbDef>> {
-    let table_def = initial::information_schema::table_schemata();
-
     let result = engine_util::EngineFactory::try_new(
         global_context.clone(),
         meta_const::FULL_TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_SCHEMATA.to_object_name(),
-        table_def.clone()
     );
     let engine = match result {
         Ok(engine) => engine,

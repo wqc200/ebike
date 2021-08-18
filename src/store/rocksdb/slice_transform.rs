@@ -15,7 +15,7 @@
 use std::ffi::CString;
 use std::slice;
 use libc::{c_char, c_void, size_t};
-use super::ffi;
+use crate::store::rocksdb::ffi;
 
 /// A SliceTranform is a generic pluggable way of transforming one string
 /// to another. Its primary use-case is in configuring rocksdb

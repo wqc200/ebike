@@ -19,13 +19,13 @@ pub fn scan_column_name(schema_name: &str) -> Box<[u8]> {
     key(k.as_bytes())
 }
 
-pub fn create_current_serial_number(full_table_name: ObjectName) -> Box<[u8]> {
+pub fn create_current_serial_number(full_table_name: ObjectName) -> String {
     let mut k = String::from("/Schema/ColumnIndex/Current");
 
     k.push_str("/");
     k.push_str(full_table_name.to_string().as_str());
 
-    key(k.as_bytes())
+    k
 }
 
 pub fn create_column_index_to_name(schema_name: &str, column_index: usize) -> Box<[u8]> {

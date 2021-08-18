@@ -15,6 +15,7 @@ use crate::mysql::error::{MysqlResult, MysqlError};
 use crate::store::engine::engine_util;
 use crate::store::engine::engine_util::Engine;
 use crate::store::rocksdb::db::Error;
+use crate::store::reader::rocksdb::RocksdbReader;
 use crate::util;
 use crate::core::session_context::SessionContext;
 use datafusion::scalar::ScalarValue;
@@ -48,16 +49,21 @@ impl Engine for Rocksdb {
         Arc::new(provider)
     }
 
-    fn insert(&self, column_names: Vec<String>, rows: Vec<Vec<ScalarValue>>) -> MysqlResult<u64> {
-        self.insert(engine_util::ADD_ENTRY_TYPE::INSERT, column_names, rows)
+    fn table_iterator(&self) -> Arc<dyn Iterator> {
+        let reader = RocksdbReader::new(self.global_context.clone(), self.table_def.clone(), "/tmp/rocksdb/a", self.full_table_name.clone(), 1024, None,&[]);
+        Arc::new(reader)
     }
 
-    fn add_rows(&self, column_names: Vec<String>, rows: Vec<Vec<Expr>>) -> MysqlResult<u64> {
-        self.add_rows(column_names, rows)
+    fn delete_key(&self, key: String) -> MysqlResult<()> {
+        Ok(())
     }
 
-    fn delete(&self, rowid_array: &StringArray) -> MysqlResult<u64> {
-        self.delete_rows(rowid_array)
+    fn get_key(&self, key: String) -> MysqlResult<Option<&[u8]>> {
+        Ok(None)
+    }
+
+    fn put_key(&self, key: String, value: &[u8]) -> MysqlResult<()> {
+        Ok(())
     }
 }
 

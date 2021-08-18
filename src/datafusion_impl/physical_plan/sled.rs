@@ -16,37 +16,40 @@
 // under the License.
 
 //! Execution plan for reading CSV files
-
-use std::fs::File;
-use std::sync::{Arc, Mutex};
-use std::borrow::Cow;
+use std::any::Any;
 use std::borrow::Borrow;
+use std::borrow::Cow;
+use std::fs::File;
 use std::pin::Pin;
+use std::sync::{Arc, Mutex};
 use std::task::{Context, Poll};
 
-use bitflags::_core::any::Any;
-
-
+use arrow::array::ArrayRef;
+use arrow::array::Int32Array;
+use arrow::datatypes::{DataType, Field};
 use arrow::datatypes::{Schema, SchemaRef};
+use arrow::error::{ArrowError, Result as ArrowResult};
 use arrow::record_batch::{RecordBatch, RecordBatchReader};
-use arrow::error::Result as ArrowResult;
-use datafusion::logical_plan::Expr;
+use async_trait::async_trait;
 use datafusion::error::{DataFusionError, Result};
-use datafusion::physical_plan::ExecutionPlan;
+//use rocksdb::{Error, IteratorMode, Options, SliceTransform, Snapshot, WriteBatch, DB, DBRawIterator, ReadOptions};
+use datafusion::logical_plan::Expr;
 use datafusion::physical_plan::{Partitioning, RecordBatchStream, SendableRecordBatchStream};
+use datafusion::physical_plan::common::SizedRecordBatchStream;
+use datafusion::physical_plan::ExecutionPlan;
 use futures::Stream;
-
-use crate::store::reader::sled::Reader;
-use crate::store::rocksdb::option::{Options, ReadOptions};
-use crate::store::rocksdb::slice_transform::SliceTransform;
-use crate::store::rocksdb::db::DB;
-use crate::core::context::CoreContext;
-use crate::core::global_context::GlobalContext;
-use crate::meta::def;
 use sqlparser::ast::ObjectName;
 
+use crate::core::global_context::GlobalContext;
+use crate::meta::{def, meta_util};
+use crate::store::reader::rocksdb::RocksdbReader;
+use crate::store::rocksdb::db::DB;
+use crate::store::rocksdb::option::{Options, ReadOptions};
+use crate::store::rocksdb::slice_transform::SliceTransform;
+use crate::util;
+
 #[derive(Debug, Clone)]
-pub struct RocksdbExec {
+pub struct SledExec {
     core_context: Arc<Mutex<GlobalContext>>,
     schema: def::TableDef,
     path: String,
@@ -58,7 +61,7 @@ pub struct RocksdbExec {
     filters: Vec<Expr>,
 }
 
-impl RocksdbExec {
+impl SledExec {
     /// Create a new execution plan for reading a set of CSV files
     pub fn try_new(
         core_context: Arc<Mutex<GlobalContext>>,
@@ -89,7 +92,7 @@ impl RocksdbExec {
 }
 
 #[async_trait]
-impl ExecutionPlan for RocksdbExec {
+impl ExecutionPlan for SledExec {
     fn as_any(&self) -> &dyn Any {
         self
     }
@@ -124,9 +127,10 @@ impl ExecutionPlan for RocksdbExec {
     }
 
     async fn execute(&self, partition: usize) -> Result<SendableRecordBatchStream> {
-        let reader = Reader::new(
+        let reader = RocksdbReader::new(
             self.core_context.clone(),
             self.schema.clone(),
+            self.path.as_str(),
             self.full_table_name.clone(),
             self.batch_size,
             self.projection.clone(),
@@ -137,11 +141,11 @@ impl ExecutionPlan for RocksdbExec {
     }
 }
 
-struct SledStream {
-    reader: Reader,
+struct RocksdbStream {
+    reader: RocksdbReader,
 }
 
-impl SledStream {
+impl RocksdbStream {
     pub fn try_new(
         core_context: Arc<Mutex<GlobalContext>>,
         schema: def::TableDef,
@@ -151,9 +155,10 @@ impl SledStream {
         batch_size: usize,
         filters: &[Expr],
     ) -> Result<Self> {
-        let reader = Reader::new(
+        let reader = RocksdbReader::new(
             core_context,
             schema.clone(),
+            path,
             full_table_name,
             batch_size,
             projection.clone(),
@@ -164,7 +169,7 @@ impl SledStream {
     }
 }
 
-impl Stream for SledStream {
+impl Stream for RocksdbStream {
     type Item = ArrowResult<RecordBatch>;
 
     fn poll_next(
@@ -175,7 +180,7 @@ impl Stream for SledStream {
     }
 }
 
-impl RecordBatchStream for SledStream {
+impl RecordBatchStream for RocksdbStream {
     fn schema(&self) -> SchemaRef {
         self.reader.projected_schema()
     }

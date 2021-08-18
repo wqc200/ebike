@@ -18,7 +18,7 @@ use crate::core::session_context::SessionContext;
 use sqlparser::ast::ObjectName;
 use datafusion::scalar::ScalarValue;
 use crate::meta::def::TableDef;
-use crate::store::reader::sled::Reader;
+use crate::store::reader::sled::SledReader;
 
 pub struct Sled {
     core_context: Arc<Mutex<GlobalContext>>,
@@ -46,16 +46,21 @@ impl Engine for Sled {
         Arc::new(provider)
     }
 
-    fn insert(&self, column_name: Vec<String>, column_value: Vec<Vec<ScalarValue>>) -> MysqlResult<u64> {
-        Ok(0)
+    fn table_iterator(&self) -> Arc<dyn Iterator> {
+        let reader = SledReader::new(self.global_context.clone(), self.table_def.clone(), "/tmp/rocksdb/a", self.full_table_name.clone(), 1024, None,&[]);
+        Arc::new(reader)
     }
 
-    fn add_rows(&self, column_name: Vec<String>, column_value: Vec<Vec<Expr>>) -> MysqlResult<u64> {
-        Ok(0)
+    fn delete_key(&self, key: String) -> MysqlResult<()> {
+        Ok(())
     }
 
-    fn delete(&self, rowid_array: &StringArray) -> MysqlResult<u64> {
-        Ok(0)
+    fn get_key(&self, key: String) -> MysqlResult<Option<&[u8]>> {
+        Ok(None)
+    }
+
+    fn put_key(&self, key: String, value: &[u8]) -> MysqlResult<()> {
+        Ok(())
     }
 }
 

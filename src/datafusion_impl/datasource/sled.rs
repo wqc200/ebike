@@ -16,10 +16,10 @@ use datafusion::logical_plan::Expr;
 use datafusion::physical_plan::ExecutionPlan;
 
 use crate::datafusion_impl::physical_plan::sled::SledExec;
-use crate::core::context::CoreContext;
+use crate::core::global_context::GlobalContext;
 
 pub struct SledTable {
-    core_context: CoreContext,
+    global_context: GlobalContext,
     schema: Arc<Schema>,
     path: String,
     db_name: String,
@@ -28,9 +28,9 @@ pub struct SledTable {
 
 impl SledTable {
     #[allow(missing_docs)]
-    pub fn new(core_context: CoreContext, schema: Arc<Schema>, path: &str, db_name: &str, table_name: &str) -> Self {
+    pub fn new(global_context: GlobalContext, schema: Arc<Schema>, path: &str, db_name: &str, table_name: &str) -> Self {
         Self {
-            core_context: core_context.clone(),
+            global_context,
             schema,
             path: path.to_string(),
             db_name: db_name.to_string(),
@@ -56,7 +56,7 @@ impl TableProvider for SledTable {
         limit: Option<usize>,
     ) -> Result<Arc<dyn ExecutionPlan>> {
         let exec = SledExec::try_new(
-            self.core_context.clone(),
+            self.global_context.clone(),
             self.schema.clone(),
             self.path.as_str(),
             self.db_name.as_str(),

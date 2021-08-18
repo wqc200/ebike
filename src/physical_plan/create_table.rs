@@ -19,7 +19,7 @@ use crate::meta::{meta_const, meta_util};
 use crate::meta::def::TableDef;
 use crate::meta::initial::{information_schema, initial_util};
 use crate::mysql::error::{MysqlError, MysqlResult};
-use crate::physical_plan::insert::Insert;
+use crate::physical_plan::insert::PhysicalPlanInsert;
 use crate::store::engine::sled::SledOperator;
 use crate::util;
 

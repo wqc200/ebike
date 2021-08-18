@@ -28,8 +28,9 @@ use crate::store::engine::sled::SledOperator;
 use crate::test;
 use crate::util;
 use crate::util::convert::ToIdent;
+use crate::store::engine::engine_util::EngineFactory;
 
-pub struct Insert {
+pub struct PhysicalPlanInsert {
     global_context: Arc<Mutex<GlobalContext>>,
     full_table_name: ObjectName,
     table_def: TableDef,
@@ -38,7 +39,7 @@ pub struct Insert {
     column_value_map_list: Vec<HashMap<Ident, ScalarValue>>,
 }
 
-impl Insert {
+impl PhysicalPlanInsert {
     pub fn new(global_context: Arc<Mutex<GlobalContext>>, full_table_name: ObjectName, table_def: TableDef, column_name_list: Vec<String>, index_keys_list: Vec<Vec<(String, usize, String)>>, column_value_map_list: Vec<HashMap<Ident, ScalarValue>>) -> Self {
         Self {
             global_context,
@@ -51,7 +52,7 @@ impl Insert {
     }
 
     pub fn execute(&self) -> MysqlResult<u64> {
-        let result = engine_util::EngineFactory::try_new(self.global_context.clone(), self.full_table_name.clone(), self.table_def.clone());
+        let result = EngineFactory::try_new(self.global_context.clone(), self.full_table_name.clone());
         let engine = match result {
             Ok(engine) => engine,
             Err(mysql_error) => return Err(mysql_error),

@@ -1354,7 +1354,7 @@ impl Execution {
                 Ok(CorePhysicalPlan::CreateTable(create_table))
             }
             CoreLogicalPlan::Insert { full_table_name, table_def, column_name_list, index_keys_list, column_value_map_list } => {
-                let cd = physical_plan::insert::Insert::new(self.global_context.clone(), full_table_name.clone(), table_def.clone(), column_name_list.clone(), index_keys_list.clone(), column_value_map_list.clone());
+                let cd = physical_plan::insert::PhysicalPlanInsert::new(self.global_context.clone(), full_table_name.clone(), table_def.clone(), column_name_list.clone(), index_keys_list.clone(), column_value_map_list.clone());
                 Ok(CorePhysicalPlan::Insert(cd))
             }
             CoreLogicalPlan::Update { logical_plan, table_name, assignments } => {

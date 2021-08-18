@@ -26,8 +26,7 @@ pub enum ADD_ENTRY_TYPE {
 
 pub trait Engine {
     fn table_provider(&self) -> Arc<dyn TableProvider>;
-    fn add_rows(&self, column_name: Vec<String>, column_value: Vec<Vec<Expr>>) -> MysqlResult<u64>;
-    fn delete(&self, rowid_array: &StringArray) -> MysqlResult<u64>;
+    fn table_iterator(&self) -> Arc<dyn Iterator>;
     fn delete_key(&self, key: String) -> MysqlResult<()>;
     fn get_key(&self, key: String) -> MysqlResult<Option<&[u8]>>;
     fn put_key(&self, key: String, value: &[u8]) -> MysqlResult<()>;
@@ -36,7 +35,9 @@ pub trait Engine {
 pub struct EngineFactory;
 
 impl EngineFactory {
-    pub fn try_new(global_context: Arc<Mutex<GlobalContext>>, full_table_name: ObjectName, table_def: TableDef) -> MysqlResult<Box<dyn Engine>> {
+    pub fn try_new(global_context: Arc<Mutex<GlobalContext>>, full_table_name: ObjectName) -> MysqlResult<Box<dyn Engine>> {
+        let table_def = global_context.lock().unwrap().meta_cache.get_table(full_table_name.clone()).unwrap().clone();
+
         match table_def.clone().get_engine() {
             Some(engine) => {
                 match engine.as_str() {

@@ -20,10 +20,10 @@ name = "sparrow-server"
 path = "src/main.rs"
 doc = false
 
+
 [dependencies]
 bstr = "0.2.12"
 bytes = "0.5.0"
-csv = "1.1"
 fnv = "1.0.3"
 tempdir = "0.3.7"
 lazy_static = "1.4.0"
@@ -43,14 +43,14 @@ byteorder = "1.2.7"
 sqlparser = { path = "components/sqlparser-rs" }
 #sqlparser = "0.9.0"
 sled = { version = "0.34" }
-#rocksdb = { path = "components/rust-rocksdb" }
 datafusion = { path = "components/arrow-datafusion/datafusion" }
 #arrow = { path = "components/arrow-rs/arrow" }
 #arrow = { git = "https://github.com/apache/arrow-rs", rev = "4449ee96fe3fd4a0b275da8dd25ce2792699bc98", features = ["prettyprint"] }
 #parquet = { path = "components/arrow-rs/parquet" }
-arrow = { version = "5.0", features = ["prettyprint"] }
-parquet = { version = "5.0", features = ["arrow"] }
+arrow = { version = "5.1", features = ["prettyprint"] }
+parquet = { version = "5.1", features = ["arrow"] }
 libc = "0.2"
+librocksdb-sys = { path = "components/rust-rocksdb/librocksdb-sys"}
 packed_simd = { version = "0.3.1", optional = true }
 hex = "0.4"
 num = "0.2"
@@ -58,11 +58,12 @@ flatbuffers = "0.6.0"
 indexmap = "1.0"
 #proc-macro2 = "=1.0.18"
 async-trait = "0.1.41"
-serde = { version = "=1.0.118", features = ["rc"] }
-serde_derive = "1.0"
-serde_json = { version = "1.0", features = ["preserve_order"] }
-confy = "0.4.0"
+serde_derive = "=1.0.118"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
 clap = { version = "2.33", default-features = false }
 toml = "0.5"
+
+
 
 

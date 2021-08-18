@@ -29,7 +29,7 @@ use crate::mysql::error::MysqlError;
 use crate::util::convert::{ToObjectName, ToIdent};
 use crate::meta::def::TableDef;
 
-pub struct Reader {
+pub struct SledReader {
     global_context: Arc<Mutex<GlobalContext>>,
     table_schema: TableDef,
     full_table_name: ObjectName,
@@ -42,7 +42,7 @@ pub struct Reader {
     end_scan_key: CreateScanKey,
 }
 
-impl Reader {
+impl SledReader {
     pub fn new(
         global_context: Arc<Mutex<GlobalContext>>,
         table_schema: TableDef,
@@ -105,7 +105,7 @@ impl Reader {
     }
 }
 
-impl Iterator for Reader {
+impl Iterator for SledReader {
     type Item = Result<RecordBatch>;
 
     fn next(&mut self) -> Option<Self::Item> {
