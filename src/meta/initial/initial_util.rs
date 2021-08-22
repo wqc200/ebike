@@ -195,7 +195,7 @@ pub fn delete_db_form_information_schema(global_context: Arc<Mutex<GlobalContext
     let db_name_index = schema_ref.index_of(meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_SCHEMATA_SCHEMA_NAME).unwrap();
     let projection = Some(vec![rowid_index, db_name_index]);
 
-    let result = engine_util::EngineFactory::try_new(
+    let result = engine_util::EngineFactory::try_new_with_table_name(
         global_context.clone(),
         meta_const::FULL_TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_SCHEMATA.to_object_name(),
     );
@@ -477,7 +477,7 @@ pub fn read_all_table(global_context: Arc<Mutex<GlobalContext>>) -> MysqlResult<
 }
 
 pub fn read_information_schema_tables(global_context: Arc<Mutex<GlobalContext>>) -> MysqlResult<HashMap<ObjectName, Vec<SqlOption>>> {
-    let result = engine_util::EngineFactory::try_new(
+    let result = engine_util::EngineFactory::try_new_with_table_name(
         global_context.clone(),
         meta_const::FULL_TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_TABLES.to_object_name(),
     );
@@ -537,7 +537,7 @@ pub fn read_information_schema_tables(global_context: Arc<Mutex<GlobalContext>>)
 }
 
 pub fn read_information_schema_schemata(global_context: Arc<Mutex<GlobalContext>>) -> MysqlResult<HashMap<ObjectName, DbDef>> {
-    let result = engine_util::EngineFactory::try_new(
+    let result = engine_util::EngineFactory::try_new_with_table_name(
         global_context.clone(),
         meta_const::FULL_TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_SCHEMATA.to_object_name(),
     );
@@ -595,7 +595,7 @@ pub fn read_information_schema_schemata(global_context: Arc<Mutex<GlobalContext>
 pub fn read_information_schema_statistics(global_context: Arc<Mutex<GlobalContext>>) -> MysqlResult<HashMap<ObjectName, Vec<TableConstraint>>> {
     let table_def = initial::information_schema::table_statistics();
 
-    let result = engine_util::EngineFactory::try_new(
+    let result = engine_util::EngineFactory::try_new_with_table_name(
         global_context.clone(),
         meta_const::FULL_TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_STATISTICS.to_object_name(),
         table_def.clone()
@@ -682,7 +682,7 @@ pub fn read_information_schema_statistics(global_context: Arc<Mutex<GlobalContex
 pub fn read_information_schema_columns(global_context: Arc<Mutex<GlobalContext>>) -> MysqlResult<HashMap<ObjectName, Vec<ColumnDef>>> {
     let table_def = initial::information_schema::table_columns();
 
-    let result = engine_util::EngineFactory::try_new(
+    let result = engine_util::EngineFactory::try_new_with_table_name(
         global_context.clone(),
         meta_const::FULL_TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_COLUMNS.to_object_name(),
         table_def.clone()
@@ -749,7 +749,7 @@ pub fn read_information_schema_columns(global_context: Arc<Mutex<GlobalContext>>
 pub fn read_performance_schema_global_variables(global_context: Arc<Mutex<GlobalContext>>) -> MysqlResult<HashMap<String, String>> {
     let table_def = initial::performance_schema::global_variables();
 
-    let result = engine_util::EngineFactory::try_new(
+    let result = engine_util::EngineFactory::try_new_with_table_name(
         global_context.clone(),
         meta_const::FULL_TABLE_NAME_OF_DEF_PERFORMANCE_SCHEMA_GLOBAL_VARIABLES.to_object_name(),
         table_def.clone()
@@ -796,7 +796,7 @@ pub fn read_performance_schema_global_variables(global_context: Arc<Mutex<Global
 pub fn read_column_index(global_context: Arc<Mutex<GlobalContext>>) -> MysqlResult<HashMap<ObjectName, HashMap<Ident, usize>>> {
     let table_def = initial::information_schema::table_columns();
 
-    let result = engine_util::EngineFactory::try_new(
+    let result = engine_util::EngineFactory::try_new_with_table_name(
         global_context.clone(),
         meta_const::FULL_TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_COLUMNS.to_object_name(),
         table_def.clone()

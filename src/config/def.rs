@@ -3,6 +3,7 @@ use serde_derive::{Deserialize, Serialize};
 #[derive(Debug, Serialize, Deserialize)]
 pub struct MyConfig {
     pub server: ConfigServer,
+    pub schema: ConfigSchema,
     pub engine: ConfigEngine,
 }
 
@@ -11,6 +12,7 @@ impl ::std::default::Default for MyConfig {
     fn default() -> Self {
         Self {
             server: ConfigServer::default(),
+            schema: ConfigSchema::default(),
             engine: ConfigEngine::default(),
         }
     }
@@ -20,7 +22,7 @@ impl ::std::default::Default for MyConfig {
 pub struct ConfigServer {
     pub log_file: String,
     pub bind_host: String,
-    pub schema_engine: String,
+    pub engines: Vec<String>,
 }
 
 /// `ConfigServer` implements `Default`
@@ -29,7 +31,20 @@ impl ::std::default::Default for ConfigServer {
         Self {
             log_file: "./log4rs.yaml".into(),
             bind_host: "0.0.0.0:3307".into(),
-            schema_engine: "sled".into(),
+            engines: vec![],
+        }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ConfigSchema {
+    pub engine: String,
+}
+
+impl ::std::default::Default for ConfigSchema {
+    fn default() -> Self {
+        Self {
+            engine: "sled".into(),
         }
     }
 }
@@ -37,12 +52,14 @@ impl ::std::default::Default for ConfigServer {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ConfigEngine {
     pub sled: EngineSled,
+    pub rocksdb: EngineRocksdb,
 }
 
 impl ::std::default::Default for ConfigEngine {
     fn default() -> Self {
         Self {
             sled: EngineSled::default(),
+            rocksdb: EngineRocksdb::default(),
         }
     }
 }
@@ -55,7 +72,20 @@ pub struct EngineSled {
 impl ::std::default::Default for EngineSled {
     fn default() -> Self {
         Self {
-            data_path: "F:/Data/sparrow".into(),
+            data_path: "./data/sled".into(),
+        }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct EngineRocksdb {
+    pub data_path: String,
+}
+
+impl ::std::default::Default for EngineRocksdb {
+    fn default() -> Self {
+        Self {
+            data_path: "./data/rocksdb".into(),
         }
     }
 }

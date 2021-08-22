@@ -53,7 +53,7 @@ use crate::physical_plan::create_table::CreateTable;
 use crate::physical_plan::delete::Delete;
 use crate::physical_plan::insert::PhysicalPlanInsert;
 use crate::store::engine::engine_util;
-use crate::store::engine::engine_util::Engine;
+use crate::store::engine::engine_util::{Engine, EngineFactory};
 use crate::store::reader::rocksdb::RocksdbReader;
 use crate::store::rocksdb::db::DB;
 use crate::store::rocksdb::option::Options;
@@ -363,7 +363,7 @@ pub fn cache_delete_column_serial_number(global_context: Arc<Mutex<GlobalContext
 }
 
 pub fn get_current_serial_number(global_context: Arc<Mutex<GlobalContext>>, full_table_name: ObjectName) -> MysqlResult<usize> {
-    let result = engine_util::EngineFactory::try_new(global_context.clone(), full_table_name.clone());
+    let result = EngineFactory::try_new_with_table_name(global_context.clone(), full_table_name.clone());
     let engine = match result {
         Ok(engine) => engine,
         Err(mysql_error) => return Err(mysql_error),
@@ -388,6 +388,12 @@ pub fn get_current_serial_number(global_context: Arc<Mutex<GlobalContext>>, full
 }
 
 pub fn store_add_column_serial_number(global_context: Arc<Mutex<GlobalContext>>, full_table_name: ObjectName, columns: Vec<SQLColumnDef>) -> MysqlResult<()> {
+    let result = EngineFactory::try_new_with_engine_name(global_context.clone(), global_context.lock().unwrap().my_config.server.schema.engine.as_str());
+    let engine = match result {
+        Ok(engine) => engine,
+        Err(mysql_error) => return Err(mysql_error),
+    };
+
     let result = get_current_serial_number(global_context.clone(), full_table_name.clone());
     if let Err(e) = result {
         return Err(e);
@@ -404,10 +410,10 @@ pub fn store_add_column_serial_number(global_context: Arc<Mutex<GlobalContext>>,
         let column_name = column_def.name;
 
         let key = util::dbkey::create_column_serial_number(full_table_name.clone(), column_name.clone());
-        let value = orm_id.to_string().into_bytes();
-        let result = global_context.lock().unwrap().rocksdb_db.put(key, value);
+        let value = orm_id.to_sring().to_bytes();
+        let result = engine.put_key(key, value);
     }
-    global_context.lock().unwrap().rocksdb_db.put(util::dbkey::create_current_serial_number(full_table_name.clone()), orm_id.to_string().as_bytes().to_vec());
+    engine.put_key(util::dbkey::create_current_serial_number(full_table_name.clone()), orm_id.to_string().as_bytes().to_vec());
     Ok(())
 }
 

@@ -1,3 +1,4 @@
+use bstr::ByteSlice;
 use std::sync::{Arc, Mutex};
 use datafusion::datasource::TableProvider;
 use datafusion::logical_plan::{Expr};
@@ -5,6 +6,7 @@ use std::collections::HashMap;
 use uuid::Uuid;
 
 use arrow::array::{StringArray, Array};
+use datafusion::scalar::ScalarValue;
 use sqlparser::ast::{TableConstraint, ObjectName};
 
 use crate::core::global_context::GlobalContext;
@@ -18,7 +20,6 @@ use crate::store::rocksdb::db::Error;
 use crate::store::reader::rocksdb::RocksdbReader;
 use crate::util;
 use crate::core::session_context::SessionContext;
-use datafusion::scalar::ScalarValue;
 use crate::util::convert::{ToObjectName, ToIdent};
 use crate::meta::def::TableDef;
 
@@ -55,14 +56,20 @@ impl Engine for Rocksdb {
     }
 
     fn delete_key(&self, key: String) -> MysqlResult<()> {
+        let result = self.global_context.lock().unwrap().engine.rocksdb_db.unwrap().delete(key).unwrap();
         Ok(())
     }
 
     fn get_key(&self, key: String) -> MysqlResult<Option<&[u8]>> {
-        Ok(None)
+        let result = self.global_context.lock().unwrap().engine.rocksdb_db.unwrap().get(key).unwrap();
+        match result {
+            None => Ok(None),
+            Some(value) => Ok(Some(value.as_bytes())),
+        }
     }
 
     fn put_key(&self, key: String, value: &[u8]) -> MysqlResult<()> {
+        let result = self.global_context.lock().unwrap().engine.rocksdb_db.unwrap().put(key, value).unwrap();
         Ok(())
     }
 }

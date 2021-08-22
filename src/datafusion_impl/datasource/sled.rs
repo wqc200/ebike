@@ -1,6 +1,6 @@
 use std::fs::File;
 use std::string::String;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::borrow::Cow;
 
 use bitflags::_core::any::Any;
@@ -17,24 +17,22 @@ use datafusion::physical_plan::ExecutionPlan;
 
 use crate::datafusion_impl::physical_plan::sled::SledExec;
 use crate::core::global_context::GlobalContext;
+use sqlparser::ast::ObjectName;
 
 pub struct SledTable {
-    global_context: GlobalContext,
+    global_context: Arc<Mutex<GlobalContext>>,
     schema: Arc<Schema>,
     path: String,
-    db_name: String,
-    table_name: String,
+    full_table_name: String,
 }
 
 impl SledTable {
     #[allow(missing_docs)]
-    pub fn new(global_context: GlobalContext, schema: Arc<Schema>, path: &str, db_name: &str, table_name: &str) -> Self {
+    pub fn new(global_context: Arc<Mutex<GlobalContext>>, schema: Arc<Schema>, full_table_name: ObjectName) -> Self {
         Self {
             global_context,
             schema,
-            path: path.to_string(),
-            db_name: db_name.to_string(),
-            table_name: table_name.to_string(),
+            full_table_name: table_name.to_string(),
         }
     }
 }

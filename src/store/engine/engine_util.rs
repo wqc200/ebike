@@ -35,27 +35,31 @@ pub trait Engine {
 pub struct EngineFactory;
 
 impl EngineFactory {
-    pub fn try_new(global_context: Arc<Mutex<GlobalContext>>, full_table_name: ObjectName) -> MysqlResult<Box<dyn Engine>> {
+    pub fn try_new_with_table_name(global_context: Arc<Mutex<GlobalContext>>, full_table_name: ObjectName) -> MysqlResult<Box<dyn Engine>> {
         let table_def = global_context.lock().unwrap().meta_cache.get_table(full_table_name.clone()).unwrap().clone();
 
         match table_def.clone().get_engine() {
-            Some(engine) => {
-                match engine.as_str() {
-                    meta_const::OPTION_ENGINE_NAME_ROCKSDB => Ok(Box::new(rocksdb::Rocksdb::new(global_context, full_table_name, table_def))),
-                    meta_const::OPTION_ENGINE_NAME_SLED => Ok(Box::new(sled::Sled::new(global_context, full_table_name, table_def))),
-                    _ => {
-                        Err(MysqlError::new_global_error(1105, format!(
-                            "Unknown error. The table engine is not supported, table: {:?}, engine: {:?}",
-                            full_table_name,
-                            engine,
-                        ).as_str()))
-                    }
-                }
-            }
+            Some(engine_name) => {
+                EngineFactory::try_new_with_engine_name(global_context, engine_name.as_str())
+            },
             None => {
                 Err(MysqlError::new_global_error(1105, format!(
                     "Unknown error. The engine in table {:?} not found.",
                     full_table_name,
+                ).as_str()))
+            }
+        }
+    }
+
+    pub fn try_new_with_engine_name(global_context: Arc<Mutex<GlobalContext>>, engine_name: &str) -> MysqlResult<Box<dyn Engine>> {
+        match engine_name {
+            meta_const::OPTION_ENGINE_NAME_ROCKSDB => Ok(Box::new(rocksdb::Rocksdb::new(global_context, full_table_name, table_def))),
+            meta_const::OPTION_ENGINE_NAME_SLED => Ok(Box::new(sled::Sled::new(global_context, full_table_name, table_def))),
+            _ => {
+                Err(MysqlError::new_global_error(1105, format!(
+                    "Unknown error. The table engine is not supported, table: {:?}, engine: {:?}",
+                    full_table_name,
+                    engine,
                 ).as_str()))
             }
         }
@@ -199,7 +203,7 @@ pub fn build_column_name_value(column_names: Vec<Ident>, column_values: Vec<Scal
     let mut column_value_map: HashMap<Ident, ScalarValue> = HashMap::new();
     for i in 0..column_names.len() {
         let column_name = column_names[i].clone();
-        let column_value = match column_values.get(i){
+        let column_value = match column_values.get(i) {
             None => return Err(MysqlError::new_global_error(1105, format!(
                 "Unknown error. The column value `{:?}` not found in input column_values.",
                 column_name,
