@@ -34,12 +34,12 @@ pub trait StoreEngine {
 
 pub trait TableEngine {
     fn table_provider(&self) -> Arc<dyn TableProvider>;
-    fn table_iterator(&self) -> Arc<dyn Iterator<Item = Result<RecordBatch>>>;
+    fn table_iterator(&self, projection: Option<Vec<usize>>) -> Arc<dyn Iterator<Item = Result<RecordBatch>>>;
 }
 
-pub struct EngineFactory;
+pub struct TableEngineFactory;
 
-impl EngineFactory {
+impl TableEngineFactory {
     pub fn try_new_with_table(global_context: Arc<Mutex<GlobalContext>>, full_table_name: ObjectName) -> MysqlResult<Box<dyn TableEngine>> {
         let table_def = global_context.lock().unwrap().meta_cache.get_table(full_table_name.clone()).unwrap().clone();
 
@@ -64,6 +64,31 @@ impl EngineFactory {
                 ).as_str()))
             }
         }
+    }
+}
+
+pub struct StoreEngineFactory;
+
+impl StoreEngineFactory {
+    pub fn try_new_with_table(global_context: Arc<Mutex<GlobalContext>>, full_table_name: ObjectName) -> MysqlResult<Box<dyn StoreEngine>> {
+        let table_def = global_context.lock().unwrap().meta_cache.get_table(full_table_name.clone()).unwrap().clone();
+
+        match table_def.clone().get_engine() {
+            Some(engine) => {
+                StoreEngineFactory::try_new_with_engine(global_context.clone(), engine.as_str())
+            }
+            None => {
+                Err(MysqlError::new_global_error(1105, format!(
+                    "Unknown error. The engine in table not found. table_name: {}",
+                    full_table_name,
+                ).as_str()))
+            }
+        }
+    }
+
+    pub fn try_new_schema_engine(global_context: Arc<Mutex<GlobalContext>>) -> MysqlResult<Box<dyn StoreEngine>> {
+        let engine = global_context.lock().unwrap().clone().my_config.schema.engine;
+        StoreEngineFactory::try_new_with_engine(global_context.clone(), engine.as_str())
     }
 
     pub fn try_new_with_engine(global_context: Arc<Mutex<GlobalContext>>, engine: &str) -> MysqlResult<Box<dyn StoreEngine>> {

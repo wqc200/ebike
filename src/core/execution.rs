@@ -145,7 +145,7 @@ impl Execution {
 
                 for (table_name, table_def) in table_map.iter() {
                     let full_table_name = meta_util::create_full_table_name(catalog_name.to_string().as_str(), schema_name.to_string().as_str(), table_name.to_string().as_str());
-                    let engine = engine_util::EngineFactory::try_new_with_table(self.global_context.clone(), full_table_name.clone());
+                    let engine = engine_util::TableEngineFactory::try_new_with_table(self.global_context.clone(), full_table_name.clone());
                     let table_provider = match engine {
                         Ok(engine) => engine.table_provider(),
                         Err(mysql_error) => return Err(mysql_error),
@@ -1051,7 +1051,7 @@ impl Execution {
                 return Ok(CoreLogicalPlan::Select(logical_plan));
             }
             SQLStatement::Explain { analyze, verbose, statement } => {
-                let mut logical_plan = query_planner.explain_statement_to_plan(verbose, &statement)?;
+                let mut logical_plan = query_planner.explain_statement_to_plan(verbose, analyze, &statement)?;
 
                 let has_rowid = self.project_has_rowid(&statement);
                 if !has_rowid {

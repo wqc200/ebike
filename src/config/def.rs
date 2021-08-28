@@ -1,6 +1,6 @@
 use serde_derive::{Deserialize, Serialize};
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct MyConfig {
     pub server: ConfigServer,
     pub schema: ConfigSchema,
@@ -18,7 +18,7 @@ impl ::std::default::Default for MyConfig {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ConfigServer {
     pub log_file: String,
     pub bind_host: String,
@@ -36,7 +36,7 @@ impl ::std::default::Default for ConfigServer {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ConfigSchema {
     pub engine: String,
 }
@@ -49,7 +49,7 @@ impl ::std::default::Default for ConfigSchema {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ConfigEngine {
     pub sled: EngineSled,
     pub rocksdb: EngineRocksdb,
@@ -64,7 +64,7 @@ impl ::std::default::Default for ConfigEngine {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct EngineSled {
     pub data_path: String,
 }
@@ -77,7 +77,7 @@ impl ::std::default::Default for EngineSled {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct EngineRocksdb {
     pub data_path: String,
 }

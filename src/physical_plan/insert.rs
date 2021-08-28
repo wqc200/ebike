@@ -28,7 +28,7 @@ use crate::store::engine::engine_util;
 use crate::test;
 use crate::util;
 use crate::util::convert::ToIdent;
-use crate::store::engine::engine_util::EngineFactory;
+use crate::store::engine::engine_util::TableEngineFactory;
 
 pub struct PhysicalPlanInsert {
     global_context: Arc<Mutex<GlobalContext>>,
@@ -52,7 +52,7 @@ impl PhysicalPlanInsert {
     }
 
     pub fn execute(&self) -> MysqlResult<u64> {
-        let result = EngineFactory::try_new_with_table(self.global_context.clone(), self.full_table_name.clone());
+        let result = TableEngineFactory::try_new_with_table(self.global_context.clone(), self.full_table_name.clone());
         let engine = match result {
             Ok(engine) => engine,
             Err(mysql_error) => return Err(mysql_error),

@@ -53,8 +53,8 @@ impl TableEngine for TableEngineRocksdb {
         Arc::new(provider)
     }
 
-    fn table_iterator(&self) -> Arc<dyn Iterator<Item = Result<RecordBatch>>>{
-        let reader = RocksdbReader::new(self.global_context.clone(), self.table_def.clone(), self.full_table_name.clone(), 1024, None, &[]);
+    fn table_iterator(&self, projection: Option<Vec<usize>>) -> Arc<dyn Iterator<Item = Result<RecordBatch>>>{
+        let reader = RocksdbReader::new(self.global_context.clone(), self.table_def.clone(), self.full_table_name.clone(), 1024, projection, &[]);
         Arc::new(reader)
     }
 }
@@ -73,7 +73,7 @@ impl StoreEngineRocksdb {
 
 impl StoreEngine for StoreEngineRocksdb {
     fn delete_key(&self, key: String) -> MysqlResult<()> {
-        let result = self.rocksdb_db.unwrap().delete(key).unwrap();
+        let result = self.rocksdb_db.unwrap().delete(key);
         Ok(())
     }
 

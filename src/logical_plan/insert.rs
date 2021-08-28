@@ -161,7 +161,7 @@ impl Insert {
             column_value_map_list.push(column_value_map);
         }
 
-        let result = engine_util::EngineFactory::try_new_with_table(self.global_context.clone(), full_table_name.clone(), table_def.clone());
+        let result = engine_util::TableEngineFactory::try_new_with_table(self.global_context.clone(), full_table_name.clone(), table_def.clone());
         let engine = match result {
             Ok(engine) => engine,
             Err(mysql_error) => return Err(mysql_error),

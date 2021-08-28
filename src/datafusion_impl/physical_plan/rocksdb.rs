@@ -50,8 +50,8 @@ use crate::util;
 
 #[derive(Debug, Clone)]
 pub struct RocksdbExec {
-    core_context: Arc<Mutex<GlobalContext>>,
-    schema: def::TableDef,
+    global_context: Arc<Mutex<GlobalContext>>,
+    table_def: def::TableDef,
     full_table_name: ObjectName,
     projection: Option<Vec<usize>>,
     /// Schema after the projection has been applied
@@ -63,23 +63,23 @@ pub struct RocksdbExec {
 impl RocksdbExec {
     /// Create a new execution plan for reading a set of CSV files
     pub fn try_new(
-        core_context: Arc<Mutex<GlobalContext>>,
-        schema: def::TableDef,
+        global_context: Arc<Mutex<GlobalContext>>,
+        table_def: def::TableDef,
         full_table_name: ObjectName,
         projection: Option<Vec<usize>>,
         batch_size: usize,
         filters: &[Expr],
     ) -> Result<Self> {
-        let schema_ref = schema.to_schemaref();
+        let schema_ref = table_def.to_schemaref();
         let projected_schema = match &projection {
             None => schema_ref,
             Some(p) => SchemaRef::new(Schema::new(p.iter().map(|i| schema_ref.field(*i).clone()).collect())),
         };
 
         Ok(Self {
-            core_context,
+            global_context,
             full_table_name,
-            schema,
+            table_def,
             projection,
             projected_schema,
             batch_size,
@@ -125,8 +125,8 @@ impl ExecutionPlan for RocksdbExec {
 
     async fn execute(&self, partition: usize) -> Result<SendableRecordBatchStream> {
         let reader = RocksdbReader::new(
-            self.core_context.clone(),
-            self.schema.clone(),
+            self.global_context.clone(),
+            self.table_def.clone(),
             self.full_table_name.clone(),
             self.batch_size,
             self.projection.clone(),
@@ -145,7 +145,6 @@ impl RocksdbStream {
     pub fn try_new(
         core_context: Arc<Mutex<GlobalContext>>,
         schema: def::TableDef,
-        path: &str,
         full_table_name: ObjectName,
         projection: Option<Vec<usize>>,
         batch_size: usize,
@@ -154,7 +153,6 @@ impl RocksdbStream {
         let reader = RocksdbReader::new(
             core_context,
             schema.clone(),
-            path,
             full_table_name,
             batch_size,
             projection.clone(),

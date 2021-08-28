@@ -53,7 +53,7 @@ use crate::physical_plan::create_table::CreateTable;
 use crate::physical_plan::delete::Delete;
 use crate::physical_plan::insert::PhysicalPlanInsert;
 use crate::store::engine::engine_util;
-use crate::store::engine::engine_util::{TableEngine, EngineFactory};
+use crate::store::engine::engine_util::{TableEngine, TableEngineFactory, StoreEngine, StoreEngineFactory};
 use crate::store::reader::rocksdb::RocksdbReader;
 use crate::store::rocksdb::db::DB;
 use crate::store::rocksdb::option::Options;
@@ -345,14 +345,18 @@ pub fn cache_delete_table(global_context: Arc<Mutex<GlobalContext>>, full_table_
 }
 
 pub fn store_delete_current_serial_number(global_context: Arc<Mutex<GlobalContext>>, full_table_name: ObjectName) {
+    let store_engine = StoreEngineFactory::try_new_schema_engine(global_context.clone()).unwrap();
+
     let key = util::dbkey::create_current_serial_number(full_table_name.clone());
-    global_context.lock().unwrap().rocksdb_db.delete(key);
+    store_engine.delete_key(key);
 }
 
 pub fn store_delete_column_serial_number(global_context: Arc<Mutex<GlobalContext>>, full_table_name: ObjectName, columns: Vec<Ident>) {
+    let store_engine = StoreEngineFactory::try_new_schema_engine(global_context.clone()).unwrap();
+
     for column_name in columns {
         let key = util::dbkey::create_column_serial_number(full_table_name.clone(), column_name.clone());
-        let result = global_context.lock().unwrap().rocksdb_db.delete(key);
+        let result = store_engine.delete_key(key);
     }
 }
 
@@ -363,16 +367,12 @@ pub fn cache_delete_column_serial_number(global_context: Arc<Mutex<GlobalContext
 }
 
 pub fn get_current_serial_number(global_context: Arc<Mutex<GlobalContext>>, full_table_name: ObjectName) -> MysqlResult<usize> {
-    let result = EngineFactory::try_new_with_table(global_context.clone(), full_table_name.clone());
-    let engine = match result {
-        Ok(engine) => engine,
-        Err(mysql_error) => return Err(mysql_error),
-    };
+    let store_engine = StoreEngineFactory::try_new_schema_engine(global_context.clone()).unwrap();
 
     let first = 0 as usize;
 
     let key = util::dbkey::create_current_serial_number(full_table_name);
-    let result = engine.get_key(key);
+    let result = store_engine.get_key(key);
     match result {
         Ok(result) => {
             match result {
@@ -388,11 +388,7 @@ pub fn get_current_serial_number(global_context: Arc<Mutex<GlobalContext>>, full
 }
 
 pub fn store_add_column_serial_number(global_context: Arc<Mutex<GlobalContext>>, full_table_name: ObjectName, columns: Vec<SQLColumnDef>) -> MysqlResult<()> {
-    let result = EngineFactory::try_new_with_engine(global_context.clone(), global_context.lock().unwrap().my_config.schema.engine.as_str());
-    let engine = match result {
-        Ok(engine) => engine,
-        Err(mysql_error) => return Err(mysql_error),
-    };
+    let store_engine = StoreEngineFactory::try_new_schema_engine(global_context.clone()).unwrap();
 
     let result = get_current_serial_number(global_context.clone(), full_table_name.clone());
     if let Err(e) = result {
@@ -410,12 +406,12 @@ pub fn store_add_column_serial_number(global_context: Arc<Mutex<GlobalContext>>,
         let column_name = column_def.name;
 
         let key = util::dbkey::create_column_serial_number(full_table_name.clone(), column_name.clone());
-        let value = orm_id.to_sring().to_bytes();
-        let result = engine.put_key(key, value);
+        let value = orm_id.as;
+        let result = store_engine.put_key(key, value);
     }
     let key = util::dbkey::create_current_serial_number(full_table_name.clone());
     let value = orm_id.to_string().as_bytes();
-    engine.put_key(key, value);
+    store_engine.put_key(key, value);
     Ok(())
 }
 

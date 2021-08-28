@@ -40,8 +40,8 @@ futures = "0.3"
 env_logger = "0.3"
 byteorder = "1.2.7"
 #sqlparser = { git = "https://github.com/ballista-compute/sqlparser-rs", branch = "main" }
-#sqlparser = { path = "components/sqlparser-rs" }
-sqlparser = "0.9.0"
+sqlparser = { path = "components/sqlparser-rs" }
+#sqlparser = "0.9.0"
 sled = { version = "0.34" }
 datafusion = { path = "components/arrow-datafusion/datafusion" }
 #arrow = { path = "components/arrow-rs/arrow" }

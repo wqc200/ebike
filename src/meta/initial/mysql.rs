@@ -39,11 +39,13 @@ use crate::core::global_context::GlobalContext;
 use crate::meta::{def, meta_const, meta_util};
 use crate::mysql::error::MysqlResult;
 use crate::physical_plan::create_table::CreateTable;
+use crate::physical_plan::insert::PhysicalPlanInsert;
 use crate::store::engine::engine_util;
 use crate::store::reader::rocksdb::RocksdbReader;
 use crate::store::rocksdb::db::DB;
 use crate::store::rocksdb::option::Options;
-use crate::util::convert::ToObjectName;
+use crate::util::convert::{ToObjectName, ToIdent};
+use crate::mysql::metadata::MysqlType::MYSQL_TYPE_BIT;
 
 pub fn users() -> def::TableDef {
     let mut with_option = vec![];
@@ -121,123 +123,129 @@ pub fn users() -> def::TableDef {
 }
 
 pub fn users_data(global_context: Arc<Mutex<GlobalContext>>) -> MysqlResult<u64> {
-    let mut column_name = vec![];
+    let mut column_name_list = vec![];
     for column_def in users().get_columns() {
-        column_name.push(column_def.sql_column.name.to_string());
+        column_name_list.push(column_def.sql_column.name.to_string());
     }
 
-    let mut column_value: Vec<Vec<Expr>> = vec![];
-    let row = vec![
-        // Host
-        Expr::Literal(ScalarValue::Utf8(Some("%".to_string()))),
-        // User
-        Expr::Literal(ScalarValue::Utf8(Some("root".to_string()))),
-        // Select_priv
-        Expr::Literal(ScalarValue::Utf8(Some("Y".to_string()))),
-        // Insert_priv
-        Expr::Literal(ScalarValue::Utf8(Some("Y".to_string()))),
-        // Update_priv
-        Expr::Literal(ScalarValue::Utf8(Some("Y".to_string()))),
-        // Delete_priv
-        Expr::Literal(ScalarValue::Utf8(Some("Y".to_string()))),
-        // Create_priv
-        Expr::Literal(ScalarValue::Utf8(Some("Y".to_string()))),
-        // Drop_priv
-        Expr::Literal(ScalarValue::Utf8(Some("Y".to_string()))),
-        // Reload_priv
-        Expr::Literal(ScalarValue::Utf8(Some("Y".to_string()))),
-        // Shutdown_priv
-        Expr::Literal(ScalarValue::Utf8(Some("Y".to_string()))),
-        // Process_priv
-        Expr::Literal(ScalarValue::Utf8(Some("Y".to_string()))),
-        // File_priv
-        Expr::Literal(ScalarValue::Utf8(Some("Y".to_string()))),
-        // Grant_priv
-        Expr::Literal(ScalarValue::Utf8(Some("Y".to_string()))),
-        // References_priv
-        Expr::Literal(ScalarValue::Utf8(Some("Y".to_string()))),
-        // Index_priv
-        Expr::Literal(ScalarValue::Utf8(Some("Y".to_string()))),
-        // Alter_priv
-        Expr::Literal(ScalarValue::Utf8(Some("Y".to_string()))),
-        // Show_db_priv
-        Expr::Literal(ScalarValue::Utf8(Some("Y".to_string()))),
-        // Super_priv
-        Expr::Literal(ScalarValue::Utf8(Some("Y".to_string()))),
-        // Create_tmp_table_priv
-        Expr::Literal(ScalarValue::Utf8(Some("Y".to_string()))),
-        // Lock_tables_priv
-        Expr::Literal(ScalarValue::Utf8(Some("Y".to_string()))),
-        // Execute_priv
-        Expr::Literal(ScalarValue::Utf8(Some("Y".to_string()))),
-        // Repl_slave_priv
-        Expr::Literal(ScalarValue::Utf8(Some("Y".to_string()))),
-        // Repl_client_priv
-        Expr::Literal(ScalarValue::Utf8(Some("Y".to_string()))),
-        // Create_view_priv
-        Expr::Literal(ScalarValue::Utf8(Some("Y".to_string()))),
-        // Show_view_priv
-        Expr::Literal(ScalarValue::Utf8(Some("Y".to_string()))),
-        // Create_routine_priv
-        Expr::Literal(ScalarValue::Utf8(Some("Y".to_string()))),
-        // Alter_routine_priv
-        Expr::Literal(ScalarValue::Utf8(Some("Y".to_string()))),
-        // Create_user_priv
-        Expr::Literal(ScalarValue::Utf8(Some("Y".to_string()))),
-        // Event_priv
-        Expr::Literal(ScalarValue::Utf8(Some("Y".to_string()))),
-        // Trigger_priv
-        Expr::Literal(ScalarValue::Utf8(Some("Y".to_string()))),
-        // Create_tablespace_priv
-        Expr::Literal(ScalarValue::Utf8(Some("Y".to_string()))),
-        // ssl_type
-        Expr::Literal(ScalarValue::Utf8(None)),
-        // ssl_cipher
-        Expr::Literal(ScalarValue::Utf8(None)),
-        // x509_issuer
-        Expr::Literal(ScalarValue::Utf8(None)),
-        // x509_subject
-        Expr::Literal(ScalarValue::Utf8(None)),
-        // max_questions
-        Expr::Literal(ScalarValue::UInt64(Some(0))),
-        // max_updates
-        Expr::Literal(ScalarValue::UInt64(Some(0))),
-        // max_connections
-        Expr::Literal(ScalarValue::UInt64(Some(0))),
-        // max_user_connections
-        Expr::Literal(ScalarValue::UInt64(Some(0))),
-        // plugin
-        Expr::Literal(ScalarValue::Utf8(Some("mysql_native_password".to_string()))),
-        // authentication_string
-        Expr::Literal(ScalarValue::Utf8(Some("*6BB4837EB74329105EE4568DDA7DC67ED2CA2AD9".to_string()))),
-        // password_expired
-        Expr::Literal(ScalarValue::Utf8(Some("N".to_string()))),
-        // password_last_changed
-        Expr::Literal(ScalarValue::Utf8(None)),
-        // password_lifetime
-        Expr::Literal(ScalarValue::Utf8(None)),
-        // account_locked
-        Expr::Literal(ScalarValue::Utf8(Some("N".to_string()))),
-        // Create_role_priv
-        Expr::Literal(ScalarValue::Utf8(Some("Y".to_string()))),
-        // Drop_role_priv
-        Expr::Literal(ScalarValue::Utf8(Some("Y".to_string()))),
-        // Password_reuse_history
-        Expr::Literal(ScalarValue::Utf8(None)),
-        // Password_reuse_time
-        Expr::Literal(ScalarValue::Utf8(None)),
-        // Password_require_current
-        Expr::Literal(ScalarValue::Utf8(None)),
-        // User_attributes
-        Expr::Literal(ScalarValue::Utf8(None)),
-    ];
-    column_value.push(row);
+    let mut column_value_map_list: Vec<HashMap<Ident, ScalarValue>> = vec![];
+    let mut column_value_map = HashMap::new();
+    // Host
+    column_value_map.insert("Host".to_ident(), ScalarValue::Utf8(Some("%".to_string())));
+    // User
+    column_value_map.insert("User".to_ident(), ScalarValue::Utf8(Some("root".to_string())));
+    // Select_priv
+    column_value_map.insert("Select_priv".to_ident(), ScalarValue::Utf8(Some("Y".to_string())));
+    // Insert_priv
+    column_value_map.insert("Insert_priv".to_ident(), ScalarValue::Utf8(Some("Y".to_string())));
+    // Update_priv
+    column_value_map.insert("Update_priv".to_ident(), ScalarValue::Utf8(Some("Y".to_string())));
+    // Delete_priv
+    column_value_map.insert("Delete_priv".to_ident(), ScalarValue::Utf8(Some("Y".to_string())));
+    // Create_priv
+    column_value_map.insert("Create_priv".to_ident(), ScalarValue::Utf8(Some("Y".to_string())));
+    // Drop_priv
+    column_value_map.insert("Drop_priv".to_ident(), ScalarValue::Utf8(Some("Y".to_string())));
+    // Reload_priv
+    column_value_map.insert("Reload_priv".to_ident(), ScalarValue::Utf8(Some("Y".to_string())));
+    // Shutdown_priv
+    column_value_map.insert("Shutdown_priv".to_ident(), ScalarValue::Utf8(Some("Y".to_string())));
+    // Process_priv
+    column_value_map.insert("Process_priv".to_ident(), ScalarValue::Utf8(Some("Y".to_string())));
+    // File_priv
+    column_value_map.insert("File_priv".to_ident(), ScalarValue::Utf8(Some("Y".to_string())));
+    // Grant_priv
+    column_value_map.insert("Grant_priv".to_ident(), ScalarValue::Utf8(Some("Y".to_string())));
+    // References_priv
+    column_value_map.insert("References_priv".to_ident(), ScalarValue::Utf8(Some("Y".to_string())));
+    // Index_priv
+    column_value_map.insert("Index_priv".to_ident(), ScalarValue::Utf8(Some("Y".to_string())));
+    // Alter_priv
+    column_value_map.insert("Alter_priv".to_ident(), ScalarValue::Utf8(Some("Y".to_string())));
+    // Show_db_priv
+    column_value_map.insert("Show_db_priv".to_ident(), ScalarValue::Utf8(Some("Y".to_string())));
+    // Super_priv
+    column_value_map.insert("Super_priv".to_ident(), ScalarValue::Utf8(Some("Y".to_string())));
+    // Create_tmp_table_priv
+    column_value_map.insert("Create_tmp_table_priv".to_ident(), ScalarValue::Utf8(Some("Y".to_string())));
+    // Lock_tables_priv
+    column_value_map.insert("Lock_tables_priv".to_ident(), ScalarValue::Utf8(Some("Y".to_string())));
+    // Execute_priv
+    column_value_map.insert("Execute_priv".to_ident(), ScalarValue::Utf8(Some("Y".to_string())));
+    // Repl_slave_priv
+    column_value_map.insert("Repl_slave_priv".to_ident(), ScalarValue::Utf8(Some("Y".to_string())));
+    // Repl_client_priv
+    column_value_map.insert("Repl_client_priv".to_ident(), ScalarValue::Utf8(Some("Y".to_string())));
+    // Create_view_priv
+    column_value_map.insert("Create_view_priv".to_ident(), ScalarValue::Utf8(Some("Y".to_string())));
+    // Show_view_priv
+    column_value_map.insert("Show_view_priv".to_ident(), ScalarValue::Utf8(Some("Y".to_string())));
+    // Create_routine_priv
+    column_value_map.insert("Create_routine_priv".to_ident(), ScalarValue::Utf8(Some("Y".to_string())));
+    // Alter_routine_priv
+    column_value_map.insert("Alter_routine_priv".to_ident(), ScalarValue::Utf8(Some("Y".to_string())));
+    // Create_user_priv
+    column_value_map.insert("Create_user_priv".to_ident(), ScalarValue::Utf8(Some("Y".to_string())));
+    // Event_priv
+    column_value_map.insert("Event_priv".to_ident(), ScalarValue::Utf8(Some("Y".to_string())));
+    // Trigger_priv
+    column_value_map.insert("Trigger_priv".to_ident(), ScalarValue::Utf8(Some("Y".to_string())));
+    // Create_tablespace_priv
+    column_value_map.insert("Create_tablespace_priv".to_ident(), ScalarValue::Utf8(Some("Y".to_string())));
+    // ssl_type
+    column_value_map.insert("ssl_type".to_ident(), ScalarValue::Utf8(None));
+    // ssl_cipher
+    column_value_map.insert("ssl_cipher".to_ident(), ScalarValue::Utf8(None));
+    // x509_issuer
+    column_value_map.insert("x509_issuer".to_ident(), ScalarValue::Utf8(None));
+    // x509_subject
+    column_value_map.insert("x509_subject".to_ident(), ScalarValue::Utf8(None));
+    // max_questions
+    column_value_map.insert("max_questions".to_ident(), ScalarValue::UInt64(Some(0)));
+    // max_updates
+    column_value_map.insert("max_updates".to_ident(), ScalarValue::UInt64(Some(0)));
+    // max_connections
+    column_value_map.insert("max_connections".to_ident(), ScalarValue::UInt64(Some(0)));
+    // max_user_connections
+    column_value_map.insert("max_user_connections".to_ident(), ScalarValue::UInt64(Some(0)));
+    // plugin
+    column_value_map.insert("plugin".to_ident(), ScalarValue::Utf8(Some("mysql_native_password".to_string())));
+    // authentication_string
+    column_value_map.insert("authentication_string".to_ident(), ScalarValue::Utf8(Some("*6BB4837EB74329105EE4568DDA7DC67ED2CA2AD9".to_string())));
+    // password_expired
+    column_value_map.insert("password_expired".to_ident(), ScalarValue::Utf8(Some("N".to_string())));
+    // password_last_changed
+    column_value_map.insert("password_last_changed".to_ident(), ScalarValue::Utf8(None));
+    // password_lifetime
+    column_value_map.insert("password_lifetime".to_ident(), ScalarValue::Utf8(None));
+    // account_locked
+    column_value_map.insert("account_locked".to_ident(), ScalarValue::Utf8(Some("N".to_string())));
+    // Create_role_priv
+    column_value_map.insert("Create_role_priv".to_ident(), ScalarValue::Utf8(Some("Y".to_string())));
+    // Drop_role_priv
+    column_value_map.insert("Drop_role_priv".to_ident(), ScalarValue::Utf8(Some("Y".to_string())));
+    // Password_reuse_history
+    column_value_map.insert("Password_reuse_history".to_ident(), ScalarValue::Utf8(None));
+    // Password_reuse_time
+    column_value_map.insert("Password_reuse_time".to_ident(), ScalarValue::Utf8(None));
+    // Password_require_current
+    column_value_map.insert("Password_require_current".to_ident(), ScalarValue::Utf8(None));
+    // User_attributes
+    column_value_map.insert("User_attributes".to_ident(), ScalarValue::Utf8(None));
+    column_value_map_list.push(column_value_map);
 
-    let table_schema = users();
+    let full_table_name = meta_const::FULL_TABLE_NAME_OF_DEF_MYSQL_USERS.to_object_name();
+    let table_def = users();
 
-    let engine = engine_util::EngineFactory::try_new_with_table(global_context.clone(), meta_const::FULL_TABLE_NAME_OF_DEF_MYSQL_USERS.to_object_name(), table_schema.clone());
-    match engine {
-        Ok(engine) => return engine.add_rows(column_name.clone(), column_value.clone()),
-        Err(mysql_error) => return Err(mysql_error),
-    }
+    let insert = PhysicalPlanInsert::new(
+        global_context.clone(),
+        full_table_name,
+        table_def,
+        column_name_list.clone(),
+        vec![],
+        column_value_map_list.clone(),
+    );
+    let total = insert.execute().unwrap();
+
+    Ok(total)
 }

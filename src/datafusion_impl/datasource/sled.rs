@@ -14,23 +14,24 @@ use datafusion::datasource::TableProvider;
 use datafusion::error::Result;
 use datafusion::logical_plan::Expr;
 use datafusion::physical_plan::ExecutionPlan;
+use sqlparser::ast::ObjectName;
 
 use crate::datafusion_impl::physical_plan::sled::SledExec;
 use crate::core::global_context::GlobalContext;
-use sqlparser::ast::ObjectName;
+use crate::meta::def::TableDef;
 
 pub struct SledTable {
     global_context: Arc<Mutex<GlobalContext>>,
-    schema: Arc<Schema>,
+    table_def: TableDef,
     full_table_name: ObjectName,
 }
 
 impl SledTable {
     #[allow(missing_docs)]
-    pub fn new(global_context: Arc<Mutex<GlobalContext>>, schema: Arc<Schema>, full_table_name: ObjectName) -> Self {
+    pub fn new(global_context: Arc<Mutex<GlobalContext>>, table_def: TableDef, full_table_name: ObjectName) -> Self {
         Self {
             global_context,
-            schema,
+            table_def,
             full_table_name,
         }
     }
@@ -42,7 +43,7 @@ impl TableProvider for SledTable {
     }
 
     fn schema(&self) -> Arc<Schema> {
-        self.schema.clone()
+        self.table_def.to_schemaref()
     }
 
     fn scan(
@@ -54,13 +55,11 @@ impl TableProvider for SledTable {
     ) -> Result<Arc<dyn ExecutionPlan>> {
         let exec = SledExec::try_new(
             self.global_context.clone(),
-            self.schema.clone(),
-            self.path.as_str(),
-            self.db_name.as_str(),
-            self.table_name.as_str(),
+            self.table_def.clone(),
+            self.full_table_name.clone(),
             projection.clone(),
             batch_size,
-        )?;
+            &[])?;
         Ok(Arc::new(exec))
     }
 

@@ -43,7 +43,8 @@ use crate::store::engine::engine_util;
 use crate::store::reader::rocksdb::RocksdbReader;
 use crate::store::rocksdb::db::DB;
 use crate::store::rocksdb::option::Options;
-use crate::util::convert::ToObjectName;
+use crate::util::convert::{ToObjectName, ToIdent};
+use crate::physical_plan::insert::PhysicalPlanInsert;
 
 pub fn global_variables() -> def::TableDef {
     let mut with_option = vec![];
@@ -71,34 +72,41 @@ pub fn global_variables() -> def::TableDef {
 }
 
 pub fn global_variables_data(global_context: Arc<Mutex<GlobalContext>>) -> MysqlResult<u64> {
-    let mut column_name = vec![];
+    let mut column_name_list = vec![];
     for column_def in global_variables().get_columns() {
-        column_name.push(column_def.sql_column.name.to_string());
+        column_name_list.push(column_def.sql_column.name.to_string());
     }
 
-    let mut column_value: Vec<Vec<Expr>> = vec![];
-    column_value.push(vec![
-        Expr::Literal(ScalarValue::Utf8(Some("auto_increment_increment".to_string()))),
-        Expr::Literal(ScalarValue::Utf8(Some("0".to_string())))]
-    );
-    column_value.push(vec![
-        Expr::Literal(ScalarValue::Utf8(Some("lower_case_table_names".to_string()))),
-        Expr::Literal(ScalarValue::Utf8(Some("1".to_string())))]
-    );
-    column_value.push(vec![
-        Expr::Literal(ScalarValue::Utf8(Some("transaction_isolation".to_string()))),
-        Expr::Literal(ScalarValue::Utf8(None))]
-    );
-    column_value.push(vec![
-        Expr::Literal(ScalarValue::Utf8(Some("transaction_read_only".to_string()))),
-        Expr::Literal(ScalarValue::Utf8(Some("0".to_string())))]
-    );
+    let mut column_value_map_list: Vec<HashMap<Ident, ScalarValue>> = vec![];
+    let mut column_value_map = HashMap::new();
+    column_value_map.insert("variable_name".to_ident(), ScalarValue::Utf8(Some("auto_increment_increment".to_string())));
+    column_value_map.insert("variable_value".to_ident(), ScalarValue::Utf8(Some("0".to_string())));
+    column_value_map_list.push(column_value_map);
+    let mut column_value_map = HashMap::new();
+    column_value_map.insert("variable_name".to_ident(), ScalarValue::Utf8(Some("lower_case_table_names".to_string())));
+    column_value_map.insert("variable_name".to_ident(), ScalarValue::Utf8(Some("1".to_string())));
+    column_value_map_list.push(column_value_map);
+    let mut column_value_map = HashMap::new();
+    column_value_map.insert("variable_name".to_ident(), ScalarValue::Utf8(Some("transaction_isolation".to_string())));
+    column_value_map.insert("variable_name".to_ident(), ScalarValue::Utf8(None));
+    column_value_map_list.push(column_value_map);
+    let mut column_value_map = HashMap::new();
+    column_value_map.insert("variable_name".to_ident(), ScalarValue::Utf8(Some("transaction_read_only".to_string())));
+    column_value_map.insert("variable_name".to_ident(), ScalarValue::Utf8(Some("0".to_string())));
+    column_value_map_list.push(column_value_map);
 
-    let table_schema = global_variables();
+    let full_table_name = meta_const::FULL_TABLE_NAME_OF_DEF_PERFORMANCE_SCHEMA_GLOBAL_VARIABLES.to_object_name();
+    let table_def = global_variables();
 
-    let engine = engine_util::EngineFactory::try_new_with_table(global_context.clone(), meta_const::FULL_TABLE_NAME_OF_DEF_PERFORMANCE_SCHEMA_GLOBAL_VARIABLES.to_object_name(), table_schema.clone());
-    match engine {
-        Ok(engine) => return engine.add_rows(column_name.clone(), column_value.clone()),
-        Err(mysql_error) => return Err(mysql_error),
-    }
+    let insert = PhysicalPlanInsert::new(
+        global_context.clone(),
+        full_table_name,
+        table_def,
+        column_name_list.clone(),
+        vec![],
+        column_value_map_list.clone(),
+    );
+    let total = insert.execute().unwrap();
+
+    Ok(total)
 }

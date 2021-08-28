@@ -46,12 +46,12 @@ impl TableEngineSled {
 
 impl TableEngine for TableEngineSled {
     fn table_provider(&self) -> Arc<dyn TableProvider> {
-        let provider = SledTable::new(self.global_context.clone(), self.table_schema.clone(), self.full_table_name.clone()).unwrap();
+        let provider = SledTable::new(self.global_context.clone(), self.table_def.clone(), self.full_table_name.clone()).unwrap();
         Arc::new(provider)
     }
 
-    fn table_iterator(&self) -> Arc<dyn Iterator<Item = Result<RecordBatch>>> {
-        let reader = SledReader::new(self.global_context.clone(), self.table_def.clone(), self.full_table_name.clone(), 1024, None, &[]);
+    fn table_iterator(&self, projection: Option<Vec<usize>>) -> Arc<dyn Iterator<Item = Result<RecordBatch>>> {
+        let reader = SledReader::new(self.global_context.clone(), self.table_def.clone(), self.full_table_name.clone(), 1024, projection, &[]);
         Arc::new(reader)
     }
 }
