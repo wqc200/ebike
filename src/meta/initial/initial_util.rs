@@ -13,9 +13,10 @@ use crate::core::global_context::GlobalContext;
 use crate::meta::{initial, meta_const, meta_util};
 use crate::meta::def::{ColumnDef, DbDef, StatisticsColumn, TableDef};
 use crate::meta::initial::information_schema;
+use crate::meta::initial::performance_schema;
 use crate::mysql::error::{MysqlError, MysqlResult};
 use crate::store::engine::engine_util;
-use crate::store::engine::engine_util::{Engine, ADD_ENTRY_TYPE};
+use crate::store::engine::engine_util::{TableEngine, ADD_ENTRY_TYPE};
 use crate::store::reader::rocksdb::RocksdbReader;
 use crate::util::convert::{ToIdent, ToObjectName};
 use crate::physical_plan::util::add_rows;
@@ -51,24 +52,26 @@ impl SaveTableConstraints {
         column_value_map.insert("table_name".to_ident(), ScalarValue::Utf8(Some(self.table_name.clone())));
         column_value_map.insert("constraint_type".to_ident(), ScalarValue::Utf8(Some(constraint_type.to_string())));
         column_value_map.insert("enforced".to_ident(), ScalarValue::Utf8(Some("YES".to_string())));
-        self.column_value_map_list.push(row);
+        self.column_value_map_list.push(column_value_map);
     }
 
     pub fn save(&mut self) -> MysqlResult<u64> {
+        let full_table_name = meta_const::FULL_TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_TABLE_CONSTRAINTS.to_object_name();
+        let table_def = self.global_context.lock().unwrap().meta_cache.get_table(full_table_name.clone()).unwrap().clone();
+
         let mut column_name_list = vec![];
         for column_def in table_def.get_columns() {
             column_name_list.push(column_def.sql_column.name.to_string());
         }
 
         let table_def = initial::information_schema::table_constraints();
-        let full_table_name = meta_const::FULL_TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_TABLE_CONSTRAINTS.to_object_name();
         let insert = PhysicalPlanInsert::new(
             self.global_context.clone(),
             full_table_name,
             table_def,
             column_name_list.clone(),
             vec![],
-            self.column_value_map_list.clone()
+            self.column_value_map_list.clone(),
         );
         let total = insert.execute();
         total
@@ -114,20 +117,22 @@ impl SaveKeyColumnUsage {
     }
 
     pub fn save(&mut self) -> MysqlResult<u64> {
+        let full_table_name = meta_const::FULL_TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_KEY_COLUMN_USAGE.to_object_name();
+        let table_def = self.global_context.lock().unwrap().meta_cache.get_table(full_table_name.clone()).unwrap().clone();
+
         let mut column_name_list = vec![];
         for column_def in table_def.get_columns() {
             column_name_list.push(column_def.sql_column.name.to_string());
         }
 
         let table_def = initial::information_schema::key_column_usage();
-        let full_table_name = meta_const::FULL_TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_KEY_COLUMN_USAGE.to_object_name();
         let insert = physical_plan::insert::PhysicalPlanInsert::new(
             self.global_context.clone(),
             full_table_name,
             table_def,
             column_name_list.clone(),
             vec![],
-            self.column_value_map_list.clone()
+            self.column_value_map_list.clone(),
         );
         let total = insert.execute();
         total
@@ -167,20 +172,22 @@ impl SaveStatistics {
     }
 
     pub fn save(&mut self) -> MysqlResult<u64> {
+        let full_table_name = meta_const::FULL_TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_STATISTICS.to_object_name();
+        let table_def = self.global_context.lock().unwrap().meta_cache.get_table(full_table_name.clone()).unwrap().clone();
+
         let mut column_name_list = vec![];
         for column_def in initial::information_schema::table_statistics().get_columns() {
             column_name_list.push(column_def.sql_column.name.to_string());
         }
 
         let table_def = initial::information_schema::table_statistics();
-        let full_table_name = meta_const::FULL_TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_STATISTICS.to_object_name();
         let insert = physical_plan::insert::PhysicalPlanInsert::new(
             self.global_context.clone(),
             full_table_name,
             table_def,
             column_name_list.clone(),
             vec![],
-            self.column_value_map_list.clone()
+            self.column_value_map_list.clone(),
         );
         let total = insert.execute();
         total
@@ -188,28 +195,21 @@ impl SaveStatistics {
 }
 
 pub fn delete_db_form_information_schema(global_context: Arc<Mutex<GlobalContext>>, full_db_name: ObjectName) -> MysqlResult<u64> {
-    let table_def = global_context.lock().unwrap().meta_cache.get_table(meta_const::FULL_TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_SCHEMATA.to_object_name()).unwrap().clone();
+    let full_table_name = meta_const::FULL_TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_SCHEMATA.to_object_name();
+
+    let table_def = global_context.lock().unwrap().meta_cache.get_table(full_table_name.clone()).unwrap();
     let schema_ref = table_def.to_schemaref();
 
     let rowid_index = schema_ref.index_of(meta_const::COLUMN_ROWID).unwrap();
     let db_name_index = schema_ref.index_of(meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_SCHEMATA_SCHEMA_NAME).unwrap();
     let projection = Some(vec![rowid_index, db_name_index]);
 
-    let result = engine_util::EngineFactory::try_new_with_table_name(
-        global_context.clone(),
-        meta_const::FULL_TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_SCHEMATA.to_object_name(),
-    );
-    let engine = match result {
-        Ok(engine) => engine,
-        Err(mysql_error) => return Err(mysql_error),
-    };
-    let table_provider = engine.table_provider();
-    let exec = table_provider.scan(&projection, 1024, &[], None)?;
-    let mut it = exec.execute(0).await?;
+    let engine = engine_util::EngineFactory::try_new_with_table(global_context.clone(), full_table_name.clone()).unwarp();
+    let iterator = engine.get_table_privoder();
 
     let mut total = 0;
     loop {
-        match it.next().await {
+        match iterator.next() {
             Some(item) => {
                 match item {
                     Ok(record_batch) => {
@@ -248,9 +248,9 @@ pub fn delete_db_form_information_schema(global_context: Arc<Mutex<GlobalContext
 }
 
 pub fn add_information_schema_tables(global_context: Arc<Mutex<GlobalContext>>, full_table_name: ObjectName, with_options: Vec<SqlOption>) -> MysqlResult<u64> {
-    let mut column_name = vec![];
+    let mut column_name_list = vec![];
     for column_def in initial::information_schema::table_tables().columns {
-        column_name.push(column_def.sql_column.name.to_string());
+        column_name_list.push(column_def.sql_column.name.to_string());
     }
 
     let tables_reference = TableReference::try_from(&full_table_name).unwrap();
@@ -290,7 +290,7 @@ pub fn add_information_schema_tables(global_context: Arc<Mutex<GlobalContext>>, 
         table_def,
         column_name_list.clone(),
         vec![],
-        column_value_map_list.clone()
+        column_value_map_list.clone(),
     );
     let total = insert.execute();
     total
@@ -401,7 +401,7 @@ pub fn add_information_schema_columns(global_context: Arc<Mutex<GlobalContext>>,
         table_def,
         column_name_list.clone(),
         vec![],
-        column_value_map_list.clone()
+        column_value_map_list.clone(),
     );
     let total = insert.execute();
     total
@@ -434,7 +434,7 @@ pub fn create_schema(global_context: Arc<Mutex<GlobalContext>>, full_schema_name
         table_def,
         column_name_list.clone(),
         vec![],
-        column_value_map_list.clone()
+        column_value_map_list.clone(),
     );
     let total = insert.execute();
     total
@@ -477,30 +477,21 @@ pub fn read_all_table(global_context: Arc<Mutex<GlobalContext>>) -> MysqlResult<
 }
 
 pub fn read_information_schema_tables(global_context: Arc<Mutex<GlobalContext>>) -> MysqlResult<HashMap<ObjectName, Vec<SqlOption>>> {
-    let result = engine_util::EngineFactory::try_new_with_table_name(
-        global_context.clone(),
-        meta_const::FULL_TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_TABLES.to_object_name(),
-    );
-    let engine = match result {
-        Ok(engine) => engine,
-        Err(mysql_error) => return Err(mysql_error),
-    };
-    let table_provider = engine.table_provider();
-    let exec = table_provider.scan(&projection, 1024, &[], None)?;
-    let mut it = exec.execute(0).await?;
+    let full_table_name = meta_const::FULL_TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_TABLES.to_object_name();
 
-    let projection_schema = table_provider.schema();
+    let engine = engine_util::EngineFactory::try_new_with_table(global_context.clone(), full_table_name).unwrap();
+    let mut iterator = engine.table_iterator();
+
+    let projection_schema = information_schema::table_tables().to_schema();
 
     let column_index_of_db_name = projection_schema.index_of(meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_TABLES_TABLE_SCHEMA).unwrap();
     let column_index_of_table_name = projection_schema.index_of(meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_TABLES_TABLE_NAME).unwrap();
     let column_index_of_table_type = projection_schema.index_of(meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_TABLES_TABLE_TYPE).unwrap();
     let column_index_of_engine = projection_schema.index_of(meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_TABLES_ENGINE).unwrap();
-    let column_index_of_version = projection_schema.index_of(meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_TABLES_VERSION).unwrap();
-    let column_index_of_auto_increment = projection_schema.index_of(meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_TABLES_AUTO_INCREMENT).unwrap();
 
     let mut table_sql_options: HashMap<ObjectName, Vec<SqlOption>> = HashMap::new();
     loop {
-        match it.next().await {
+        match iterator.next() {
             Some(item) => {
                 match item {
                     Ok(record_batch) => {
@@ -537,19 +528,12 @@ pub fn read_information_schema_tables(global_context: Arc<Mutex<GlobalContext>>)
 }
 
 pub fn read_information_schema_schemata(global_context: Arc<Mutex<GlobalContext>>) -> MysqlResult<HashMap<ObjectName, DbDef>> {
-    let result = engine_util::EngineFactory::try_new_with_table_name(
-        global_context.clone(),
-        meta_const::FULL_TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_SCHEMATA.to_object_name(),
-    );
-    let engine = match result {
-        Ok(engine) => engine,
-        Err(mysql_error) => return Err(mysql_error),
-    };
-    let table_provider = engine.table_provider();
-    let exec = table_provider.scan(&projection, 1024, &[], None)?;
-    let mut it = exec.execute(0).await?;
+    let full_table_name = meta_const::FULL_TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_SCHEMATA.to_object_name();
 
-    let projection_schema = table_provider.schema();
+    let engine = engine_util::EngineFactory::try_new_with_table(global_context.clone(), full_table_name.clone()).unwrap();
+    let mut iterator = engine.table_iterator();
+
+    let projection_schema = information_schema::table_schemata().to_schema();
 
     let column_index_of_db_name = projection_schema.index_of(meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_SCHEMATA_SCHEMA_NAME).unwrap();
     let column_index_of_default_character_set_name = projection_schema.index_of(meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_SCHEMATA_DEFAULT_CHARACTER_SET_NAME).unwrap();
@@ -557,7 +541,7 @@ pub fn read_information_schema_schemata(global_context: Arc<Mutex<GlobalContext>
 
     let mut schema_map: HashMap<ObjectName, DbDef> = HashMap::new();
     loop {
-        match it.next().await {
+        match iterator.next() {
             Some(item) => {
                 match item {
                     Ok(record_batch) => {
@@ -593,22 +577,12 @@ pub fn read_information_schema_schemata(global_context: Arc<Mutex<GlobalContext>
 }
 
 pub fn read_information_schema_statistics(global_context: Arc<Mutex<GlobalContext>>) -> MysqlResult<HashMap<ObjectName, Vec<TableConstraint>>> {
-    let table_def = initial::information_schema::table_statistics();
+    let full_table_name = meta_const::FULL_TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_STATISTICS.to_object_name();
 
-    let result = engine_util::EngineFactory::try_new_with_table_name(
-        global_context.clone(),
-        meta_const::FULL_TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_STATISTICS.to_object_name(),
-        table_def.clone()
-    );
-    let engine = match result {
-        Ok(engine) => engine,
-        Err(mysql_error) => return Err(mysql_error),
-    };
-    let table_provider = engine.table_provider();
-    let exec = table_provider.scan(&projection, 1024, &[], None)?;
-    let mut it = exec.execute(0).await?;
+    let engine = engine_util::EngineFactory::try_new_with_table(global_context.clone(), full_table_name.clone()).unwrap();
+    let mut iterator = engine.table_iterator();
 
-    let projection_schema = table_provider.schema();
+    let projection_schema = information_schema::table_statistics().to_schema();
 
     let column_index_of_db_name = projection_schema.index_of(meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_STATISTICS_TABLE_SCHEMA).unwrap();
     let column_index_of_table_name = projection_schema.index_of(meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_STATISTICS_TABLE_NAME).unwrap();
@@ -618,7 +592,7 @@ pub fn read_information_schema_statistics(global_context: Arc<Mutex<GlobalContex
 
     let mut schema_table_index: HashMap<ObjectName, HashMap<String, Vec<StatisticsColumn>>> = HashMap::new();
     loop {
-        match it.next().await {
+        match iterator.next() {
             Some(item) => {
                 match item {
                     Ok(record_batch) => {
@@ -680,22 +654,12 @@ pub fn read_information_schema_statistics(global_context: Arc<Mutex<GlobalContex
 }
 
 pub fn read_information_schema_columns(global_context: Arc<Mutex<GlobalContext>>) -> MysqlResult<HashMap<ObjectName, Vec<ColumnDef>>> {
-    let table_def = initial::information_schema::table_columns();
+    let full_table_name = meta_const::FULL_TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_COLUMNS.to_object_name();
 
-    let result = engine_util::EngineFactory::try_new_with_table_name(
-        global_context.clone(),
-        meta_const::FULL_TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_COLUMNS.to_object_name(),
-        table_def.clone()
-    );
-    let engine = match result {
-        Ok(engine) => engine,
-        Err(mysql_error) => return Err(mysql_error),
-    };
-    let table_provider = engine.table_provider();
-    let exec = table_provider.scan(&projection, 1024, &[], None)?;
-    let mut it = exec.execute(0).await?;
+    let engine = engine_util::EngineFactory::try_new_with_table(global_context.clone(), full_table_name.clone()).unwrap();
+    let mut iterator = engine.table_iterator();
 
-    let projection_schema = table_provider.schema();
+    let projection_schema = information_schema::table_columns().to_schema();
 
     let column_index_of_db_name = projection_schema.index_of(meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_COLUMNS_TABLE_SCHEMA).unwrap();
     let column_index_of_table_name = projection_schema.index_of(meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_COLUMNS_TABLE_NAME).unwrap();
@@ -706,7 +670,7 @@ pub fn read_information_schema_columns(global_context: Arc<Mutex<GlobalContext>>
 
     let mut schema_column: HashMap<ObjectName, Vec<ColumnDef>> = HashMap::new();
     loop {
-        match it.next().await {
+        match iterator.next() {
             Some(item) => {
                 match item {
                     Ok(record_batch) => {
@@ -747,29 +711,19 @@ pub fn read_information_schema_columns(global_context: Arc<Mutex<GlobalContext>>
 }
 
 pub fn read_performance_schema_global_variables(global_context: Arc<Mutex<GlobalContext>>) -> MysqlResult<HashMap<String, String>> {
-    let table_def = initial::performance_schema::global_variables();
+    let full_table_name = meta_const::FULL_TABLE_NAME_OF_DEF_PERFORMANCE_SCHEMA_GLOBAL_VARIABLES.to_object_name();
 
-    let result = engine_util::EngineFactory::try_new_with_table_name(
-        global_context.clone(),
-        meta_const::FULL_TABLE_NAME_OF_DEF_PERFORMANCE_SCHEMA_GLOBAL_VARIABLES.to_object_name(),
-        table_def.clone()
-    );
-    let engine = match result {
-        Ok(engine) => engine,
-        Err(mysql_error) => return Err(mysql_error),
-    };
-    let table_provider = engine.table_provider();
-    let exec = table_provider.scan(&projection, 1024, &[], None)?;
-    let mut it = exec.execute(0).await?;
+    let engine = engine_util::EngineFactory::try_new_with_table(global_context.clone(), full_table_name.clone()).unwrap();
+    let mut iterator = engine.table_iterator();
 
-    let projection_schema = table_provider.schema();
+    let projection_schema = performance_schema::global_variables().to_schema();
 
     let column_index_of_variable_name = projection_schema.index_of(meta_const::COLUMN_NAME_OF_DEF_PERFORMANCE_SCHEMA_GLOBAL_VARIABLES_VARIABLE_NAME).unwrap();
     let column_index_of_variable_value = projection_schema.index_of(meta_const::COLUMN_NAME_OF_DEF_PERFORMANCE_SCHEMA_GLOBAL_VARIABLES_VARIABLE_VALUE).unwrap();
 
     let mut variable_map: HashMap<String, String> = HashMap::new();
     loop {
-        match it.next().await {
+        match iterator.next() {
             Some(item) => {
                 match item {
                     Ok(record_batch) => {
@@ -794,22 +748,12 @@ pub fn read_performance_schema_global_variables(global_context: Arc<Mutex<Global
 }
 
 pub fn read_column_index(global_context: Arc<Mutex<GlobalContext>>) -> MysqlResult<HashMap<ObjectName, HashMap<Ident, usize>>> {
-    let table_def = initial::information_schema::table_columns();
+    let full_table_name = meta_const::FULL_TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_COLUMNS.to_object_name();
 
-    let result = engine_util::EngineFactory::try_new_with_table_name(
-        global_context.clone(),
-        meta_const::FULL_TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_COLUMNS.to_object_name(),
-        table_def.clone()
-    );
-    let engine = match result {
-        Ok(engine) => engine,
-        Err(mysql_error) => return Err(mysql_error),
-    };
-    let table_provider = engine.table_provider();
-    let exec = table_provider.scan(&projection, 1024, &[], None)?;
-    let mut it = exec.execute(0).await?;
+    let engine = engine_util::EngineFactory::try_new_with_table(global_context.clone(), full_table_name.clone()).unwrap();
+    let mut iterator = engine.table_iterator();
 
-    let projection_schema = table_provider.schema();
+    let projection_schema = information_schema::table_columns().to_schema();
 
     let column_index_of_db_name = projection_schema.index_of(meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_COLUMNS_TABLE_SCHEMA).unwrap();
     let column_index_of_table_name = projection_schema.index_of(meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_COLUMNS_TABLE_NAME).unwrap();
@@ -817,7 +761,7 @@ pub fn read_column_index(global_context: Arc<Mutex<GlobalContext>>) -> MysqlResu
 
     let mut schema_column_index: HashMap<ObjectName, HashMap<Ident, usize>> = HashMap::new();
     loop {
-        match reader.next() {
+        match iterator.next() {
             Some(item) => {
                 match item {
                     Ok(record_batch) => {

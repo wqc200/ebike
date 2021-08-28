@@ -22,8 +22,7 @@ use sqlparser::ast::ObjectName;
 pub struct SledTable {
     global_context: Arc<Mutex<GlobalContext>>,
     schema: Arc<Schema>,
-    path: String,
-    full_table_name: String,
+    full_table_name: ObjectName,
 }
 
 impl SledTable {
@@ -32,7 +31,7 @@ impl SledTable {
         Self {
             global_context,
             schema,
-            full_table_name: table_name.to_string(),
+            full_table_name,
         }
     }
 }

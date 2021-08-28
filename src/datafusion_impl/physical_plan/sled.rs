@@ -52,7 +52,6 @@ use crate::util;
 pub struct SledExec {
     core_context: Arc<Mutex<GlobalContext>>,
     schema: def::TableDef,
-    path: String,
     full_table_name: ObjectName,
     projection: Option<Vec<usize>>,
     /// Schema after the projection has been applied
@@ -66,7 +65,6 @@ impl SledExec {
     pub fn try_new(
         core_context: Arc<Mutex<GlobalContext>>,
         schema: def::TableDef,
-        path: &str,
         full_table_name: ObjectName,
         projection: Option<Vec<usize>>,
         batch_size: usize,
@@ -80,7 +78,6 @@ impl SledExec {
 
         Ok(Self {
             core_context,
-            path: path.to_string(),
             full_table_name,
             schema,
             projection,

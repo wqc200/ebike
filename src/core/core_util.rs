@@ -29,7 +29,6 @@ use datafusion::datasource::{CsvFile, CsvReadOptions, MemTable, TableProvider};
 use datafusion::error::{DataFusionError, Result};
 use datafusion::execution::context::ExecutionContext;
 use datafusion::logical_plan::{col, Expr, LogicalPlan, PlanType};
-use datafusion::logical_plan::StringifiedPlan;
 use datafusion::logical_plan::{DFField, DFSchema, DFSchemaRef};
 use datafusion::physical_plan::math_expressions;
 use datafusion::scalar::ScalarValue;
@@ -49,7 +48,7 @@ use crate::datafusion_impl::catalog::information_schema::CatalogWithInformationS
 use crate::datafusion_impl::datasource::rocksdb::RocksdbTable;
 use crate::meta::{meta_const, meta_util};
 use crate::mysql::error::{MysqlError, MysqlResult};
-use crate::store::engine::sled::SledOperator;
+
 use crate::test;
 use crate::util;
 
@@ -225,27 +224,6 @@ pub fn projection_has_rowid(projection: Vec<SelectItem>) -> bool {
         });
     has_rowid
 }
-
-// pub fn explain_reset_ified_plan(plan: &LogicalPlan) -> LogicalPlan {
-//     match plan.clone() {
-//         LogicalPlan::Explain { verbose, plan, stringified_plans, schema } => {
-//             let stringified_plans = vec![StringifiedPlan::new(
-//                 PlanType::LogicalPlan,
-//                 format!("{:#?}", plan),
-//             )];
-//
-//             LogicalPlan::Explain {
-//                 verbose,
-//                 plan,
-//                 stringified_plans,
-//                 schema,
-//             }
-//         }
-//         _ => {
-//             plan.clone()
-//         }
-//     }
-// }
 
 pub fn project_remove_rowid(plan: &LogicalPlan) -> LogicalPlan {
     match plan.clone() {
@@ -523,53 +501,6 @@ pub fn convert_scalar_value(scalar_value: ScalarValue) -> MysqlResult<Option<Str
         }
     }
 }
-
-pub fn create_sled_writer() -> Result<SledOperator> {
-    let path = format!("{}/{}", "/tmp/sled/".trim_end_matches("/"), "_sled_schema");
-    let sledWriter = SledOperator::new(path.as_str());
-    Ok(sledWriter)
-}
-
-//
-// pub fn create_execution_context(core_context: CoreContext) -> Result<ExecutionContext> {
-//     let csv_schema = test::rocksdb::aggr_test_csv_schema();
-//     let rocksdb_schema = test::rocksdb::aggr_test_rocksdb_schema();
-//
-//     // declare a new context. In spark API, this corresponds to a new spark SQLsession
-//     let mut ctx = ExecutionContext::new();
-//
-//     // declare a table in memory. In spark API, this corresponds to createDataFrame(...).
-//     let provider = RocksdbTable::new("/tmp/rocksdb/", rocksdb_schema.clone(), core_context.clone());
-//     ctx.register_table("aggregate_rocksdb", Box::new(provider));
-//
-//     let provider = CsvFile::try_new(
-//         "/home/wuqingcheng/Workspace/sparrow/components/arrow/testing/data/csv/aggregate_test_100.csv",
-//         CsvReadOptions::new()
-//             .schema(&csv_schema)
-//             .has_header(true),
-//     )?;
-//     ctx.register_table("aggregate_test_100", Box::new(provider));
-//
-//     //let sql = "SELECT c1, MIN(c12), MAX(c12) FROM aggregate_test_100 WHERE c11 > 0.1 AND c11 < 0.9 GROUP BY c1";
-//
-//     let dual_schema = Arc::new(Schema::new(vec![
-//         Field::new("id", DataType::Int32, false),
-//         Field::new("name", DataType::Utf8, false),
-//     ]));
-//     // define data.
-//     let batch = RecordBatch::try_new(
-//         dual_schema.clone(),
-//         vec![
-//             Arc::new(Int32Array::from(vec![1])),
-//             Arc::new(StringArray::from(vec!["a"])),
-//         ],
-//     )?;
-//     // declare a table in memory. In spark API, this corresponds to createDataFrame(...).
-//     let provider = MemTable::new(dual_schema, vec![vec![batch]])?;
-//     ctx.register_table("dual", Box::new(provider));
-//
-//     Ok(ctx)
-// }
 
 pub fn build_find_column_sqlwhere(catalog_name: &str, schema_name: &str, table_name: &str, column_name: &str) -> SQLExpr {
     let selection_catalog = SQLExpr::BinaryOp {

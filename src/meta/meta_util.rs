@@ -53,7 +53,7 @@ use crate::physical_plan::create_table::CreateTable;
 use crate::physical_plan::delete::Delete;
 use crate::physical_plan::insert::PhysicalPlanInsert;
 use crate::store::engine::engine_util;
-use crate::store::engine::engine_util::{Engine, EngineFactory};
+use crate::store::engine::engine_util::{TableEngine, EngineFactory};
 use crate::store::reader::rocksdb::RocksdbReader;
 use crate::store::rocksdb::db::DB;
 use crate::store::rocksdb::option::Options;
@@ -363,7 +363,7 @@ pub fn cache_delete_column_serial_number(global_context: Arc<Mutex<GlobalContext
 }
 
 pub fn get_current_serial_number(global_context: Arc<Mutex<GlobalContext>>, full_table_name: ObjectName) -> MysqlResult<usize> {
-    let result = EngineFactory::try_new_with_table_name(global_context.clone(), full_table_name.clone());
+    let result = EngineFactory::try_new_with_table(global_context.clone(), full_table_name.clone());
     let engine = match result {
         Ok(engine) => engine,
         Err(mysql_error) => return Err(mysql_error),
@@ -388,7 +388,7 @@ pub fn get_current_serial_number(global_context: Arc<Mutex<GlobalContext>>, full
 }
 
 pub fn store_add_column_serial_number(global_context: Arc<Mutex<GlobalContext>>, full_table_name: ObjectName, columns: Vec<SQLColumnDef>) -> MysqlResult<()> {
-    let result = EngineFactory::try_new_with_engine_name(global_context.clone(), global_context.lock().unwrap().my_config.server.schema.engine.as_str());
+    let result = EngineFactory::try_new_with_engine(global_context.clone(), global_context.lock().unwrap().my_config.schema.engine.as_str());
     let engine = match result {
         Ok(engine) => engine,
         Err(mysql_error) => return Err(mysql_error),
@@ -413,7 +413,9 @@ pub fn store_add_column_serial_number(global_context: Arc<Mutex<GlobalContext>>,
         let value = orm_id.to_sring().to_bytes();
         let result = engine.put_key(key, value);
     }
-    engine.put_key(util::dbkey::create_current_serial_number(full_table_name.clone()), orm_id.to_string().as_bytes().to_vec());
+    let key = util::dbkey::create_current_serial_number(full_table_name.clone());
+    let value = orm_id.to_string().as_bytes();
+    engine.put_key(key, value);
     Ok(())
 }
 
@@ -807,7 +809,6 @@ pub fn read_information_schema_tables_record(global_context: Arc<Mutex<GlobalCon
     let mut reader = RocksdbReader::new(
         global_context.clone(),
         initial::information_schema::table_tables(),
-        "",
         meta_const::FULL_TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_TABLES.to_object_name(),
         1024,
         None,

@@ -96,7 +96,7 @@ pub fn global_variables_data(global_context: Arc<Mutex<GlobalContext>>) -> Mysql
 
     let table_schema = global_variables();
 
-    let engine = engine_util::EngineFactory::try_new_with_table_name(global_context.clone(), meta_const::FULL_TABLE_NAME_OF_DEF_PERFORMANCE_SCHEMA_GLOBAL_VARIABLES.to_object_name(), table_schema.clone());
+    let engine = engine_util::EngineFactory::try_new_with_table(global_context.clone(), meta_const::FULL_TABLE_NAME_OF_DEF_PERFORMANCE_SCHEMA_GLOBAL_VARIABLES.to_object_name(), table_schema.clone());
     match engine {
         Ok(engine) => return engine.add_rows(column_name.clone(), column_value.clone()),
         Err(mysql_error) => return Err(mysql_error),

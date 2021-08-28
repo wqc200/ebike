@@ -14,7 +14,7 @@ use crate::core::session_context::SessionContext;
 use crate::meta::{meta_const, meta_util};
 use crate::meta::initial::initial_util;
 use crate::mysql::error::{MysqlError, MysqlResult};
-use crate::store::engine::sled::SledOperator;
+
 use crate::util;
 
 pub struct CreateDb {

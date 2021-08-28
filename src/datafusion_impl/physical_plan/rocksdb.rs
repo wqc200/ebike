@@ -52,7 +52,6 @@ use crate::util;
 pub struct RocksdbExec {
     core_context: Arc<Mutex<GlobalContext>>,
     schema: def::TableDef,
-    path: String,
     full_table_name: ObjectName,
     projection: Option<Vec<usize>>,
     /// Schema after the projection has been applied
@@ -66,7 +65,6 @@ impl RocksdbExec {
     pub fn try_new(
         core_context: Arc<Mutex<GlobalContext>>,
         schema: def::TableDef,
-        path: &str,
         full_table_name: ObjectName,
         projection: Option<Vec<usize>>,
         batch_size: usize,
@@ -80,7 +78,6 @@ impl RocksdbExec {
 
         Ok(Self {
             core_context,
-            path: path.to_string(),
             full_table_name,
             schema,
             projection,
@@ -130,7 +127,6 @@ impl ExecutionPlan for RocksdbExec {
         let reader = RocksdbReader::new(
             self.core_context.clone(),
             self.schema.clone(),
-            self.path.as_str(),
             self.full_table_name.clone(),
             self.batch_size,
             self.projection.clone(),

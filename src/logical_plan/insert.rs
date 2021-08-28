@@ -28,12 +28,13 @@ use crate::meta::def::TableDef;
 use crate::meta::meta_util;
 use crate::mysql::error::{MysqlError, MysqlResult};
 use crate::store::engine::engine_util;
-use crate::store::engine::sled::SledOperator;
+
 use crate::test;
 use crate::util;
 use crate::util::convert::ToIdent;
 use crate::physical_plan::util::add_rows;
 use crate::core::logical_plan::CoreLogicalPlan;
+use datafusion::sql::planner::{SqlToRel, ContextProvider};
 
 pub struct Insert {
     global_context: Arc<Mutex<GlobalContext>>,
@@ -52,12 +53,12 @@ impl Insert {
         }
     }
 
-    pub fn execute(&self, datafusion_context: &mut ExecutionContext, session_context: &mut SessionContext) -> MysqlResult<CoreLogicalPlan> {
-        let full_table_name = meta_util::fill_up_table_name(session_context, table_name.clone()).unwrap();
+    pub fn execute<S: ContextProvider>(&self, datafusion_context: &mut ExecutionContext, session_context: &mut SessionContext, query_planner: &SqlToRel<S>) -> MysqlResult<CoreLogicalPlan> {
+        let full_table_name = meta_util::fill_up_table_name(session_context, self.table_name.clone()).unwrap();
 
         let table_map = self.global_context.lock().unwrap().meta_cache.get_table_map();
         if !table_map.contains_key(&full_table_name) {
-            let message = format!("Table '{}' doesn't exist", table_name.to_string());
+            let message = format!("Table '{}' doesn't exist", self.table_name.to_string());
             log::error!("{}", message);
             return Err(MysqlError::new_server_error(
                 1146,
@@ -69,7 +70,7 @@ impl Insert {
         let table_def = self.global_context.lock().unwrap().meta_cache.get_table(full_table_name.clone()).unwrap().clone();
 
         let mut column_values_list = vec![];
-        match &source.body {
+        match &self.source.body {
             SetExpr::Values(values) => {
                 for row_value_ast in &values.0 {
                     let mut row_value: Vec<Expr> = vec![];
@@ -95,14 +96,14 @@ impl Insert {
             _ => {}
         }
 
-        let mut column_names = vec![];
+        let mut column_name_list = vec![];
         if self.columns.len() < 1 {
             for column_def in table_def.get_columns() {
-                column_names.push(column_def.sql_column.name.to_string())
+                column_name_list.push(column_def.sql_column.name.to_string())
             };
         } else {
             for column in self.columns {
-                column_names.push(column.to_string())
+                column_name_list.push(column.to_string())
             };
         }
 
@@ -118,7 +119,7 @@ impl Insert {
         for (row_index, column_values) in column_values_list.iter().enumerate() {
             let mut column_value_map = HashMap::new();
             for (column_index, value) in column_values.iter().enumerate() {
-                let result = column_names.get(column_index);
+                let result = column_name_list.get(column_index);
                 let column_name = match result {
                     None => {
                         return Err(MysqlError::new_global_error(1105, format!(
@@ -160,7 +161,7 @@ impl Insert {
             column_value_map_list.push(column_value_map);
         }
 
-        let result = engine_util::EngineFactory::try_new_with_table_name(self.global_context.clone(), full_table_name.clone(), table_def.clone());
+        let result = engine_util::EngineFactory::try_new_with_table(self.global_context.clone(), full_table_name.clone(), table_def.clone());
         let engine = match result {
             Ok(engine) => engine,
             Err(mysql_error) => return Err(mysql_error),

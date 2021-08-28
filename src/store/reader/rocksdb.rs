@@ -30,7 +30,6 @@ use crate::meta::def::TableDef;
 pub struct RocksdbReader {
     core_context: Arc<Mutex<GlobalContext>>,
     table_schema: TableDef,
-    rocksdb_path: String,
     full_table_name: ObjectName,
     projection: Option<Vec<usize>>,
     projected_schema: SchemaRef,
@@ -44,7 +43,6 @@ impl RocksdbReader {
     pub fn new(
         core_context: Arc<Mutex<GlobalContext>>,
         table_schema: TableDef,
-        rocksdb_path: &str,
         full_table_name: ObjectName,
         batch_size: usize,
         projection: Option<Vec<usize>>,
@@ -82,12 +80,9 @@ impl RocksdbReader {
             }
         };
 
-        let rocksdb_path = String::from(rocksdb_path);
-
         Self {
             core_context,
             table_schema,
-            rocksdb_path,
             full_table_name,
             projection,
             projected_schema,

@@ -22,17 +22,15 @@ use crate::meta::{def, meta_util};
 pub struct RocksdbTable {
     core_context: Arc<Mutex<GlobalContext>>,
     table_schema: def::TableDef,
-    path: String,
     full_table_name: ObjectName,
 }
 
 impl RocksdbTable {
     #[allow(missing_docs)]
-    pub fn try_new(core_context: Arc<Mutex<GlobalContext>>, table_schema: def::TableDef, path: &str, full_table_name: ObjectName) -> Result<Self> {
+    pub fn try_new(core_context: Arc<Mutex<GlobalContext>>, table_schema: def::TableDef, full_table_name: ObjectName) -> Result<Self> {
         Ok(Self {
             core_context,
             table_schema,
-            path: path.to_string(),
             full_table_name,
         })
     }
@@ -57,7 +55,6 @@ impl TableProvider for RocksdbTable {
         let exec = RocksdbExec::try_new(
             self.core_context.clone(),
             self.table_schema.clone(),
-            self.path.as_str(),
             self.full_table_name.clone(),
             projection.clone(),
             batch_size,

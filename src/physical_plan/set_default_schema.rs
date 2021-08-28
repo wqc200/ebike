@@ -12,7 +12,7 @@ use crate::core::output::FinalCount;
 use crate::core::session_context::SessionContext;
 use crate::meta::{meta_util, meta_const};
 use crate::mysql::error::{MysqlResult, MysqlError};
-use crate::store::engine::sled::SledOperator;
+
 use crate::util;
 use sqlparser::ast::ObjectName;
 

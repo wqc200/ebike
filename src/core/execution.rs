@@ -68,10 +68,11 @@ use crate::meta::initial::initial_util;
 use crate::mysql::error::{MysqlError, MysqlResult};
 use crate::mysql::metadata::MysqlType::MYSQL_TYPE_BIT;
 use crate::physical_plan;
+use crate::logical_plan;
 use crate::physical_plan::create_db::CreateDb;
 use crate::physical_plan::util::CorePhysicalPlan;
 use crate::store::engine::engine_util;
-use crate::store::engine::sled::SledOperator;
+
 use crate::store::rocksdb::db::DB;
 use crate::test;
 use crate::util::convert::{convert_ident_to_lowercase, ToLowercase, ToObjectName, convert_object_name_to_lowercase};
@@ -83,7 +84,7 @@ use std::process::id;
 pub struct Execution {
     global_context: Arc<Mutex<GlobalContext>>,
     session_context: SessionContext,
-    execution_context: ExecutionContext,
+    datafusion_context: ExecutionContext,
     client_id: String,
 }
 
@@ -103,7 +104,7 @@ impl Execution {
         Self {
             global_context,
             session_context,
-            execution_context: datafusion_context,
+            datafusion_context,
             client_id,
         }
     }
@@ -113,9 +114,9 @@ impl Execution {
     /// Create a new execution context for in-memory queries
     pub fn try_init(&mut self) -> MysqlResult<()> {
         let variable = UserDefinedVar::new(self.global_context.clone());
-        self.execution_context.register_variable(VarType::UserDefined, Arc::new(variable));
+        self.datafusion_context.register_variable(VarType::UserDefined, Arc::new(variable));
         let variable = SystemVar::new(self.global_context.clone());
-        self.execution_context.register_variable(VarType::System, Arc::new(variable));
+        self.datafusion_context.register_variable(VarType::System, Arc::new(variable));
 
         let mut catalog_map = HashMap::new();
 
@@ -136,21 +137,21 @@ impl Execution {
                 .entry(table_name.to_string()).or_insert(table_def.clone());
         }
 
-        core_util::register_catalog(self.global_context.clone(), &mut self.execution_context, meta_const::CATALOG_NAME);
+        core_util::register_catalog(self.global_context.clone(), &mut self.datafusion_context, meta_const::CATALOG_NAME);
 
         for (catalog_name, schema_map) in catalog_map.iter() {
             for (schema_name, table_map) in schema_map.iter() {
-                core_util::register_schema(&mut self.execution_context, catalog_name.as_str(), schema_name.as_str());
+                core_util::register_schema(&mut self.datafusion_context, catalog_name.as_str(), schema_name.as_str());
 
                 for (table_name, table_def) in table_map.iter() {
                     let full_table_name = meta_util::create_full_table_name(catalog_name.to_string().as_str(), schema_name.to_string().as_str(), table_name.to_string().as_str());
-                    let engine = engine_util::EngineFactory::try_new_with_table_name(self.global_context.clone(), full_table_name.clone(), table_def.clone());
+                    let engine = engine_util::EngineFactory::try_new_with_table(self.global_context.clone(), full_table_name.clone());
                     let table_provider = match engine {
                         Ok(engine) => engine.table_provider(),
                         Err(mysql_error) => return Err(mysql_error),
                     };
 
-                    core_util::register_table(&mut self.execution_context, catalog_name.as_str(), schema_name.as_str(), table_name.as_str(), table_provider);
+                    core_util::register_table(&mut self.datafusion_context, catalog_name.as_str(), schema_name.as_str(), table_name.as_str(), table_provider);
                 }
             }
         }
@@ -175,7 +176,7 @@ impl Execution {
             Ok(Arc::new(res) as ArrayRef)
         };
 
-        self.execution_context.register_udf(create_udf(
+        self.datafusion_context.register_udf(create_udf(
             "database", // function name
             vec![], // input argument types
             Arc::new(DataType::Utf8), // output type
@@ -625,7 +626,7 @@ impl Execution {
         let table_name = meta_util::cut_out_table_name(full_table_name.clone());
 
         if schema_name.to_string().eq(meta_const::SCHEMA_NAME_OF_DEF_INFORMATION_SCHEMA) {
-            let schema_provider = core_util::get_schema_provider(&mut self.execution_context, meta_const::CATALOG_NAME, meta_const::SCHEMA_NAME_OF_DEF_INFORMATION_SCHEMA);
+            let schema_provider = core_util::get_schema_provider(&mut self.datafusion_context, meta_const::CATALOG_NAME, meta_const::SCHEMA_NAME_OF_DEF_INFORMATION_SCHEMA);
             let table_names = schema_provider.table_names();
             if table_names.contains(&table_name.to_string()) {
                 return Ok(());
@@ -1121,60 +1122,9 @@ impl Execution {
             SQLStatement::Insert {
                 table_name, columns, source, ..
             } => {
-                let full_table_name = meta_util::fill_up_table_name(&mut self.session_context, table_name.clone()).unwrap();
-
-                let table_map = self.global_context.lock().unwrap().meta_cache.get_table_map();
-                if !table_map.contains_key(&full_table_name) {
-                    let message = format!("Table '{}' doesn't exist", table_name.to_string());
-                    log::error!("{}", message);
-                    return Err(MysqlError::new_server_error(
-                        1146,
-                        "42S02",
-                        message.as_str(),
-                    ));
-                }
-
-                let table_def = self.global_context.lock().unwrap().meta_cache.get_table(full_table_name.clone()).unwrap().clone();
-
-                let mut column_value_vec = vec![];
-                match &source.body {
-                    SetExpr::Values(values) => {
-                        for row_value_ast in &values.0 {
-                            let mut row_value: Vec<Expr> = vec![];
-                            for column_value_ast in row_value_ast {
-                                let result = query_planner.sql_expr_to_logical_expr(&column_value_ast, &table_def.to_dfschema().unwrap());
-                                let expr = match result {
-                                    Ok(v) => v,
-                                    Err(e) => {
-                                        let message = e.to_string();
-                                        log::error!("{}", message);
-                                        return Err(MysqlError::new_server_error(
-                                            1305,
-                                            "42000",
-                                            message.as_str(),
-                                        ));
-                                    }
-                                };
-                                row_value.push(expr)
-                            }
-                            column_value_vec.push(row_value);
-                        }
-                    }
-                    _ => {}
-                }
-
-                let mut column_name_vec = vec![];
-                if columns.len() < 1 {
-                    for column_def in table_def.get_columns() {
-                        column_name_vec.push(column_def.sql_column.name.to_string())
-                    };
-                } else {
-                    for column in columns {
-                        column_name_vec.push(column.to_string())
-                    };
-                }
-
-                Ok(CoreLogicalPlan::Insert { table_name, table_def, column_name_vec, column_value_vec })
+                let logicalPlanInsert = logical_plan::insert::Insert::new(self.global_context.clone(), table_name.clone(), columns.clone(), source.clone());
+                let core_logical_plan = logicalPlanInsert.execute(&mut self.datafusion_context, &mut self.session_context, query_planner).unwrap();
+                Ok(core_logical_plan)
             }
             SQLStatement::Update { table_name, assignments, selection } => {
                 let full_table_name = meta_util::fill_up_table_name(&mut self.session_context, table_name.clone()).unwrap();
@@ -1254,7 +1204,7 @@ impl Execution {
     pub fn create_logical_plan(&mut self, sql: &str) -> MysqlResult<CoreLogicalPlan> {
         let dialect = &GenericDialect {};
         let statements = DFParser::parse_sql_with_dialect(sql, dialect).unwrap();
-        let state = self.execution_context.state.lock().unwrap().clone();
+        let state = self.datafusion_context.state.lock().unwrap().clone();
         let query_planner = SqlToRel::new(&state);
 
         match &statements[0] {
@@ -1266,7 +1216,7 @@ impl Execution {
     }
 
     pub fn optimize_from_datafusion(&self, logical_plan: &LogicalPlan) -> MysqlResult<LogicalPlan> {
-        let result = self.execution_context.optimize(logical_plan);
+        let result = self.datafusion_context.optimize(logical_plan);
         match result {
             Ok(logical_plan) => {
                 Ok(logical_plan)
@@ -1294,10 +1244,10 @@ impl Execution {
             CoreLogicalPlan::AlterTableDropColumn { table_name, operation, select_from_columns_for_delete: for_delete, select_from_columns_for_update: for_update } => {
                 let alter_table = physical_plan::alter_table::AlterTable::new(self.global_context.clone(), table_name.clone(), operation.clone());
 
-                let execution_plan = self.execution_context.create_physical_plan(for_delete.logical_plan()).unwrap();
+                let execution_plan = self.datafusion_context.create_physical_plan(for_delete.logical_plan()).unwrap();
                 let physical_plan_delete_from_columns = physical_plan::delete::Delete::new(self.global_context.clone(), meta_util::convert_to_object_name(meta_const::FULL_TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_COLUMNS), execution_plan);
 
-                let execution_plan = self.execution_context.create_physical_plan(for_update.logical_plan()).unwrap();
+                let execution_plan = self.datafusion_context.create_physical_plan(for_update.logical_plan()).unwrap();
                 let physical_plan_update_from_columns = physical_plan::update::Update::new(self.global_context.clone(), meta_util::convert_to_object_name(meta_const::FULL_TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_COLUMNS), for_update.assignments(), execution_plan);
 
                 Ok(CorePhysicalPlan::AlterTableDropColumn(alter_table, physical_plan_delete_from_columns, physical_plan_update_from_columns))
@@ -1307,7 +1257,7 @@ impl Execution {
                 Ok(CorePhysicalPlan::AlterTableAddColumn(alter_table))
             }
             CoreLogicalPlan::Select(logical_plan) => {
-                let result = self.execution_context.create_physical_plan(logical_plan);
+                let result = self.datafusion_context.create_physical_plan(logical_plan);
                 let execution_plan = match result {
                     Ok(execution_plan) => execution_plan,
                     Err(datafusion_error) => {
@@ -1319,7 +1269,7 @@ impl Execution {
                 Ok(CorePhysicalPlan::Select(select))
             }
             CoreLogicalPlan::Explain(logical_plan) => {
-                let execution_plan = self.execution_context.create_physical_plan(logical_plan)?;
+                let execution_plan = self.datafusion_context.create_physical_plan(logical_plan)?;
                 let select = physical_plan::select::Select::new(self.global_context.clone(), execution_plan);
                 Ok(CorePhysicalPlan::Select(select))
             }
@@ -1330,13 +1280,13 @@ impl Execution {
             CoreLogicalPlan::DropTable { input_table_name, select_from_columns: delete_from_columns, select_from_statistics: delete_from_statistics, select_from_tables: delete_from_tables } => {
                 let drop_table = physical_plan::drop_table::DropTable::new(self.global_context.clone(), input_table_name.clone());
 
-                let execution_plan = self.execution_context.create_physical_plan(delete_from_columns.logical_plan()).unwrap();
+                let execution_plan = self.datafusion_context.create_physical_plan(delete_from_columns.logical_plan()).unwrap();
                 let physical_plan_delete_from_columns = physical_plan::delete::Delete::new(self.global_context.clone(), meta_util::convert_to_object_name(meta_const::FULL_TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_COLUMNS), execution_plan);
 
-                let execution_plan = self.execution_context.create_physical_plan(delete_from_statistics.logical_plan()).unwrap();
+                let execution_plan = self.datafusion_context.create_physical_plan(delete_from_statistics.logical_plan()).unwrap();
                 let physical_plan_delete_from_statistics = physical_plan::delete::Delete::new(self.global_context.clone(), meta_util::convert_to_object_name(meta_const::FULL_TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_STATISTICS), execution_plan);
 
-                let execution_plan = self.execution_context.create_physical_plan(delete_from_tables.logical_plan()).unwrap();
+                let execution_plan = self.datafusion_context.create_physical_plan(delete_from_tables.logical_plan()).unwrap();
                 let physical_plan_delete_from_tables = physical_plan::delete::Delete::new(self.global_context.clone(), meta_util::convert_to_object_name(meta_const::FULL_TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_TABLES), execution_plan);
 
                 Ok(CorePhysicalPlan::DropTable(drop_table, physical_plan_delete_from_columns, physical_plan_delete_from_statistics, physical_plan_delete_from_tables))
@@ -1358,12 +1308,12 @@ impl Execution {
                 Ok(CorePhysicalPlan::Insert(cd))
             }
             CoreLogicalPlan::Update { logical_plan, table_name, assignments } => {
-                let execution_plan = self.execution_context.create_physical_plan(logical_plan)?;
+                let execution_plan = self.datafusion_context.create_physical_plan(logical_plan)?;
                 let update = physical_plan::update::Update::new(self.global_context.clone(), table_name.clone(), assignments.clone(), execution_plan);
                 Ok(CorePhysicalPlan::Update(update))
             }
             CoreLogicalPlan::Delete { logical_plan, table_name } => {
-                let execution_plan = self.execution_context.create_physical_plan(logical_plan)?;
+                let execution_plan = self.datafusion_context.create_physical_plan(logical_plan)?;
                 let delete = physical_plan::delete::Delete::new(self.global_context.clone(), table_name.clone(), execution_plan);
                 Ok(CorePhysicalPlan::Delete(delete))
             }
@@ -1374,13 +1324,13 @@ impl Execution {
             CoreLogicalPlan::ShowCreateTable { table_name, select_from_columns, select_from_statistics, select_from_tables } => {
                 let show_create_table = physical_plan::show_create_table::ShowCreateTable::new(self.global_context.clone(), table_name.as_str());
 
-                let execution_plan = self.execution_context.create_physical_plan(select_from_columns.logical_plan()).unwrap();
+                let execution_plan = self.datafusion_context.create_physical_plan(select_from_columns.logical_plan()).unwrap();
                 let select_columns = physical_plan::select::Select::new(self.global_context.clone(), execution_plan);
 
-                let execution_plan = self.execution_context.create_physical_plan(select_from_statistics.logical_plan()).unwrap();
+                let execution_plan = self.datafusion_context.create_physical_plan(select_from_statistics.logical_plan()).unwrap();
                 let select_statistics = physical_plan::select::Select::new(self.global_context.clone(), execution_plan);
 
-                let execution_plan = self.execution_context.create_physical_plan(select_from_tables.logical_plan()).unwrap();
+                let execution_plan = self.datafusion_context.create_physical_plan(select_from_tables.logical_plan()).unwrap();
                 let select_tables = physical_plan::select::Select::new(self.global_context.clone(), execution_plan);
 
                 Ok(CorePhysicalPlan::ShowCreateTable(show_create_table, select_columns, select_statistics, select_tables))
@@ -1388,10 +1338,10 @@ impl Execution {
             CoreLogicalPlan::ShowColumnsFrom { select_from_columns, select_from_statistics } => {
                 let show_columns_from = physical_plan::show_columns_from::ShowColumnsFrom::new(self.global_context.clone());
 
-                let execution_plan = self.execution_context.create_physical_plan(select_from_columns.logical_plan()).unwrap();
+                let execution_plan = self.datafusion_context.create_physical_plan(select_from_columns.logical_plan()).unwrap();
                 let select_columns = physical_plan::select::Select::new(self.global_context.clone(), execution_plan);
 
-                let execution_plan = self.execution_context.create_physical_plan(select_from_statistics.logical_plan()).unwrap();
+                let execution_plan = self.datafusion_context.create_physical_plan(select_from_statistics.logical_plan()).unwrap();
                 let select_statistics = physical_plan::select::Select::new(self.global_context.clone(), execution_plan);
 
                 Ok(CorePhysicalPlan::ShowColumnsFrom(show_columns_from, select_columns, select_statistics))
@@ -1432,7 +1382,7 @@ impl Execution {
     ) -> MysqlResult<CoreOutput> {
         match core_physical_plan {
             CorePhysicalPlan::AlterTableAddColumn(physical_plan_alter_table) => {
-                let result = physical_plan_alter_table.execute(&mut self.execution_context, &mut self.session_context);
+                let result = physical_plan_alter_table.execute(&mut self.datafusion_context, &mut self.session_context);
                 match result {
                     Ok(count) => {
                         Ok(CoreOutput::FinalCount(FinalCount::new(count, 0)))
@@ -1451,7 +1401,7 @@ impl Execution {
                     return Err(mysql_error);
                 }
 
-                let result = physical_plan_alter_table.execute(&mut self.execution_context, &mut self.session_context);
+                let result = physical_plan_alter_table.execute(&mut self.datafusion_context, &mut self.session_context);
                 match result {
                     Ok(count) => {
                         Ok(CoreOutput::FinalCount(FinalCount::new(count, 0)))
@@ -1460,7 +1410,7 @@ impl Execution {
                 }
             }
             CorePhysicalPlan::SetDefaultSchema(set_default_schema) => {
-                let result = set_default_schema.execute(&mut self.execution_context, self.global_context.clone(), &mut self.session_context);
+                let result = set_default_schema.execute(&mut self.datafusion_context, self.global_context.clone(), &mut self.session_context);
                 match result {
                     Ok(count) => Ok(CoreOutput::FinalCount(FinalCount::new_with_message(count, 0, "Database changed"))),
                     Err(mysql_error) => Err(mysql_error),
@@ -1488,14 +1438,14 @@ impl Execution {
                 }
             }
             CorePhysicalPlan::CreateDb(create_db) => {
-                let result = create_db.execute(self.global_context.clone(), &mut self.execution_context, &mut self.session_context);
+                let result = create_db.execute(self.global_context.clone(), &mut self.datafusion_context, &mut self.session_context);
                 match result {
                     Ok(count) => Ok(CoreOutput::FinalCount(FinalCount::new(count, 0))),
                     Err(mysql_error) => Err(mysql_error),
                 }
             }
             CorePhysicalPlan::CreateTable(create_table) => {
-                let result = create_table.execute(&mut self.execution_context, &mut self.session_context);
+                let result = create_table.execute(&mut self.datafusion_context, &mut self.session_context);
                 match result {
                     Ok(count) => Ok(CoreOutput::FinalCount(FinalCount::new(count, 0))),
                     Err(mysql_error) => Err(mysql_error),
@@ -1524,21 +1474,21 @@ impl Execution {
                     return Err(mysql_error);
                 }
 
-                let result = physical_plan_drop_table.execute(&mut self.execution_context, &mut self.session_context);
+                let result = physical_plan_drop_table.execute(&mut self.datafusion_context, &mut self.session_context);
                 match result {
                     Ok(count) => Ok(CoreOutput::FinalCount(FinalCount::new(count, 0))),
                     Err(mysql_error) => Err(mysql_error),
                 }
             }
             CorePhysicalPlan::Insert(physical_plan_insert) => {
-                let result = physical_plan_insert.execute(&mut self.execution_context, &mut self.session_context);
+                let result = physical_plan_insert.execute();
                 match result {
                     Ok(count) => Ok(CoreOutput::FinalCount(FinalCount::new(count, 0))),
                     Err(mysql_error) => Err(mysql_error),
                 }
             }
             CorePhysicalPlan::SetVariable(set_variable) => {
-                let result = set_variable.execute(&mut self.execution_context, self.global_context.clone(), &mut self.session_context);
+                let result = set_variable.execute(&mut self.datafusion_context, self.global_context.clone(), &mut self.session_context);
                 match result {
                     Ok(count) => Ok(CoreOutput::FinalCount(FinalCount::new(count, 0))),
                     Err(mysql_error) => Err(mysql_error),

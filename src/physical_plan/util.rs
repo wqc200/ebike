@@ -32,7 +32,7 @@ use crate::physical_plan::show_grants::ShowGrants;
 use crate::physical_plan::show_privileges::ShowPrivileges;
 use crate::physical_plan::update::Update;
 use crate::store::engine::engine_util;
-use crate::store::engine::engine_util::Engine;
+use crate::store::engine::engine_util::TableEngine;
 use crate::util;
 use crate::util::convert::ToIdent;
 
@@ -63,7 +63,7 @@ pub enum CorePhysicalPlan {
 pub fn add_rows(global_context: Arc<Mutex<GlobalContext>>, full_table_name: ObjectName, add_entry_type: engine_util::ADD_ENTRY_TYPE, column_names: Vec<String>, rows: Vec<Vec<ScalarValue>>) -> MysqlResult<u64> {
     let table_def = global_context.lock().unwrap().meta_cache.get_table(full_table_name.clone()).unwrap().clone();
 
-    let result = engine_util::EngineFactory::try_new_with_table_name(global_context.clone(), full_table_name.clone(), table_def.clone());
+    let result = engine_util::EngineFactory::try_new_with_table(global_context.clone(), full_table_name.clone(), table_def.clone());
     let engine = match result {
         Ok(engine) => engine,
         Err(mysql_error) => return Err(mysql_error),

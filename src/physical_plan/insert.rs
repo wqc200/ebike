@@ -24,7 +24,7 @@ use crate::meta::def::TableDef;
 use crate::meta::meta_util;
 use crate::mysql::error::{MysqlError, MysqlResult};
 use crate::store::engine::engine_util;
-use crate::store::engine::sled::SledOperator;
+
 use crate::test;
 use crate::util;
 use crate::util::convert::ToIdent;
@@ -52,7 +52,7 @@ impl PhysicalPlanInsert {
     }
 
     pub fn execute(&self) -> MysqlResult<u64> {
-        let result = EngineFactory::try_new_with_table_name(self.global_context.clone(), self.full_table_name.clone());
+        let result = EngineFactory::try_new_with_table(self.global_context.clone(), self.full_table_name.clone());
         let engine = match result {
             Ok(engine) => engine,
             Err(mysql_error) => return Err(mysql_error),
@@ -101,7 +101,7 @@ impl PhysicalPlanInsert {
 
 
                 let column_orm_id = self.global_context.lock().unwrap().meta_cache.get_serial_number(self.full_table_name.clone(), column_name.clone()).unwrap();
-                let column_key = util::dbkey::create_column_key(full_table_name.clone(), column_orm_id, rowid.as_str());
+                let column_key = util::dbkey::create_column_key(self.full_table_name.clone(), column_orm_id, rowid.as_str());
                 log::debug!("column_key: {:?}", String::from_utf8_lossy(column_key.to_vec().as_slice()));
                 let result = core_util::convert_scalar_value(column_value.clone()).unwrap();
                 log::debug!("column_value: {:?}", result);
@@ -111,6 +111,6 @@ impl PhysicalPlanInsert {
             }
         }
 
-        Ok(rows.len() as u64)
+        Ok(self.column_value_map_list.len() as u64)
     }
 }

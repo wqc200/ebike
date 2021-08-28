@@ -10,7 +10,7 @@
 // use crate::core::context::CoreContext;
 // use crate::core::util::get_real_value;
 // use crate::meta::context::TableContext;
-// use crate::store::engine::sled::SledOperator;
+//
 // use crate::util;
 //
 // use super::rocksdb::aggr_test_rocksdb_schema;

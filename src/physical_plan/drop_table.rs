@@ -19,7 +19,7 @@ use crate::meta::meta_util;
 use crate::mysql::error::{MysqlResult, MysqlError};
 use crate::physical_plan::insert::PhysicalPlanInsert;
 use crate::store::engine::engine_util;
-use crate::store::engine::sled::SledOperator;
+
 use crate::util;
 
 pub struct DropTable {

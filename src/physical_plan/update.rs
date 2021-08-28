@@ -33,7 +33,7 @@ use crate::core::output::FinalCount;
 use crate::core::core_util as CoreUtil;
 
 use crate::mysql::error::{MysqlError, MysqlResult};
-use crate::store::engine::sled::SledOperator;
+
 use crate::test;
 use crate::util;
 use crate::core::session_context::SessionContext;

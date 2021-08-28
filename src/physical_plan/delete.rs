@@ -34,8 +34,8 @@ use crate::meta::meta_util;
 use crate::mysql::{command, packet, request, response, message, metadata};
 use crate::mysql::error::{MysqlError, MysqlResult};
 use crate::store::engine::engine_util;
-use crate::store::engine::engine_util::Engine;
-use crate::store::engine::sled::SledOperator;
+use crate::store::engine::engine_util::TableEngine;
+
 use crate::test;
 use crate::util;
 use crate::store::rocksdb::db::Error;
@@ -84,7 +84,7 @@ impl Delete {
         let full_table_name = meta_util::fill_up_table_name(session_context, self.table_name.clone()).unwrap();
 
         let table_schema = self.core_context.lock().unwrap().meta_cache.get_table(full_table_name.clone()).unwrap();
-        let result = engine_util::EngineFactory::try_new_with_table_name(self.core_context.clone(), self.table_name.clone(), table_schema.clone());
+        let result = engine_util::EngineFactory::try_new_with_table(self.core_context.clone(), self.table_name.clone(), table_schema.clone());
         let engine = match result {
             Err(mysql_error) => {
                 return Err(mysql_error);

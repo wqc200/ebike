@@ -23,7 +23,7 @@ use crate::meta::{meta_util, scalar_value};
 use crate::mysql::error::{MysqlResult, MysqlError};
 use crate::mysql::metadata;
 use crate::physical_plan::insert::PhysicalPlanInsert;
-use crate::store::engine::sled::SledOperator;
+
 use crate::util;
 use crate::mysql::metadata::ArrayCell;
 use arrow::compute::not;
