@@ -406,7 +406,7 @@ pub fn store_add_column_serial_number(global_context: Arc<Mutex<GlobalContext>>,
         let column_name = column_def.name;
 
         let key = util::dbkey::create_column_serial_number(full_table_name.clone(), column_name.clone());
-        let value = orm_id.as;
+        let value = orm_id.to_string().as_bytes();
         let result = store_engine.put_key(key, value);
     }
     let key = util::dbkey::create_current_serial_number(full_table_name.clone());
@@ -831,8 +831,10 @@ pub fn read_information_schema_tables_record(global_context: Arc<Mutex<GlobalCon
 }
 
 pub fn store_get_column_serial_number(global_context: Arc<Mutex<GlobalContext>>, full_table_name: ObjectName, column_name: Ident) -> MysqlResult<Option<usize>> {
+    let store_engine = StoreEngineFactory::try_new_schema_engine(global_context.clone()).unwrap();
+
     let key = util::dbkey::create_column_serial_number(full_table_name, column_name.clone());
-    match global_context.lock().unwrap().rocksdb_db.get(key) {
+    match store_engine.get_key(key) {
         Ok(result) => {
             match result {
                 Some(value) => match std::str::from_utf8(&value) {

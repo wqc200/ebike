@@ -74,7 +74,7 @@ impl AlterTable {
         let result = self.global_context.lock().unwrap().meta_cache.get_table(full_table_name.clone());
         match result {
             Some(table_def) => {
-                let engine = engine_util::TableEngineFactory::try_new_with_table(self.global_context.clone(), self.table_name.clone(), table_def.clone());
+                let engine = engine_util::TableEngineFactory::try_new_with_table(self.global_context.clone(), self.table_name.clone());
                 let provider = match engine {
                     Ok(engine) => engine.table_provider(),
                     Err(mysql_error) => return Err(mysql_error),

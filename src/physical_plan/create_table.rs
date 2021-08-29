@@ -81,7 +81,7 @@ impl CreateTable {
         };
         self.global_context.lock().unwrap().meta_cache.add_table(full_table_name.clone(), table_def.clone());
 
-        let table_provider = Arc::new(RocksdbTable::try_new(self.global_context.clone(), table_def.clone(), "/tmp/rocksdb/", full_table_name.clone()).unwrap());
+        let table_provider = Arc::new(RocksdbTable::try_new(self.global_context.clone(), table_def.clone(), full_table_name.clone()).unwrap());
         core_util::register_table(execution_context, catalog_name.to_string().as_str() , schema_name.to_string().as_str(), table_name.to_string().as_str(), table_provider);
 
         Ok(1)

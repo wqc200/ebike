@@ -30,11 +30,11 @@ use crate::core::global_context::GlobalContext;
 use crate::core::output::CoreOutput;
 use crate::core::output::FinalCount;
 use crate::core::core_util as CoreUtil;
-use crate::meta::meta_util;
+use crate::meta::{meta_util, meta_const};
 use crate::mysql::{command, packet, request, response, message, metadata};
 use crate::mysql::error::{MysqlError, MysqlResult};
 use crate::store::engine::engine_util;
-use crate::store::engine::engine_util::TableEngine;
+use crate::store::engine::engine_util::{TableEngine, StoreEngineFactory};
 
 use crate::test;
 use crate::util;
@@ -42,19 +42,19 @@ use crate::store::rocksdb::db::Error;
 use crate::core::session_context::SessionContext;
 
 pub struct Delete {
-    core_context: Arc<Mutex<GlobalContext>>,
+    global_context: Arc<Mutex<GlobalContext>>,
     table_name: ObjectName,
     execution_plan: Arc<dyn ExecutionPlan>,
 }
 
 impl Delete {
     pub fn new(
-        core_context: Arc<Mutex<GlobalContext>>,
+        global_context: Arc<Mutex<GlobalContext>>,
         table_name: ObjectName,
         execution_plan: Arc<dyn ExecutionPlan>,
     ) -> Self {
         Self {
-            core_context,
+            global_context,
             table_name,
             execution_plan,
         }
@@ -83,22 +83,57 @@ impl Delete {
     pub fn delete_record(&self, session_context: &mut SessionContext, batch: RecordBatch) -> MysqlResult<u64> {
         let full_table_name = meta_util::fill_up_table_name(session_context, self.table_name.clone()).unwrap();
 
-        let table_schema = self.core_context.lock().unwrap().meta_cache.get_table(full_table_name.clone()).unwrap();
-        let result = engine_util::TableEngineFactory::try_new_with_table(self.core_context.clone(), self.table_name.clone(), table_schema.clone());
-        let engine = match result {
-            Err(mysql_error) => {
-                return Err(mysql_error);
-            }
-            Ok(engine) => {
-                engine
-            }
-        };
+        let store_engine = StoreEngineFactory::try_new_with_table(global_context.clone(), full_table_name.clone()).unwrap();
 
         let rowid_array = batch
             .column(0)
             .as_any()
             .downcast_ref::<StringArray>()
             .unwrap();
+
+        let catalog_name = meta_util::cut_out_catalog_name(self.full_table_name.clone()).to_string();
+        let schema_name = meta_util::cut_out_schema_name(self.full_table_name.clone()).to_string();
+        let table_name = meta_util::cut_out_table_name(self.full_table_name.clone()).to_string();
+
+        let table_schema = self.global_context.lock().unwrap().meta_cache.get_table(self.full_table_name.clone()).unwrap();
+
+        for row_index in 0..rowid_array.len() {
+            let rowid = rowid_array.value(row_index);
+
+            let recordPutKey = util::dbkey::create_record_rowid(self.full_table_name.clone(), rowid.as_ref());
+            log::debug!("recordPutKey pk: {:?}", String::from_utf8_lossy(recordPutKey.to_vec().as_slice()));
+            self.global_context.lock().unwrap().rocksdb_db.delete(recordPutKey.to_vec());
+
+            for column_def in table_schema.to_sqlcolumns() {
+                let column_name = column_def.name;
+                if column_name.to_string().contains(meta_const::COLUMN_ROWID) {
+                    continue;
+                }
+
+                let result = self.global_context.lock().unwrap().meta_cache.get_serial_number(self.full_table_name.clone(), column_name.clone());
+                let orm_id = match result {
+                    Ok(orm_id) => orm_id,
+                    Err(mysql_error) => {
+                        return Err(mysql_error);
+                    }
+                };
+
+                let recordPutKey = util::dbkey::create_record_column(self.full_table_name.clone(), orm_id, rowid.as_ref());
+                let result = self.global_context.lock().unwrap().rocksdb_db.delete(recordPutKey.to_vec());
+                match result {
+                    Err(error) => {
+                        return Err(MysqlError::new_global_error(1105, format!(
+                            "Unknown error. An error occurred while deleting the key, key: {:?}, error: {:?}",
+                            recordPutKey,
+                            error,
+                        ).as_str()));
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+
         let result = engine.delete(rowid_array);
         result
     }
