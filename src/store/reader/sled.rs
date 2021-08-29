@@ -64,7 +64,7 @@ impl SledReader {
             None => schema_ref.clone(),
         };
 
-        let mut sled_db = global_context.lock().unwrap().engine.sled.unwrap();
+        let mut sled_db = global_context.lock().unwrap().engine.sled_db.unwrap();
         let mut sled_iter = None;
 
         let mut start_scan_key = CreateScanKey::new("");

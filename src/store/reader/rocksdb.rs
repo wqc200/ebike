@@ -13,7 +13,7 @@ use uuid::Uuid;
 use crate::core::global_context::GlobalContext;
 use crate::meta::{meta_util as MetaUtil, meta_const, meta_util};
 use crate::store::reader::reader_util;
-use crate::store::rocksdb::db::DB;
+use crate::store::rocksdb::db::DB as RocksdbDB;
 use crate::store::rocksdb::iterator::DBRawIterator;
 use crate::store::rocksdb::option::{Options, ReadOptions};
 use crate::store::rocksdb::slice_transform::SliceTransform;
@@ -28,12 +28,13 @@ use crate::util::convert::{ToObjectName, ToIdent};
 use crate::meta::def::TableDef;
 
 pub struct RocksdbReader {
-    core_context: Arc<Mutex<GlobalContext>>,
+    global_context: Arc<Mutex<GlobalContext>>,
     table_schema: TableDef,
     full_table_name: ObjectName,
     projection: Option<Vec<usize>>,
     projected_schema: SchemaRef,
     batch_size: usize,
+    rocksdb_db: RocksdbDB,
     rocksdb_iter: DBRawIterator,
     start_scan_key: CreateScanKey,
     end_scan_key: CreateScanKey,
@@ -41,7 +42,7 @@ pub struct RocksdbReader {
 
 impl RocksdbReader {
     pub fn new(
-        core_context: Arc<Mutex<GlobalContext>>,
+        global_context: Arc<Mutex<GlobalContext>>,
         table_schema: TableDef,
         full_table_name: ObjectName,
         batch_size: usize,
@@ -61,11 +62,12 @@ impl RocksdbReader {
             None => schema_ref.clone(),
         };
 
-        let mut rocksdb_iter = core_context.lock().unwrap().rocksdb_db.raw_iterator();
+        let mut rocksdb_db = global_context.lock().unwrap().engine.rocksdb_db.unwrap();
+        let mut rocksdb_iter = rocksdb_db.raw_iterator();
 
         let mut start_scan_key = CreateScanKey::new("");
         let mut end_scan_key = CreateScanKey::new("");
-        let table_index_prefix = reader_util::get_seek_prefix(core_context.clone(), full_table_name.clone(), table_schema.clone(), filters.clone()).unwrap();
+        let table_index_prefix = reader_util::get_seek_prefix(global_context.clone(), full_table_name.clone(), table_schema.clone(), filters.clone()).unwrap();
         match table_index_prefix {
             SeekType::NoRecord => {},
             SeekType::FullTableScan { start, end} => {
@@ -81,12 +83,13 @@ impl RocksdbReader {
         };
 
         Self {
-            core_context,
+            global_context,
             table_schema,
             full_table_name,
             projection,
             projected_schema,
             batch_size,
+            rocksdb_db,
             rocksdb_iter,
             start_scan_key,
             end_scan_key,
@@ -178,7 +181,7 @@ impl Iterator for RocksdbReader {
             } else {
                 let column_name = field_name.to_ident();
 
-                let result = self.core_context.lock().unwrap().meta_cache.get_serial_number(self.full_table_name.clone(), column_name.clone());
+                let result = self.global_context.lock().unwrap().meta_cache.get_serial_number(self.full_table_name.clone(), column_name.clone());
                 let column_index = match result {
                     Ok(value) => value,
                     Err(error) => {
@@ -190,8 +193,8 @@ impl Iterator for RocksdbReader {
                 };
 
                 for rowid in rowids.clone() {
-                    let db_key = util::dbkey::create_record_column(self.full_table_name.clone(), column_index, rowid.as_str());
-                    let db_value = self.core_context.lock().unwrap().rocksdb_db.get(db_key.clone());
+                    let record_column_key = util::dbkey::create_record_column(self.full_table_name.clone(), column_index, rowid.as_str());
+                    let db_value = self.rocksdb_db.get(record_column_key);
 
                     match db_value {
                         Ok(value) => {
@@ -252,7 +255,7 @@ impl Iterator for RocksdbReader {
                         Err(error) => {
                             return Some(Err(ArrowError::IoError(format!(
                                 "Error get '{:?}' from rocksdb: {:?}",
-                                db_key,
+                                record_column_key,
                                 error
                             ))));
                         }

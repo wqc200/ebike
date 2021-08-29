@@ -63,7 +63,7 @@ pub fn create_table_key(schema_name: String) -> Box<[u8]> {
     key(k.as_bytes())
 }
 
-pub fn create_record_rowid(full_table_name: ObjectName, uuid: &str) -> Box<[u8]> {
+pub fn create_record_rowid(full_table_name: ObjectName, uuid: &str) -> String {
     let mut k = String::from("/Table/rowid");
 
     k.push_str("/");
@@ -72,7 +72,7 @@ pub fn create_record_rowid(full_table_name: ObjectName, uuid: &str) -> Box<[u8]>
     k.push_str("/");
     k.push_str(uuid);
 
-    key(k.as_bytes())
+    k
 }
 
 pub fn create_column_rowid_key(full_table_name: ObjectName, uuid: &str) -> String {
@@ -367,7 +367,7 @@ pub fn scan_record_unique(schema_name: &str, column_tuple_vec: Vec<(usize, Strin
     key(k.as_bytes())
 }
 
-pub fn create_record_column(full_table_name: ObjectName, orm_id: usize, uuid: &str) -> Box<[u8]> {
+pub fn create_record_column(full_table_name: ObjectName, orm_id: usize, uuid: &str) -> String {
     let mut k = String::from("/Table/index/column");
 
     k.push_str("/");
@@ -379,7 +379,7 @@ pub fn create_record_column(full_table_name: ObjectName, orm_id: usize, uuid: &s
     k.push_str("/");
     k.push_str(&uuid);
 
-    key(k.as_bytes())
+    k
 }
 
 pub fn parse_record_column(key: Box<[u8]>) -> (usize, usize) {

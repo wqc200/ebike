@@ -83,7 +83,7 @@ impl Delete {
     pub fn delete_record(&self, session_context: &mut SessionContext, batch: RecordBatch) -> MysqlResult<u64> {
         let full_table_name = meta_util::fill_up_table_name(session_context, self.table_name.clone()).unwrap();
 
-        let store_engine = StoreEngineFactory::try_new_with_table(global_context.clone(), full_table_name.clone()).unwrap();
+        let store_engine = StoreEngineFactory::try_new_with_table(self.global_context.clone(), full_table_name.clone()).unwrap();
 
         let rowid_array = batch
             .column(0)
@@ -91,18 +91,18 @@ impl Delete {
             .downcast_ref::<StringArray>()
             .unwrap();
 
-        let catalog_name = meta_util::cut_out_catalog_name(self.full_table_name.clone()).to_string();
-        let schema_name = meta_util::cut_out_schema_name(self.full_table_name.clone()).to_string();
-        let table_name = meta_util::cut_out_table_name(self.full_table_name.clone()).to_string();
+        let catalog_name = meta_util::cut_out_catalog_name(full_table_name.clone()).to_string();
+        let schema_name = meta_util::cut_out_schema_name(full_table_name.clone()).to_string();
+        let table_name = meta_util::cut_out_table_name(full_table_name.clone()).to_string();
 
-        let table_schema = self.global_context.lock().unwrap().meta_cache.get_table(self.full_table_name.clone()).unwrap();
+        let table_schema = self.global_context.lock().unwrap().meta_cache.get_table(full_table_name.clone()).unwrap();
 
         for row_index in 0..rowid_array.len() {
             let rowid = rowid_array.value(row_index);
 
-            let recordPutKey = util::dbkey::create_record_rowid(self.full_table_name.clone(), rowid.as_ref());
-            log::debug!("recordPutKey pk: {:?}", String::from_utf8_lossy(recordPutKey.to_vec().as_slice()));
-            self.global_context.lock().unwrap().rocksdb_db.delete(recordPutKey.to_vec());
+            let record_rowid_key = util::dbkey::create_record_rowid(full_table_name.clone(), rowid.as_ref());
+            log::debug!("record_rowid_key: {:?}", record_rowid_key);
+            store_engine.delete_key(record_rowid_key);
 
             for column_def in table_schema.to_sqlcolumns() {
                 let column_name = column_def.name;
@@ -110,7 +110,7 @@ impl Delete {
                     continue;
                 }
 
-                let result = self.global_context.lock().unwrap().meta_cache.get_serial_number(self.full_table_name.clone(), column_name.clone());
+                let result = self.global_context.lock().unwrap().meta_cache.get_serial_number(full_table_name.clone(), column_name.clone());
                 let orm_id = match result {
                     Ok(orm_id) => orm_id,
                     Err(mysql_error) => {
@@ -118,13 +118,13 @@ impl Delete {
                     }
                 };
 
-                let recordPutKey = util::dbkey::create_record_column(self.full_table_name.clone(), orm_id, rowid.as_ref());
-                let result = self.global_context.lock().unwrap().rocksdb_db.delete(recordPutKey.to_vec());
+                let record_column_key = util::dbkey::create_record_column(full_table_name.clone(), orm_id, rowid.as_ref());
+                let result = store_engine.delete_key(record_column_key);
                 match result {
                     Err(error) => {
                         return Err(MysqlError::new_global_error(1105, format!(
                             "Unknown error. An error occurred while deleting the key, key: {:?}, error: {:?}",
-                            recordPutKey,
+                            record_column_key,
                             error,
                         ).as_str()));
                     }
@@ -133,8 +133,6 @@ impl Delete {
             }
         }
 
-
-        let result = engine.delete(rowid_array);
-        result
+        Ok(rowid_array.len() as u64)
     }
 }

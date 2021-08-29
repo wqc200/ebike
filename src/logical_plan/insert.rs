@@ -32,7 +32,6 @@ use crate::store::engine::engine_util;
 use crate::test;
 use crate::util;
 use crate::util::convert::ToIdent;
-use crate::physical_plan::util::add_rows;
 use crate::core::logical_plan::CoreLogicalPlan;
 use datafusion::sql::planner::{SqlToRel, ContextProvider};
 

@@ -19,7 +19,6 @@ use crate::store::engine::engine_util;
 use crate::store::engine::engine_util::{TableEngine, ADD_ENTRY_TYPE};
 use crate::store::reader::rocksdb::RocksdbReader;
 use crate::util::convert::{ToIdent, ToObjectName};
-use crate::physical_plan::util::add_rows;
 use crate::physical_plan;
 use crate::physical_plan::insert::PhysicalPlanInsert;
 

@@ -39,9 +39,10 @@ use crate::util;
 use crate::core::session_context::SessionContext;
 use crate::meta::meta_util;
 use crate::util::convert::ToObjectName;
+use crate::store::engine::engine_util::StoreEngineFactory;
 
 pub struct Update {
-    core_context: Arc<Mutex<GlobalContext>>,
+    global_context: Arc<Mutex<GlobalContext>>,
     table_name: ObjectName,
     assignments: Vec<Assignment>,
     execution_plan: Arc<ExecutionPlan>,
@@ -49,13 +50,13 @@ pub struct Update {
 
 impl Update {
     pub fn new(
-        core_context: Arc<Mutex<GlobalContext>>,
+        global_context: Arc<Mutex<GlobalContext>>,
         table_name: ObjectName,
         assignments: Vec<Assignment>,
         execution_plan: Arc<ExecutionPlan>,
     ) -> Self {
         Self {
-            core_context,
+            global_context,
             table_name,
             assignments,
             execution_plan,
@@ -84,6 +85,8 @@ impl Update {
 
     pub fn update_record(&self, session_context: &mut SessionContext, batch: RecordBatch) -> MysqlResult<(u64)> {
         let full_table_name = meta_util::fill_up_table_name(session_context, self.table_name.clone()).unwrap();
+
+        let store_engine = StoreEngineFactory::try_new_with_table(self.global_context.clone(), full_table_name.clone()).unwrap();
 
         let catalog_name = meta_util::cut_out_catalog_name(full_table_name.clone());
         let schema_name = meta_util::cut_out_schema_name(full_table_name.clone());
@@ -234,14 +237,14 @@ impl Update {
 
                 let column_name = &assignment.id;
 
-                let column_index = self.core_context.lock().unwrap().meta_cache.get_serial_number(full_table_name.clone(), column_name.clone()).unwrap();
-                let recordPutKey = util::dbkey::create_record_column(full_table_name.clone(), column_index, rowid.as_ref());
-                let result = self.core_context.lock().unwrap().rocksdb_db.put(recordPutKey.to_vec(), column_value);
+                let column_index = self.global_context.lock().unwrap().meta_cache.get_serial_number(full_table_name.clone(), column_name.clone()).unwrap();
+                let record_column_key = util::dbkey::create_record_column(full_table_name.clone(), column_index, rowid.as_ref());
+                let result = store_engine.put_key(record_column_key, column_value.as_bytes());
                 match result {
                     Err(error) => {
                         return Err(MysqlError::new_global_error(1105, format!(
                             "Unknown error. An error occurred while updating the key, key: {:?}, error: {:?}",
-                            recordPutKey,
+                            record_column_key,
                             error,
                         ).as_str()));
                     }
