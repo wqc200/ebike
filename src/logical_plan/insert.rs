@@ -34,26 +34,31 @@ use crate::util;
 use crate::util::convert::ToIdent;
 use crate::core::logical_plan::CoreLogicalPlan;
 use datafusion::sql::planner::{SqlToRel, ContextProvider};
+use crate::store::engine::engine_util::StoreEngineFactory;
 
 pub struct Insert {
     global_context: Arc<Mutex<GlobalContext>>,
     table_name: ObjectName,
     columns: Vec<Ident>,
+    overwrite: bool,
     source: Box<Query>,
 }
 
 impl Insert {
-    pub fn new(global_context: Arc<Mutex<GlobalContext>>, table_name: ObjectName, columns: Vec<Ident>, source: Box<Query>) -> Self {
+    pub fn new(global_context: Arc<Mutex<GlobalContext>>, table_name: ObjectName, columns: Vec<Ident>, overwrite: bool, source: Box<Query>) -> Self {
         Self {
             global_context,
             table_name,
             columns,
+            overwrite,
             source,
         }
     }
 
     pub fn execute<S: ContextProvider>(&self, datafusion_context: &mut ExecutionContext, session_context: &mut SessionContext, query_planner: &SqlToRel<S>) -> MysqlResult<CoreLogicalPlan> {
         let full_table_name = meta_util::fill_up_table_name(session_context, self.table_name.clone()).unwrap();
+
+        let store_engine = StoreEngineFactory::try_new_with_table(self.global_context.clone(), full_table_name.clone()).unwrap();
 
         let table_map = self.global_context.lock().unwrap().meta_cache.get_table_map();
         if !table_map.contains_key(&full_table_name) {
@@ -160,12 +165,6 @@ impl Insert {
             column_value_map_list.push(column_value_map);
         }
 
-        let result = engine_util::TableEngineFactory::try_new_with_table(self.global_context.clone(), full_table_name.clone(), table_def.clone());
-        let engine = match result {
-            Ok(engine) => engine,
-            Err(mysql_error) => return Err(mysql_error),
-        };
-
         let table_name = meta_util::cut_out_table_name(full_table_name.clone()).to_string();
 
         let all_table_index = meta_util::get_all_table_index(self.global_context.clone(), full_table_name.clone()).unwrap();
@@ -179,11 +178,7 @@ impl Insert {
             let mut index_keys = vec![];
             for (index_name, level, index_column_names) in all_table_index.clone() {
                 let serial_number_value_vec = engine_util::build_column_serial_number_value(index_column_names.clone(), serial_number_map.clone(), column_value_map.clone()).unwrap();
-                let result = util::dbkey::create_index(self.full_table_name.clone(), index_name.as_str(), serial_number_value_vec);
-                let index_key = match result {
-                    Ok(index_key) => index_key,
-                    Err(mysql_error) => return Err(mysql_error)
-                };
+                let index_key = util::dbkey::create_index(full_table_name.clone(), index_name.as_str(), serial_number_value_vec).unwrap();
                 index_keys.push((index_name.clone(), level, index_key.clone()));
             }
 
@@ -193,10 +188,10 @@ impl Insert {
         for index_keys in index_keys_list.clone() {
             for (index_name, level, index_key) in index_keys {
                 if level == 1 || level == 2 {
-                    match engine.get_key(index_key.clone()).unwrap() {
+                    match store_engine.get_key(index_key.clone()).unwrap() {
                         None => {}
                         Some(_) => {
-                            if self.add_entry_type == engine_util::ADD_ENTRY_TYPE::INSERT {
+                            if !self.overwrite {
                                 return Err(MysqlError::new_server_error(
                                     1062,
                                     "23000",

@@ -93,8 +93,8 @@ impl StoreEngineFactory {
 
     pub fn try_new_with_engine(global_context: Arc<Mutex<GlobalContext>>, engine: &str) -> MysqlResult<Box<dyn StoreEngine>> {
         match engine {
-            meta_const::OPTION_ENGINE_NAME_ROCKSDB => Ok(Box::new(rocksdb::StoreEngineRocksdb::new(global_context.lock().unwrap().engine.rocksdb_db.unwarp()))),
-            meta_const::OPTION_ENGINE_NAME_SLED => Ok(Box::new(sled::StoreEngineSled::new(global_context.lock().unwrap().engine.sled_db.unwarp()))),
+            meta_const::OPTION_ENGINE_NAME_ROCKSDB => Ok(Box::new(rocksdb::StoreEngineRocksdb::new(global_context.lock().unwrap().engine.rocksdb_db.unwrap()))),
+            meta_const::OPTION_ENGINE_NAME_SLED => Ok(Box::new(sled::StoreEngineSled::new(global_context.lock().unwrap().engine.sled_db.unwrap()))),
             _ => {
                 Err(MysqlError::new_global_error(1105, format!(
                     "Unknown error. The table engine is not supported, engine: {:?}",

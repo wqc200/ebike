@@ -109,7 +109,7 @@ impl Iterator for SledReader {
     type Item = Result<RecordBatch>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let mut sled_iter = match self.sled_iter.clone() {
+        let mut sled_iter = match self.sled_iter {
             None => return None,
             Some(sled_iter) => {
                 sled_iter

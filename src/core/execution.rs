@@ -1120,9 +1120,9 @@ impl Execution {
                 Ok(CoreLogicalPlan::CreateTable { table_name, columns: columns.clone(), constraints: constraints.clone(), with_options: with_options.clone() })
             }
             SQLStatement::Insert {
-                table_name, columns, source, ..
+                table_name, columns, overwrite, source, ..
             } => {
-                let logicalPlanInsert = logical_plan::insert::Insert::new(self.global_context.clone(), table_name.clone(), columns.clone(), source.clone());
+                let logicalPlanInsert = logical_plan::insert::Insert::new(self.global_context.clone(), table_name.clone(), columns.clone(), overwrite, source.clone());
                 let core_logical_plan = logicalPlanInsert.execute(&mut self.datafusion_context, &mut self.session_context, query_planner).unwrap();
                 Ok(core_logical_plan)
             }

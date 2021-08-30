@@ -49,7 +49,7 @@ impl TableEngineRocksdb {
 
 impl TableEngine for TableEngineRocksdb {
     fn table_provider(&self) -> Arc<dyn TableProvider> {
-        let provider = RocksdbTable::try_new(self.global_context.clone(), self.table_def.clone(), self.full_table_name.clone()).unwrap();
+        let provider = RocksdbTable::new(self.global_context.clone(), self.table_def.clone(), self.full_table_name.clone());
         Arc::new(provider)
     }
 
@@ -73,12 +73,12 @@ impl StoreEngineRocksdb {
 
 impl StoreEngine for StoreEngineRocksdb {
     fn delete_key(&self, key: String) -> MysqlResult<()> {
-        let result = self.rocksdb_db.unwrap().delete(key);
+        let result = self.rocksdb_db.delete(key);
         Ok(())
     }
 
     fn get_key(&self, key: String) -> MysqlResult<Option<&[u8]>> {
-        let result = self.rocksdb_db.unwrap().get(key).unwrap();
+        let result = self.rocksdb_db.get(key).unwrap();
         match result {
             None => Ok(None),
             Some(value) => Ok(Some(value.as_bytes())),
@@ -86,7 +86,7 @@ impl StoreEngine for StoreEngineRocksdb {
     }
 
     fn put_key(&self, key: String, value: &[u8]) -> MysqlResult<()> {
-        let result = self.rocksdb_db.unwrap().put(key, value).unwrap();
+        let result = self.rocksdb_db.put(key, value).unwrap();
         Ok(())
     }
 }

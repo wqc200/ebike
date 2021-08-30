@@ -40,23 +40,18 @@ pub mod variable;
 
 #[tokio::main]
 async fn main() {
-    let config_path = get_config_path();
-    println!("Value for config path: {}", config_path);
+    let global_context = Arc::new(Mutex::new(GlobalContext::new()));
 
-    let my_config = read_config(config_path.as_str());
-
-    log4rs::init_file(my_config.server.log_file.to_string(), Default::default()).unwrap();
+    log4rs::init_file(global_context.lock().unwrap().my_config.server.log_file.to_string(), Default::default()).unwrap();
 
     // Parse the address we're going to run this server on
     // and set up our TCP listener to accept connections.
     let addr = env::args()
         .nth(1)
-        .unwrap_or_else(|| my_config.server.bind_host.to_string());
+        .unwrap_or_else(|| global_context.lock().unwrap().my_config.server.bind_host.to_string());
 
     let listener = TcpListener::bind(&addr).await.unwrap();
     log::info!("Listening on: {}", addr);
-
-    let global_context = Arc::new(Mutex::new(GlobalContext::new(my_config)));
 
     let result = meta_util::init_meta(global_context.clone());
     if let Err(e) = result {

@@ -46,7 +46,7 @@ impl TableEngineSled {
 
 impl TableEngine for TableEngineSled {
     fn table_provider(&self) -> Arc<dyn TableProvider> {
-        let provider = SledTable::new(self.global_context.clone(), self.table_def.clone(), self.full_table_name.clone()).unwrap();
+        let provider = SledTable::new(self.global_context.clone(), self.table_def.clone(), self.full_table_name.clone());
         Arc::new(provider)
     }
 

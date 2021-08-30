@@ -27,12 +27,12 @@ pub struct RocksdbTable {
 
 impl RocksdbTable {
     #[allow(missing_docs)]
-    pub fn try_new(core_context: Arc<Mutex<GlobalContext>>, table_schema: def::TableDef, full_table_name: ObjectName) -> Result<Self> {
-        Ok(Self {
+    pub fn new(core_context: Arc<Mutex<GlobalContext>>, table_schema: def::TableDef, full_table_name: ObjectName) -> Self {
+        Self {
             core_context,
             table_schema,
             full_table_name,
-        })
+        }
     }
 }
 

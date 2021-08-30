@@ -7,7 +7,8 @@ use arrow::datatypes::{DataType, Field, Schema, SchemaRef};
 use datafusion::error::{Result};
 use sled::Db as SledDb;
 
-// use crate::core::udf::UdfContext;
+use crate::config::util::get_config_path;
+use crate::config::util::read_config;
 use crate::meta::cache::MetaCache;
 use crate::store::rocksdb::db::DB as RocksdbDB;
 use crate::test;
@@ -31,13 +32,18 @@ pub struct GlobalContext {
 }
 
 impl GlobalContext {
-    pub fn new(my_config: MyConfig) -> Self {
+    pub fn new() -> Self {
+        let config_path = get_config_path();
+        println!("Value for config path: {}", config_path);
+
+        let my_config = read_config(config_path.as_str());
+
         let meta_cache = MetaCache::new();
         let variable = Variable::new();
 
         let mut sled_db = None;
         let mut rocksdb_db = None;
-        for engine in my_config.server.engines {
+        for engine in &my_config.server.engines {
             if engine.eq("sled") {
                 let config = sled::Config::new().temporary(false).path(my_config.engine.sled.data_path.clone());
                 let db = config.open().unwrap();
