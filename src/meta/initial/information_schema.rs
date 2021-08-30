@@ -39,6 +39,7 @@ use crate::physical_plan::create_table::CreateTable;
 use crate::store::reader::rocksdb::RocksdbReader;
 use crate::store::rocksdb::db::DB;
 use crate::store::rocksdb::option::Options;
+use crate::util::convert::ToObjectName;
 
 pub fn table_columns() -> def::TableDef {
     let mut with_option = vec![];
@@ -79,10 +80,10 @@ pub fn table_columns() -> def::TableDef {
         meta_util::create_sql_column("SRS_ID", SQLDataType::Int, ColumnOption::Null),
     ];
 
+    let full_table_name = meta_const::FULL_TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_COLUMNS.to_object_name();
     let constraints = vec![];
-
-    let table_schema = def::TableDef::new_with_sqlcolumn(meta_const::FULL_TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_COLUMNS, sql_columns, constraints, with_option);
-    table_schema
+    let table_def = def::TableDef::new_with_sqlcolumn(full_table_name, sql_columns, constraints, with_option);
+    table_def
 }
 
 pub fn table_tables() -> def::TableDef {
@@ -104,10 +105,10 @@ pub fn table_tables() -> def::TableDef {
         meta_util::create_sql_column(meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_TABLES_AUTO_INCREMENT, SQLDataType::Int, ColumnOption::NotNull),
     ];
 
+    let full_table_name = meta_const::FULL_TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_TABLES.to_object_name();
     let constraints = vec![];
-
-    let table_schema = def::TableDef::new_with_sqlcolumn(meta_const::FULL_TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_TABLES, columns, constraints, with_option);
-    table_schema
+    let table_def = def::TableDef::new_with_sqlcolumn(full_table_name, columns, constraints, with_option);
+    table_def
 }
 
 pub fn table_schemata() -> def::TableDef {
@@ -126,10 +127,10 @@ pub fn table_schemata() -> def::TableDef {
         meta_util::create_sql_column("DEFAULT_ENCRYPTION", SQLDataType::Varchar(Some(512)), ColumnOption::NotNull),
     ];
 
+    let full_table_name = meta_const::FULL_TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_SCHEMATA.to_object_name();
     let constraints = vec![];
-
-    let table_schema = def::TableDef::new_with_sqlcolumn(meta_const::FULL_TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_SCHEMATA, columns, constraints, with_option);
-    table_schema
+    let table_def = def::TableDef::new_with_sqlcolumn(full_table_name, columns, constraints, with_option);
+    table_def
 }
 
 pub fn table_statistics() -> def::TableDef {
@@ -149,10 +150,10 @@ pub fn table_statistics() -> def::TableDef {
         meta_util::create_sql_column(meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_STATISTICS_COLUMN_NAME, SQLDataType::Varchar(Some(512)), ColumnOption::NotNull),
     ];
 
+    let full_table_name = meta_const::FULL_TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_STATISTICS.to_object_name();
     let constraints = vec![];
-
-    let table = def::TableDef::new_with_sqlcolumn(meta_const::FULL_TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_STATISTICS, columns, constraints, with_option);
-    table
+    let table_def = def::TableDef::new_with_sqlcolumn(full_table_name, columns, constraints, with_option);
+    table_def
 }
 
 pub fn key_column_usage() -> def::TableDef {
@@ -177,10 +178,10 @@ pub fn key_column_usage() -> def::TableDef {
         meta_util::create_sql_column("referenced_column_name", SQLDataType::Varchar(Some(512)), ColumnOption::Null),
     ];
 
+    let full_table_name = meta_const::FULL_TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_KEY_COLUMN_USAGE.to_object_name();
     let constraints = vec![];
-
-    let table = def::TableDef::new_with_sqlcolumn(meta_const::FULL_TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_KEY_COLUMN_USAGE, columns, constraints, with_option);
-    table
+    let table_def = def::TableDef::new_with_sqlcolumn(full_table_name, columns, constraints, with_option);
+    table_def
 }
 
 pub fn table_constraints() -> def::TableDef {
@@ -200,8 +201,8 @@ pub fn table_constraints() -> def::TableDef {
         meta_util::create_sql_column("enforced", SQLDataType::Varchar(Some(512)), ColumnOption::NotNull),
     ];
 
+    let full_table_name = meta_const::FULL_TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_TABLE_CONSTRAINTS.to_object_name();
     let constraints = vec![];
-
-    let table = def::TableDef::new_with_sqlcolumn(meta_const::FULL_TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_TABLE_CONSTRAINTS, columns, constraints, with_option);
-    table
+    let table_def = def::TableDef::new_with_sqlcolumn(full_table_name, columns, constraints, with_option);
+    table_def
 }

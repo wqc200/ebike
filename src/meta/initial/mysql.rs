@@ -116,10 +116,10 @@ pub fn users() -> def::TableDef {
         columns,
         is_primary: true,
     };
+    let full_table_name = meta_const::FULL_TABLE_NAME_OF_DEF_MYSQL_USERS.to_object_name();
     let constraints = vec![table_constraint];
-
-    let table_schema = def::TableDef::new_with_sqlcolumn(meta_const::FULL_TABLE_NAME_OF_DEF_MYSQL_USERS, sql_columns, constraints, with_option);
-    table_schema
+    let table_def = def::TableDef::new_with_sqlcolumn(full_table_name, sql_columns, constraints, with_option);
+    table_def
 }
 
 pub fn users_data(global_context: Arc<Mutex<GlobalContext>>) -> MysqlResult<u64> {

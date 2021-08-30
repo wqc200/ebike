@@ -52,7 +52,7 @@ impl PhysicalPlanInsert {
     }
 
     pub fn execute(&self) -> MysqlResult<u64> {
-        let store_engine = StoreEngineFactory::try_new_with_table(self.global_context.clone(), self.full_table_name.clone()).unwrap();
+        let store_engine = StoreEngineFactory::try_new_with_table_def(self.global_context.clone(), self.table_def.clone()).unwrap();
 
         for row_index in 0..self.column_value_map_list.len() {
             let rowid = Uuid::new_v4().to_simple().encode_lower(&mut Uuid::encode_buffer()).to_string();

@@ -3,7 +3,7 @@ use std::sync::Arc;
 use arrow::datatypes::{DataType, Schema, SchemaRef};
 use datafusion::error;
 use datafusion::logical_plan::{DFField, DFSchema};
-use sqlparser::ast::{ColumnDef as SQLColumnDef, ColumnOption, SqlOption, TableConstraint, Value};
+use sqlparser::ast::{ColumnDef as SQLColumnDef, ColumnOption, SqlOption, TableConstraint, Value, ObjectName};
 
 use crate::meta::{meta_const, meta_util};
 
@@ -40,14 +40,14 @@ impl ColumnDef {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct TableDef {
-    table_name: String,
+    full_table_name: ObjectName,
     pub columns: Vec<ColumnDef>,
     constraints: Vec<TableConstraint>,
     pub with_option: Vec<SqlOption>,
 }
 
 impl TableDef {
-    pub fn new_with_sqlcolumn(table_name: &str, sqlcolumns: Vec<SQLColumnDef>, constraints: Vec<TableConstraint>, with_option: Vec<SqlOption>) -> Self {
+    pub fn new_with_sqlcolumn(full_table_name: ObjectName, sqlcolumns: Vec<SQLColumnDef>, constraints: Vec<TableConstraint>, with_option: Vec<SqlOption>) -> Self {
         let mut columns = vec![];
         let mut ordinal_position = 0;
         for sqlcolumn in sqlcolumns {
@@ -57,20 +57,24 @@ impl TableDef {
         }
 
         Self {
-            table_name: table_name.to_string(),
+            full_table_name,
             columns,
             constraints,
             with_option,
         }
     }
 
-    pub fn new_with_column(table_name: &str, columns: Vec<ColumnDef>, constraints: Vec<TableConstraint>, with_option: Vec<SqlOption>) -> Self {
+    pub fn new_with_column(full_table_name: ObjectName, columns: Vec<ColumnDef>, constraints: Vec<TableConstraint>, with_option: Vec<SqlOption>) -> Self {
         Self {
-            table_name: table_name.to_string(),
+            full_table_name,
             columns,
             constraints,
             with_option,
         }
+    }
+
+    pub fn get_full_table_name(&self) -> ObjectName {
+        self.full_table_name.clone()
     }
 
     pub fn get_columns(&self) -> &Vec<ColumnDef> {
@@ -95,14 +99,14 @@ impl TableDef {
 
     pub fn to_dfschema(&self) -> error::Result<DFSchema> {
         let mut dffields = vec![];
-        dffields.push(DFField::new(Some(self.table_name.as_str()), meta_const::COLUMN_ROWID, DataType::Utf8, false));
+        dffields.push(DFField::new(Some(self.full_table_name.to_string().as_str()), meta_const::COLUMN_ROWID, DataType::Utf8, false));
         for column_def in self.get_columns().to_vec() {
             let field_name = column_def.sql_column.name.to_string();
             let data_type = meta_util::convert_sql_data_type_to_arrow_data_type(&column_def.sql_column.data_type).unwrap();
             let nullable = column_def.sql_column.options
                 .iter()
                 .any(|x| x.option == ColumnOption::Null);
-            dffields.push(DFField::new(Some(self.table_name.as_str()), field_name.as_ref(), data_type, nullable));
+            dffields.push(DFField::new(Some(self.full_table_name.to_string().as_str()), field_name.as_ref(), data_type, nullable));
         }
 
         DFSchema::new(dffields)

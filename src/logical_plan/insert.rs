@@ -58,7 +58,7 @@ impl Insert {
     pub fn execute<S: ContextProvider>(&self, datafusion_context: &mut ExecutionContext, session_context: &mut SessionContext, query_planner: &SqlToRel<S>) -> MysqlResult<CoreLogicalPlan> {
         let full_table_name = meta_util::fill_up_table_name(session_context, self.table_name.clone()).unwrap();
 
-        let store_engine = StoreEngineFactory::try_new_with_table(self.global_context.clone(), full_table_name.clone()).unwrap();
+        let store_engine = StoreEngineFactory::try_new_with_table_name(self.global_context.clone(), full_table_name.clone()).unwrap();
 
         let table_map = self.global_context.lock().unwrap().meta_cache.get_table_map();
         if !table_map.contains_key(&full_table_name) {

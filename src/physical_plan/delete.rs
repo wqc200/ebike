@@ -83,7 +83,7 @@ impl Delete {
     pub fn delete_record(&self, session_context: &mut SessionContext, batch: RecordBatch) -> MysqlResult<u64> {
         let full_table_name = meta_util::fill_up_table_name(session_context, self.table_name.clone()).unwrap();
 
-        let store_engine = StoreEngineFactory::try_new_with_table(self.global_context.clone(), full_table_name.clone()).unwrap();
+        let store_engine = StoreEngineFactory::try_new_with_table_name(self.global_context.clone(), full_table_name.clone()).unwrap();
 
         let rowid_array = batch
             .column(0)

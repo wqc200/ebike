@@ -65,10 +65,10 @@ pub fn global_variables() -> def::TableDef {
         columns,
         is_primary: true,
     };
+    let full_table_name = meta_const::FULL_TABLE_NAME_OF_DEF_PERFORMANCE_SCHEMA_GLOBAL_VARIABLES.to_object_name();
     let constraints = vec![table_constraint];
-
-    let table_schema = def::TableDef::new_with_sqlcolumn(meta_const::FULL_TABLE_NAME_OF_DEF_PERFORMANCE_SCHEMA_GLOBAL_VARIABLES, sql_columns, constraints, with_option);
-    table_schema
+    let table_def = def::TableDef::new_with_sqlcolumn(full_table_name, sql_columns, constraints, with_option);
+    table_def
 }
 
 pub fn global_variables_data(global_context: Arc<Mutex<GlobalContext>>) -> MysqlResult<u64> {
