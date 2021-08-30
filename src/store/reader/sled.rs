@@ -36,8 +36,7 @@ pub struct SledReader {
     projection: Option<Vec<usize>>,
     projected_schema: SchemaRef,
     batch_size: usize,
-    sled_db: SledDb,
-    sled_iter: Option<SledIter>,
+    sled_iter: SledIter,
     start_scan_key: CreateScanKey,
     end_scan_key: CreateScanKey,
 }
@@ -64,8 +63,7 @@ impl SledReader {
             None => schema_ref.clone(),
         };
 
-        let mut sled_db = global_context.lock().unwrap().engine.sled_db.unwrap();
-        let mut sled_iter = None;
+        let mut sled_iter = global_context.lock().unwrap().engine.sled_db.as_ref().unwrap().iter();
 
         let mut start_scan_key = CreateScanKey::new("");
         let mut end_scan_key = CreateScanKey::new("");
@@ -73,14 +71,12 @@ impl SledReader {
         match table_index_prefix {
             SeekType::NoRecord => {},
             SeekType::FullTableScan { start, end} => {
-                let iter = sled_db.scan_prefix(start.clone());
-                sled_iter = Some(iter);
+                sled_iter = global_context.lock().unwrap().engine.sled_db.as_ref().unwrap().scan_prefix(start.clone());
                 start_scan_key = CreateScanKey::new(start.clone().as_str());
                 end_scan_key = CreateScanKey::new(end.clone().as_str());
             }
             SeekType::UsingTheIndex { index_name, order, start, end} => {
-                let iter = sled_db.scan_prefix(start.key().clone());
-                sled_iter = Some(iter);
+                sled_iter = global_context.lock().unwrap().engine.sled_db.as_ref().unwrap().scan_prefix(start.key().clone());
                 start_scan_key = start;
                 end_scan_key = end;
             }
@@ -93,7 +89,6 @@ impl SledReader {
             projection,
             projected_schema,
             batch_size,
-            sled_db,
             sled_iter,
             start_scan_key,
             end_scan_key,
@@ -109,17 +104,13 @@ impl Iterator for SledReader {
     type Item = Result<RecordBatch>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let mut sled_iter = match &self.sled_iter {
-            None => return None,
-            Some(sled_iter) => {
-                sled_iter
-            }
-        };
+        let global_context = &self.global_context.lock().unwrap();
+        let sled_db = global_context.engine.sled_db.as_ref().unwrap();
 
         let mut rowids: Vec<String> = vec![];
 
         loop {
-            let result = sled_iter.next();
+            let result = self.sled_iter.next();
             let (key, value) = match result {
                 Some(item) => {
                     match item {
@@ -215,7 +206,7 @@ impl Iterator for SledReader {
 
                 for rowid in rowids.clone() {
                     let db_key = util::dbkey::create_record_column(self.full_table_name.clone(), column_index, rowid.as_str());
-                    let db_value = self.sled_db.get(db_key.clone());
+                    let db_value = sled_db.get(db_key.clone());
 
                     match db_value {
                         Ok(value) => {

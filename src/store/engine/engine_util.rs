@@ -28,7 +28,7 @@ pub enum ADD_ENTRY_TYPE {
 
 pub trait StoreEngine {
     fn delete_key(&self, key: String) -> MysqlResult<()>;
-    fn get_key(&self, key: String) -> MysqlResult<Option<&[u8]>>;
+    fn get_key(&self, key: String) -> MysqlResult<Option<Vec<u8>>>;
     fn put_key(&self, key: String, value: &[u8]) -> MysqlResult<()>;
 }
 
@@ -92,9 +92,13 @@ impl StoreEngineFactory {
     }
 
     pub fn try_new_with_engine(global_context: Arc<Mutex<GlobalContext>>, engine: &str) -> MysqlResult<Box<dyn StoreEngine>> {
+        let gc = global_context.lock().unwrap();
+        let rocksdb_db = gc.engine.rocksdb_db.as_ref().unwrap();
+        let sled_db = gc.engine.sled_db.as_ref().unwrap();
+
         match engine {
-            meta_const::OPTION_ENGINE_NAME_ROCKSDB => Ok(Box::new(rocksdb::StoreEngineRocksdb::new(global_context.lock().unwrap().engine.rocksdb_db.unwrap()))),
-            meta_const::OPTION_ENGINE_NAME_SLED => Ok(Box::new(sled::StoreEngineSled::new(global_context.lock().unwrap().engine.sled_db.unwrap()))),
+            meta_const::OPTION_ENGINE_NAME_ROCKSDB => Ok(Box::new(rocksdb::StoreEngineRocksdb::new(rocksdb_db.clone()))),
+            meta_const::OPTION_ENGINE_NAME_SLED => Ok(Box::new(sled::StoreEngineSled::new(sled_db.clone()))),
             _ => {
                 Err(MysqlError::new_global_error(1105, format!(
                     "Unknown error. The table engine is not supported, engine: {:?}",

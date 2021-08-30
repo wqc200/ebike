@@ -119,12 +119,12 @@ impl Delete {
                 };
 
                 let record_column_key = util::dbkey::create_record_column(full_table_name.clone(), orm_id, rowid.as_ref());
-                let result = store_engine.delete_key(record_column_key);
+                let result = store_engine.delete_key(record_column_key.clone());
                 match result {
                     Err(error) => {
                         return Err(MysqlError::new_global_error(1105, format!(
                             "Unknown error. An error occurred while deleting the key, key: {:?}, error: {:?}",
-                            record_column_key,
+                            record_column_key.clone(),
                             error,
                         ).as_str()));
                     }

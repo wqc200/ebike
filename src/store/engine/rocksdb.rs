@@ -77,11 +77,11 @@ impl StoreEngine for StoreEngineRocksdb {
         Ok(())
     }
 
-    fn get_key(&self, key: String) -> MysqlResult<Option<&[u8]>> {
+    fn get_key(&self, key: String) -> MysqlResult<Option<Vec<u8>>> {
         let result = self.rocksdb_db.get(key).unwrap();
         match result {
             None => Ok(None),
-            Some(value) => Ok(Some(value.as_bytes())),
+            Some(value) => Ok(Some(value)),
         }
     }
 

@@ -239,12 +239,12 @@ impl Update {
 
                 let column_index = self.global_context.lock().unwrap().meta_cache.get_serial_number(full_table_name.clone(), column_name.clone()).unwrap();
                 let record_column_key = util::dbkey::create_record_column(full_table_name.clone(), column_index, rowid.as_ref());
-                let result = store_engine.put_key(record_column_key, column_value.as_bytes());
+                let result = store_engine.put_key(record_column_key.clone(), column_value.as_bytes());
                 match result {
                     Err(error) => {
                         return Err(MysqlError::new_global_error(1105, format!(
                             "Unknown error. An error occurred while updating the key, key: {:?}, error: {:?}",
-                            record_column_key,
+                            record_column_key.clone(),
                             error,
                         ).as_str()));
                     }

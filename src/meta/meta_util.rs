@@ -406,12 +406,12 @@ pub fn store_add_column_serial_number(global_context: Arc<Mutex<GlobalContext>>,
         let column_name = column_def.name;
 
         let key = util::dbkey::create_column_serial_number(full_table_name.clone(), column_name.clone());
-        let value = orm_id.to_string().as_bytes();
-        let result = store_engine.put_key(key, value);
+        let value = orm_id.to_string();
+        let result = store_engine.put_key(key, value.as_bytes());
     }
     let key = util::dbkey::create_current_serial_number(full_table_name.clone());
-    let value = orm_id.to_string().as_bytes();
-    store_engine.put_key(key, value);
+    let value = orm_id.to_string();
+    store_engine.put_key(key, value.as_bytes());
     Ok(())
 }
 

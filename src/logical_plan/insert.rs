@@ -106,7 +106,7 @@ impl Insert {
                 column_name_list.push(column_def.sql_column.name.to_string())
             };
         } else {
-            for column in self.columns {
+            for column in &self.columns {
                 column_name_list.push(column.to_string())
             };
         }

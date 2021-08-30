@@ -34,7 +34,6 @@ pub struct RocksdbReader {
     projection: Option<Vec<usize>>,
     projected_schema: SchemaRef,
     batch_size: usize,
-    rocksdb_db: RocksdbDB,
     rocksdb_iter: DBRawIterator,
     start_scan_key: CreateScanKey,
     end_scan_key: CreateScanKey,
@@ -62,8 +61,7 @@ impl RocksdbReader {
             None => schema_ref.clone(),
         };
 
-        let mut rocksdb_db = global_context.lock().unwrap().engine.rocksdb_db.unwrap();
-        let mut rocksdb_iter = rocksdb_db.raw_iterator();
+        let mut rocksdb_iter = global_context.lock().unwrap().engine.rocksdb_db.as_ref().unwrap().raw_iterator();
 
         let mut start_scan_key = CreateScanKey::new("");
         let mut end_scan_key = CreateScanKey::new("");
@@ -89,7 +87,6 @@ impl RocksdbReader {
             projection,
             projected_schema,
             batch_size,
-            rocksdb_db,
             rocksdb_iter,
             start_scan_key,
             end_scan_key,
@@ -105,6 +102,9 @@ impl Iterator for RocksdbReader {
     type Item = Result<RecordBatch>;
 
     fn next(&mut self) -> Option<Self::Item> {
+        let global_context = &self.global_context.lock().unwrap();
+        let rocksdb_db = global_context.engine.rocksdb_db.as_ref().unwrap();
+
         let mut rowids: Vec<String> = vec![];
 
         let catalog_name = meta_util::cut_out_catalog_name(self.full_table_name.clone());
@@ -194,7 +194,7 @@ impl Iterator for RocksdbReader {
 
                 for rowid in rowids.clone() {
                     let record_column_key = util::dbkey::create_record_column(self.full_table_name.clone(), column_index, rowid.as_str());
-                    let db_value = self.rocksdb_db.get(record_column_key);
+                    let db_value = rocksdb_db.get(record_column_key.clone());
 
                     match db_value {
                         Ok(value) => {
@@ -255,7 +255,7 @@ impl Iterator for RocksdbReader {
                         Err(error) => {
                             return Some(Err(ArrowError::IoError(format!(
                                 "Error get '{:?}' from rocksdb: {:?}",
-                                record_column_key,
+                                record_column_key.clone(),
                                 error
                             ))));
                         }

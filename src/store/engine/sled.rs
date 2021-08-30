@@ -74,11 +74,14 @@ impl StoreEngine for StoreEngineSled {
         Ok(())
     }
 
-    fn get_key(&self, key: String) -> MysqlResult<Option<&[u8]>> {
+    fn get_key(&self, key: String) -> MysqlResult<Option<Vec<u8>>> {
         let result = self.sled_db.get(key).unwrap();
         match result {
             None => Ok(None),
-            Some(value) => Ok(Some(value.as_bytes())),
+            Some(value) => {
+                let v = value.to_vec();
+                Ok(Some(v))
+            },
         }
     }
 
