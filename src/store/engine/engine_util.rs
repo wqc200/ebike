@@ -34,7 +34,7 @@ pub trait StoreEngine {
 
 pub trait TableEngine {
     fn table_provider(&self) -> Arc<dyn TableProvider>;
-    fn table_iterator(&self, projection: Option<Vec<usize>>) -> Arc<dyn Iterator<Item = Result<RecordBatch>>>;
+    fn table_iterator(&self, projection: Option<Vec<usize>>) -> Box<dyn Iterator<Item = Result<RecordBatch>>>;
 }
 
 pub struct TableEngineFactory;

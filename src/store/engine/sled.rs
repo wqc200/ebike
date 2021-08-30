@@ -50,9 +50,9 @@ impl TableEngine for TableEngineSled {
         Arc::new(provider)
     }
 
-    fn table_iterator(&self, projection: Option<Vec<usize>>) -> Arc<dyn Iterator<Item = Result<RecordBatch>>> {
+    fn table_iterator(&self, projection: Option<Vec<usize>>) -> Box<dyn Iterator<Item = Result<RecordBatch>>> {
         let reader = SledReader::new(self.global_context.clone(), self.table_def.clone(), self.full_table_name.clone(), 1024, projection, &[]);
-        Arc::new(reader)
+        Box::new(reader)
     }
 }
 
