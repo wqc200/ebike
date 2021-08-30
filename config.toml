@@ -8,4 +8,7 @@ engines = ["sled", "rocksdb"]
 engine = "sled"
 
 [engine.sled]
-data_path = "./data/sparrow"
+data_path = "./data/sparrow/sled"
+
+[engine.rocksdb]
+data_path = "./data/sparrow/rocksdb"

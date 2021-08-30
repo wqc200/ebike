@@ -50,6 +50,7 @@ impl GlobalContext {
                 sled_db = Some(db);
             } else if engine.eq("rocksdb") {
                 let mut opts = Options::default();
+                opts.create_if_missing(true);
                 let db = RocksdbDB::open(&opts, my_config.engine.rocksdb.data_path.as_str()).unwrap();
                 rocksdb_db = Some(db);
             }
