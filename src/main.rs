@@ -53,7 +53,7 @@ async fn main() {
     let listener = TcpListener::bind(&addr).await.unwrap();
     log::info!("Listening on: {}", addr);
 
-    let result = meta_util::init_meta(global_context.clone());
+    let result = meta_util::init_meta(global_context.clone()).await;
     if let Err(e) = result {
         log::error!("init meta error: {}", e);
         return;

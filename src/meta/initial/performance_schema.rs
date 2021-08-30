@@ -84,15 +84,15 @@ pub fn global_variables_data(global_context: Arc<Mutex<GlobalContext>>) -> Mysql
     column_value_map_list.push(column_value_map);
     let mut column_value_map = HashMap::new();
     column_value_map.insert("variable_name".to_ident(), ScalarValue::Utf8(Some("lower_case_table_names".to_string())));
-    column_value_map.insert("variable_name".to_ident(), ScalarValue::Utf8(Some("1".to_string())));
+    column_value_map.insert("variable_value".to_ident(), ScalarValue::Utf8(Some("1".to_string())));
     column_value_map_list.push(column_value_map);
     let mut column_value_map = HashMap::new();
     column_value_map.insert("variable_name".to_ident(), ScalarValue::Utf8(Some("transaction_isolation".to_string())));
-    column_value_map.insert("variable_name".to_ident(), ScalarValue::Utf8(None));
+    column_value_map.insert("variable_value".to_ident(), ScalarValue::Utf8(None));
     column_value_map_list.push(column_value_map);
     let mut column_value_map = HashMap::new();
     column_value_map.insert("variable_name".to_ident(), ScalarValue::Utf8(Some("transaction_read_only".to_string())));
-    column_value_map.insert("variable_name".to_ident(), ScalarValue::Utf8(Some("0".to_string())));
+    column_value_map.insert("variable_value".to_ident(), ScalarValue::Utf8(Some("0".to_string())));
     column_value_map_list.push(column_value_map);
 
     let full_table_name = meta_const::FULL_TABLE_NAME_OF_DEF_PERFORMANCE_SCHEMA_GLOBAL_VARIABLES.to_object_name();

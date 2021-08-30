@@ -56,7 +56,7 @@ pub fn users() -> def::TableDef {
 
     let sql_columns = vec![
         meta_util::create_sql_column("Host", SQLDataType::Varchar(Some(512)), ColumnOption::NotNull),
-        meta_util::create_sql_column("user", SQLDataType::Varchar(Some(512)), ColumnOption::NotNull),
+        meta_util::create_sql_column("User", SQLDataType::Varchar(Some(512)), ColumnOption::NotNull),
         meta_util::create_sql_column("Select_priv", SQLDataType::Varchar(Some(512)), ColumnOption::NotNull),
         meta_util::create_sql_column("Insert_priv", SQLDataType::Varchar(Some(512)), ColumnOption::NotNull),
         meta_util::create_sql_column("Update_priv", SQLDataType::Varchar(Some(512)), ColumnOption::NotNull),

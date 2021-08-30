@@ -193,7 +193,7 @@ impl Iterator for SledReader {
             } else {
                 let column_name = field_name.to_ident();
 
-                let result = self.global_context.lock().unwrap().meta_cache.get_serial_number(self.full_table_name.clone(), column_name.clone());
+                let result = global_context.meta_cache.get_serial_number(self.full_table_name.clone(), column_name.clone());
                 let column_index = match result {
                     Ok(value) => value,
                     Err(error) => {

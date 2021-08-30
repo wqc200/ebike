@@ -60,6 +60,7 @@ use crate::store::rocksdb::option::Options;
 use crate::util::convert::{ToIdent, ToObjectName};
 
 use super::super::util;
+use futures::StreamExt;
 
 // pub const INFORMATION_SCHEMA_NUMBER_SCHEMATA: &str = "information_schema.number_schemata";
 // pub const INFORMATION_SCHEMA_NUMBER_TABLE: &str = "information_schema.number_table";
@@ -277,7 +278,7 @@ pub fn load_global_variable(global_context: Arc<Mutex<GlobalContext>>) -> MysqlR
     Ok(())
 }
 
-pub fn init_meta(global_context: Arc<Mutex<GlobalContext>>) -> MysqlResult<()> {
+pub async fn init_meta(global_context: Arc<Mutex<GlobalContext>>) -> MysqlResult<()> {
     let mut init_tables: HashMap<ObjectName, TableDef> = HashMap::new();
     init_tables.insert(meta_const::FULL_TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_TABLES.to_object_name(), initial::information_schema::table_tables());
     init_tables.insert(meta_const::FULL_TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_COLUMNS.to_object_name(), initial::information_schema::table_columns());
@@ -287,6 +288,17 @@ pub fn init_meta(global_context: Arc<Mutex<GlobalContext>>) -> MysqlResult<()> {
     init_tables.insert(meta_const::FULL_TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_TABLE_CONSTRAINTS.to_object_name(), table_constraints());
     init_tables.insert(meta_const::FULL_TABLE_NAME_OF_DEF_MYSQL_USERS.to_object_name(), initial::mysql::users());
     init_tables.insert(meta_const::FULL_TABLE_NAME_OF_DEF_PERFORMANCE_SCHEMA_GLOBAL_VARIABLES.to_object_name(), initial::performance_schema::global_variables());
+
+
+    // let full_table_name = meta_const::FULL_TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_STATISTICS.to_object_name();
+    // let table_def = initial::information_schema::table_statistics();
+    //
+    // let engine = engine_util::TableEngineFactory::try_new_with_table_def(global_context.clone(), table_def.clone()).unwrap();
+    // let mut table_provider = engine.table_provider();
+    //
+    // let exec = table_provider.scan(&None, 1024, &[], None)?;
+    // let mut it = exec.execute(0).await?;
+    // let batch1 = it.next().await.unwrap()?;
 
     if !meta_has_create() {
         for (full_table_name, table_def) in init_tables.iter() {

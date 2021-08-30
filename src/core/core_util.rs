@@ -487,6 +487,13 @@ pub fn convert_scalar_value(scalar_value: ScalarValue) -> MysqlResult<Option<Str
                 Ok(None)
             }
         }
+        ScalarValue::UInt64(limit) => {
+            if let Some(value) = limit {
+                Ok(Some(value.to_string()))
+            } else {
+                Ok(None)
+            }
+        }
         ScalarValue::Utf8(limit) => {
             if let Some(value) = limit {
                 Ok(Some(value.to_string()))
