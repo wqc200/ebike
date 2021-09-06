@@ -5,7 +5,7 @@ bind_host = "0.0.0.0:3307"
 engines = ["sled", "rocksdb"]
 
 [schema]
-engine = "sled"
+engine = "rocksdb"
 
 [engine.sled]
 data_path = "./data/sparrow/sled"

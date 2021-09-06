@@ -3,11 +3,13 @@ use std::sync::Arc;
 use arrow::datatypes::{DataType, Schema, SchemaRef};
 use datafusion::error;
 use datafusion::logical_plan::{DFField, DFSchema};
-use sqlparser::ast::{ColumnDef as SQLColumnDef, ColumnOption, SqlOption, TableConstraint, Value, ObjectName};
+use sqlparser::ast::{ColumnDef as SQLColumnDef, ColumnOption, SqlOption, TableConstraint, Value, ObjectName, Ident, ColumnDef};
 
 use crate::meta::{meta_const, meta_util};
+use crate::mysql::error::{MysqlError, MysqlResult};
+use std::collections::HashMap;
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DbDef {
     with_option: Vec<SqlOption>,
 }
@@ -20,73 +22,253 @@ impl DbDef {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct ColumnDef {
-    pub ordinal_position: usize,
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SparrowColumnDef {
+    pub store_id: i32,
+    pub ordinal_position: i32,
     pub sql_column: SQLColumnDef,
 }
 
-impl ColumnDef {
+impl SparrowColumnDef {
     pub fn new(
-        ordinal_number: usize,
-        sql_column_def: SQLColumnDef,
+        store_id: i32,
+        ordinal_position: i32,
+        sql_column: SQLColumnDef,
     ) -> Self {
         Self {
-            ordinal_position: ordinal_number,
-            sql_column: sql_column_def,
+            store_id,
+            ordinal_position,
+            sql_column,
         }
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TableColumnDef {
+    pub sparrow_column_map: HashMap<Ident, SparrowColumnDef>,
+    pub sparrow_column_list: Vec<SparrowColumnDef>,
+    pub sql_column_list: Vec<SQLColumnDef>,
+}
+
+impl Default for TableColumnDef {
+    fn default() -> Self {
+        let sparrow_column_map = HashMap::new();
+        let sparrow_column_list = vec![];
+        let sql_column_list = vec![];
+
+        Self {
+            sparrow_column_map,
+            sparrow_column_list,
+            sql_column_list,
+        }
+    }
+}
+
+impl TableColumnDef {
+    pub fn with_sparrow_column_list(mut self, my_column_list: Vec<SparrowColumnDef>) -> Self {
+        let mut my_column_map = HashMap::new();
+        let mut sql_column_list = vec![];
+
+        for my_column in my_column_list {
+            let sql_column = my_column.sql_column;
+            let column_name = sql_column.name.clone();
+
+            my_column_map.insert(column_name, my_column.clone());
+            sql_column_list.push(sql_column.clone());
+        }
+
+        Self {
+            sparrow_column_map: my_column_map,
+            sparrow_column_list: my_column_list,
+            sql_column_list,
+        }
+    }
+
+    pub fn new_with_sql_column_list(sql_column_list: Vec<SQLColumnDef>) -> Self {
+        let mut my_column_map = HashMap::new();
+        let mut my_column_list = vec![];
+
+        let mut ordinal_position = 0;
+        let mut store_id = 0;
+        for sql_column in sql_column_list {
+            let column_name = sql_column.name.clone();
+            ordinal_position += 1;
+            store_id += 1;
+            let my_column = SparrowColumnDef::new(store_id, ordinal_position, sql_column);
+            my_column_map.insert(column_name, my_column.clone());
+            my_column_list.push(my_column.clone());
+        }
+        let max_store_id = store_id;
+
+        Self {
+            sparrow_column_map: my_column_map,
+            sparrow_column_list: my_column_list,
+            sql_column_list,
+        }
+    }
+}
+
+impl TableColumnDef {
+    pub fn get_sparrow_column(&self, column_name: Ident) -> MysqlResult<SparrowColumnDef> {
+        let result = self.sparrow_column_map.get(&column_name);
+        match result {
+            None => {
+                Err(MysqlError::new_server_error(
+                    1007,
+                    "HY000",
+                    format!("My column not found, column name: {:?}", column_name).as_str(),
+                ))
+            }
+            Some(my_column) => Ok(my_column.clone())
+        }
+    }
+}
+
+impl TableColumnDef {
+    pub fn with_sparrow_column_map(mut self, sparrow_column_map: HashMap<Ident, SparrowColumnDef>) -> Self {
+        self.sparrow_column_map = sparrow_column_map;
+        self
+    }
+
+    pub fn with_sparrow_column_list(mut self, sparrow_column_list: Vec<SparrowColumnDef>) -> Self {
+        self.sparrow_column_list = sparrow_column_list;
+        self
+    }
+
+    pub fn with_sql_column_list(mut self, sql_column_list: Vec<SQLColumnDef>) -> Self {
+        self.sql_column_list = sql_column_list;
+        self
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TableOptionDef {
+    pub engine: String,
+    pub column_max_store_id: i32,
+    pub table_type: String,
+}
+
+impl Default for TableOptionDef {
+    fn default() -> Self {
+        Self {
+            engine: "".to_string(),
+            column_max_store_id: 0,
+            table_type: "".to_string(),
+        }
+    }
+}
+
+impl TableOptionDef {
+    pub fn from_table_options(table_options: Vec<SqlOption>) -> Self {
+        let table_option = TableOptionDef::default();
+
+        for sql_option in table_options {
+            if sql_option.name.to_string().to_uppercase() == meta_const::TABLE_OPTION_OF_TABLE_TYPE.to_uppercase() {
+                match sql_option.value {
+                    Value::SingleQuotedString(table_type) => {
+                        table_option.with_table_type(table_type.as_str());
+                    }
+                    _ => {}
+                };
+            } else if sql_option.name.to_string().to_uppercase() == meta_const::TABLE_OPTION_OF_ENGINE.to_uppercase() {
+                match sql_option.value {
+                    Value::SingleQuotedString(engine) => {
+                        table_option.with_engine(engine.as_str());
+                    }
+                    _ => {}
+                };
+            }
+        }
+
+        table_option
+    }
+}
+
+impl TableOptionDef {
+    pub fn to_table_options(&self) -> Vec<SqlOption> {
+        let table_options = vec![];
+
+        let sql_option = SqlOption { name: Ident { value: meta_const::TABLE_OPTION_OF_TABLE_TYPE.to_string(), quote_style: None }, value: Value::SingleQuotedString(self.table_type.clone()) };
+        with_option.push(sql_option);
+        let sql_option = SqlOption { name: Ident { value: meta_const::TABLE_OPTION_OF_ENGINE.to_string(), quote_style: None }, value: Value::SingleQuotedString(self.engine.clone()) };
+        with_option.push(sql_option);
+
+        table_options
+    }
+}
+
+impl TableOptionDef {
+    pub fn with_engine(mut self, engine: &str) -> Self {
+        self.engine = engine.to_string();
+        self
+    }
+
+    pub fn with_column_max_store_id(mut self, column_max_store_id: i32) -> Self {
+        self.column_max_store_id = column_max_store_id;
+        self
+    }
+
+    pub fn with_table_type(mut self, table_type: &str) -> Self {
+        self.table_type = table_type.to_string();
+        self
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TableDef {
-    full_table_name: ObjectName,
-    pub columns: Vec<ColumnDef>,
-    constraints: Vec<TableConstraint>,
-    pub with_option: Vec<SqlOption>,
+    pub full_table_name: ObjectName,
+    pub column: TableColumnDef,
+    pub constraints: Vec<TableConstraint>,
+    pub table_option: TableOptionDef,
 }
 
 impl TableDef {
-    pub fn new_with_sqlcolumn(full_table_name: ObjectName, sqlcolumns: Vec<SQLColumnDef>, constraints: Vec<TableConstraint>, with_option: Vec<SqlOption>) -> Self {
-        let mut columns = vec![];
-        let mut ordinal_position = 0;
-        for sqlcolumn in sqlcolumns {
-            ordinal_position += 1;
-            let column = ColumnDef::new(ordinal_position, sqlcolumn);
-            columns.push(column);
-        }
+    pub fn new(full_table_name: ObjectName) -> Self {
+        let constraints: Vec<TableConstraint> = vec![];
+        let table_option = TableOptionDef::default();
+        let column = TableColumnDef::new();
 
         Self {
             full_table_name,
-            columns,
+            column,
             constraints,
-            with_option,
+            sql_options,
         }
     }
 
-    pub fn new_with_column(full_table_name: ObjectName, columns: Vec<ColumnDef>, constraints: Vec<TableConstraint>, with_option: Vec<SqlOption>) -> Self {
-        Self {
-            full_table_name,
-            columns,
-            constraints,
-            with_option,
-        }
+    pub fn new_with_sqlcolumn(full_table_name: ObjectName, sql_column_list: Vec<SQLColumnDef>, constraints: Vec<TableConstraint>, with_option: Vec<SqlOption>) -> Self {
+        let table_column = TableColumnDef::new_with_sql_column_list(sql_column_list);
+        let mut table_def = TableDef::new(full_table_name);
+        table_def.with_column(table_column);
+        table_def
+    }
+}
+
+impl TableDef {
+    pub fn with_column(&mut self, column: TableColumnDef) {
+        self.column = column
     }
 
+    pub fn with_constraints(&mut self, constraints: Vec<TableConstraint>) {
+        self.constraints = constraints
+    }
+
+    pub fn with_options(&mut self, sql_options: Vec<SqlOption>) {
+        self.sql_options = sql_options
+    }
+}
+
+impl TableDef {
     pub fn get_full_table_name(&self) -> ObjectName {
         self.full_table_name.clone()
     }
 
-    pub fn get_columns(&self) -> &Vec<ColumnDef> {
-        &self.columns
+    pub fn get_columns(&self) -> &Vec<SparrowColumnDef> {
+        &self.column.sparrow_column_list
     }
 
-    pub fn to_sqlcolumns(&self) -> Vec<SQLColumnDef> {
-        let mut sqlcolumns = vec![];
-        for column_def in self.get_columns().to_vec() {
-            sqlcolumns.push(column_def.sql_column);
-        }
-        sqlcolumns
+    pub fn get_table_column(&self) -> TableColumnDef {
+        self.column.clone()
     }
 
     pub fn get_constraints(&self) -> &Vec<TableConstraint> {
@@ -94,16 +276,16 @@ impl TableDef {
     }
 
     pub fn with_option(&self) -> &Vec<SqlOption> {
-        &self.with_option
+        &self.sql_options
     }
 
-    pub fn to_dfschema(&self) -> error::Result<DFSchema> {
+    pub fn to_datafusion_dfschema(&self) -> error::Result<DFSchema> {
         let mut dffields = vec![];
         dffields.push(DFField::new(Some(self.full_table_name.to_string().as_str()), meta_const::COLUMN_ROWID, DataType::Utf8, false));
-        for column_def in self.get_columns().to_vec() {
-            let field_name = column_def.sql_column.name.to_string();
-            let data_type = meta_util::convert_sql_data_type_to_arrow_data_type(&column_def.sql_column.data_type).unwrap();
-            let nullable = column_def.sql_column.options
+        for sql_column in self.column.sql_column_list {
+            let field_name = sql_column.name.to_string();
+            let data_type = meta_util::convert_sql_data_type_to_arrow_data_type(&sql_column.data_type).unwrap();
+            let nullable = sql_column.options
                 .iter()
                 .any(|x| x.option == ColumnOption::Null);
             dffields.push(DFField::new(Some(self.full_table_name.to_string().as_str()), field_name.as_ref(), data_type, nullable));
@@ -113,7 +295,7 @@ impl TableDef {
     }
 
     pub fn to_schema(&self) -> Schema {
-        self.to_dfschema().unwrap().into()
+        self.to_datafusion_dfschema().unwrap().into()
     }
 
     pub fn to_schemaref(&self) -> SchemaRef {
@@ -122,12 +304,12 @@ impl TableDef {
 
     pub fn add_sqlcolumn(&mut self, column: SQLColumnDef) {
         let ordinal_position = self.columns.len() + 1;
-        self.columns.push(ColumnDef::new(ordinal_position, column));
+        self.columns.push(SparrowColumnDef::new(ordinal_position, column));
     }
 
     pub fn get_engine(&mut self) -> Option<String> {
-        let engine = self.with_option.iter().fold(None, |key, x| {
-            if x.name.to_string() == meta_const::OPTION_ENGINE {
+        let engine = self.sql_options.iter().fold(None, |key, x| {
+            if x.name.to_string() == meta_const::TABLE_OPTION_OF_ENGINE {
                 if let Value::SingleQuotedString(engine) = x.value.clone() {
                     Some(engine)
                 } else {

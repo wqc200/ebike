@@ -49,9 +49,9 @@ use crate::mysql::metadata::MysqlType::MYSQL_TYPE_BIT;
 
 pub fn users() -> def::TableDef {
     let mut with_option = vec![];
-    let sql_option = SqlOption { name: Ident { value: meta_const::OPTION_TABLE_TYPE.to_string(), quote_style: None }, value: Value::SingleQuotedString(meta_const::OPTION_TABLE_TYPE_SYSTEM_VIEW.to_string()) };
+    let sql_option = SqlOption { name: Ident { value: meta_const::TABLE_OPTION_OF_TABLE_TYPE.to_string(), quote_style: None }, value: Value::SingleQuotedString(meta_const::OPTION_TABLE_TYPE_SYSTEM_VIEW.to_string()) };
     with_option.push(sql_option);
-    let sql_option = SqlOption { name: Ident { value: meta_const::OPTION_ENGINE.to_string(), quote_style: None }, value: Value::SingleQuotedString(meta_const::OPTION_ENGINE_NAME_ROCKSDB.to_string()) };
+    let sql_option = SqlOption { name: Ident { value: meta_const::TABLE_OPTION_OF_ENGINE.to_string(), quote_style: None }, value: Value::SingleQuotedString(meta_const::OPTION_ENGINE_NAME_ROCKSDB.to_string()) };
     with_option.push(sql_option);
 
     let sql_columns = vec![
@@ -123,9 +123,11 @@ pub fn users() -> def::TableDef {
 }
 
 pub fn users_data(global_context: Arc<Mutex<GlobalContext>>) -> MysqlResult<u64> {
+    let table_def = users();
+
     let mut column_name_list = vec![];
-    for column_def in users().get_columns() {
-        column_name_list.push(column_def.sql_column.name.to_string());
+    for sql_column in table_def.column.sql_column_list {
+        column_name_list.push(sql_column.name.to_string());
     }
 
     let mut column_value_map_list: Vec<HashMap<Ident, ScalarValue>> = vec![];
@@ -234,12 +236,8 @@ pub fn users_data(global_context: Arc<Mutex<GlobalContext>>) -> MysqlResult<u64>
     column_value_map.insert("User_attributes".to_ident(), ScalarValue::Utf8(None));
     column_value_map_list.push(column_value_map);
 
-    let full_table_name = meta_const::FULL_TABLE_NAME_OF_DEF_MYSQL_USERS.to_object_name();
-    let table_def = users();
-
     let insert = PhysicalPlanInsert::new(
         global_context.clone(),
-        full_table_name,
         table_def,
         column_name_list.clone(),
         vec![],

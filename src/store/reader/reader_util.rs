@@ -10,7 +10,7 @@ use sqlparser::ast::{ObjectName, TableConstraint};
 
 use crate::core::core_util;
 use crate::core::global_context::GlobalContext;
-use crate::meta::def::ColumnDef;
+use crate::meta::def::SparrowColumnDef;
 use crate::meta::meta_util;
 use crate::meta::def::TableDef;
 use crate::mysql::error::{MysqlError, MysqlResult};

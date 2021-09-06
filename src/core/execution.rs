@@ -79,6 +79,8 @@ use crate::util::convert::{convert_ident_to_lowercase, ToLowercase, ToObjectName
 use crate::variable::system::SystemVar;
 use crate::variable::user_defined::UserDefinedVar;
 use std::process::id;
+use crate::meta::read::get_all_full_table_names;
+use crate::physical_plan::insert::PhysicalPlanInsert;
 
 /// Execution context for registering data sources and executing queries
 pub struct Execution {
@@ -633,8 +635,8 @@ impl Execution {
             }
         }
 
-        let table_def_map = initial_util::read_all_table(self.global_context.clone()).unwrap();
-        if table_def_map.contains_key(&full_table_name) {
+        let full_table_names = get_all_full_table_names(self.global_context.clone()).unwrap();
+        if full_table_names.contains(&full_table_name) {
             return Ok(());
         }
 
@@ -1129,8 +1131,8 @@ impl Execution {
             SQLStatement::Update { table_name, assignments, selection } => {
                 let full_table_name = meta_util::fill_up_table_name(&mut self.session_context, table_name.clone()).unwrap();
 
-                let table_map = initial_util::read_all_table(self.global_context.clone()).unwrap();
-                if !table_map.contains_key(&full_table_name) {
+                let full_table_names = get_all_full_table_names(self.global_context.clone()).unwrap();
+                if !full_table_names.contains(&full_table_name) {
                     let message = format!("Table '{}' doesn't exist", table_name.to_string());
                     log::error!("{}", message);
                     return Err(MysqlError::new_server_error(
@@ -1304,7 +1306,7 @@ impl Execution {
                 Ok(CorePhysicalPlan::CreateTable(create_table))
             }
             CoreLogicalPlan::Insert { full_table_name, table_def, column_name_list, index_keys_list, column_value_map_list } => {
-                let cd = physical_plan::insert::PhysicalPlanInsert::new(self.global_context.clone(), full_table_name.clone(), table_def.clone(), column_name_list.clone(), index_keys_list.clone(), column_value_map_list.clone());
+                let cd = PhysicalPlanInsert::new(self.global_context.clone(),  table_def.clone(), column_name_list.clone(), index_keys_list.clone(), column_value_map_list.clone());
                 Ok(CorePhysicalPlan::Insert(cd))
             }
             CoreLogicalPlan::Update { logical_plan, table_name, assignments } => {

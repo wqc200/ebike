@@ -95,7 +95,7 @@ impl Delete {
         let schema_name = meta_util::cut_out_schema_name(full_table_name.clone()).to_string();
         let table_name = meta_util::cut_out_table_name(full_table_name.clone()).to_string();
 
-        let table_schema = self.global_context.lock().unwrap().meta_cache.get_table(full_table_name.clone()).unwrap();
+        let table = self.global_context.lock().unwrap().meta_cache.get_table(full_table_name.clone()).unwrap();
 
         for row_index in 0..rowid_array.len() {
             let rowid = rowid_array.value(row_index);
@@ -104,21 +104,16 @@ impl Delete {
             log::debug!("record_rowid_key: {:?}", record_rowid_key);
             store_engine.delete_key(record_rowid_key);
 
-            for column_def in table_schema.to_sqlcolumns() {
-                let column_name = column_def.name;
+            for sql_column in table.get_table_column().sql_column_list {
+                let column_name = sql_column.name;
                 if column_name.to_string().contains(meta_const::COLUMN_ROWID) {
                     continue;
                 }
 
-                let result = self.global_context.lock().unwrap().meta_cache.get_serial_number(full_table_name.clone(), column_name.clone());
-                let orm_id = match result {
-                    Ok(orm_id) => orm_id,
-                    Err(mysql_error) => {
-                        return Err(mysql_error);
-                    }
-                };
+                let sparrow_column = table.get_table_column().get_sparrow_column(column_name).unwrap();
+                let store_id = sparrow_column.store_id;
 
-                let record_column_key = util::dbkey::create_record_column(full_table_name.clone(), orm_id, rowid.as_ref());
+                let record_column_key = util::dbkey::create_record_column(full_table_name.clone(), store_id, rowid.as_ref());
                 let result = store_engine.delete_key(record_column_key.clone());
                 match result {
                     Err(error) => {

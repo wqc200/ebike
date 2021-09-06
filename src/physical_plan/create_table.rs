@@ -58,9 +58,9 @@ impl CreateTable {
         let mut with_options = self.with_options.clone();
         let has_engine = with_options
             .iter()
-            .any(|x| x.name.to_string().to_uppercase() == meta_const::OPTION_ENGINE);
+            .any(|x| x.name.to_string().to_uppercase() == meta_const::TABLE_OPTION_OF_ENGINE);
         if !has_engine {
-            let sql_option = SqlOption { name: Ident { value: meta_const::OPTION_ENGINE.to_string(), quote_style: None }, value: Value::SingleQuotedString(meta_const::OPTION_ENGINE_NAME_ROCKSDB.to_string()) };
+            let sql_option = SqlOption { name: Ident { value: meta_const::TABLE_OPTION_OF_ENGINE.to_string(), quote_style: None }, value: Value::SingleQuotedString(meta_const::OPTION_ENGINE_NAME_ROCKSDB.to_string()) };
             with_options.push(sql_option)
         }
         let constraints = self.constraints.clone();

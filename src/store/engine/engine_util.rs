@@ -34,7 +34,7 @@ pub trait StoreEngine {
 
 pub trait TableEngine {
     fn table_provider(&self) -> Arc<dyn TableProvider>;
-    fn table_iterator(&self, projection: Option<Vec<usize>>) -> Box<dyn Iterator<Item = Result<RecordBatch>>>;
+    fn table_iterator(&self, projection: Option<Vec<usize>>, filters: &[Expr]) -> Box<dyn Iterator<Item = Result<RecordBatch>>>;
 }
 
 pub struct TableEngineFactory;
@@ -149,12 +149,16 @@ impl StoreEngineFactory {
 
     pub fn try_new_with_engine(global_context: Arc<Mutex<GlobalContext>>, engine: &str) -> MysqlResult<Box<dyn StoreEngine>> {
         let gc = global_context.lock().unwrap();
-        let rocksdb_db = gc.engine.rocksdb_db.as_ref().unwrap();
-        let sled_db = gc.engine.sled_db.as_ref().unwrap();
 
         match engine {
-            meta_const::OPTION_ENGINE_NAME_ROCKSDB => Ok(Box::new(rocksdb::StoreEngineRocksdb::new(rocksdb_db.clone()))),
-            meta_const::OPTION_ENGINE_NAME_SLED => Ok(Box::new(sled::StoreEngineSled::new(sled_db.clone()))),
+            meta_const::OPTION_ENGINE_NAME_ROCKSDB => {
+                let rocksdb_db = gc.engine.rocksdb_db.as_ref().unwrap();
+                Ok(Box::new(rocksdb::StoreEngineRocksdb::new(rocksdb_db.clone())))
+            },
+            meta_const::OPTION_ENGINE_NAME_SLED => {
+                let sled_db = gc.engine.sled_db.as_ref().unwrap();
+                Ok(Box::new(sled::StoreEngineSled::new(sled_db.clone())))
+            }
             _ => {
                 Err(MysqlError::new_global_error(1105, format!(
                     "Unknown error. The table engine is not supported, engine: {:?}",

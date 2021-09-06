@@ -60,7 +60,7 @@ pub const COLUMN_INFORMATION_SCHEMA_COLUMN_NAME: &str = "column_name";
 pub const COLUMN_INFORMATION_SCHEMA_ORDINAL_POSITION: &str = "ordinal_position";
 
 // column of def.information_schema.tables
-pub const COLUMN_DEF_INFORMATION_SCHEMA_TABLES_TABLE_CATALOG: &str = "table_catalog";
+pub const COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_TABLES_TABLE_CATALOG: &str = "table_catalog";
 pub const COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_TABLES_TABLE_SCHEMA: &str = "table_schema";
 pub const FULL_COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_TABLES_TABLE_SCHEMA: &str = "def.information_schema.tables.table_schema";
 pub const COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_TABLES_TABLE_NAME: &str = "table_name";
@@ -77,6 +77,8 @@ pub const COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_TABLES_INDEX_LENGTH: &str = "ind
 pub const FULL_COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_TABLES_INDEX_LENGTH: &str = "def.information_schema.tables.index_length";
 pub const COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_TABLES_AUTO_INCREMENT: &str = "auto_increment";
 pub const FULL_COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_TABLES_AUTO_INCREMENT: &str = "def.information_schema.tables.auto_increment";
+pub const COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_TABLES_COLUMN_MAX_STORE_ID: &str = "column_max_store_id";
+pub const FULL_COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_TABLES_COLUMN_MAX_STORE_ID: &str = "def.information_schema.tables.column_max_store_id";
 // column of def.information_schema.statistics
 pub const COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_STATISTICS_TABLE_CATALOG: &str = "table_catalog";
 pub const FULL_COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_STATISTICS_TABLE_CATALOG: &str = "def.information_schema.statistics.table_catalog";
@@ -112,6 +114,8 @@ pub const COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_COLUMNS_TABLE_NAME: &str = "tabl
 pub const FULL_COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_COLUMNS_TABLE_NAME: &str = "def.information_schema.columns.table_name";
 pub const COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_COLUMNS_COLUMN_NAME: &str = "column_name";
 pub const FULL_COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_COLUMNS_COLUMN_NAME: &str = "def.information_schema.columns.column_name";
+pub const COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_COLUMNS_STORE_ID: &str = "store_id";
+pub const FULL_COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_COLUMNS_STORE_ID: &str = "def.information_schema.columns.store_id";
 pub const COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_COLUMNS_ORDINAL_POSITION: &str = "ordinal_position";
 pub const FULL_COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_COLUMNS_ORDINAL_POSITION: &str = "def.information_schema.columns.ordinal_position";
 pub const COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_COLUMNS_IS_NULLABLE: &str = "is_nullable";
@@ -124,11 +128,12 @@ pub const FULL_COLUMN_NAME_OF_DEF_PERFORMANCE_SCHEMA_GLOBAL_VARIABLES_VARIABLE_N
 pub const COLUMN_NAME_OF_DEF_PERFORMANCE_SCHEMA_GLOBAL_VARIABLES_VARIABLE_VALUE: &str = "variable_value";
 pub const FULL_COLUMN_NAME_OF_DEF_PERFORMANCE_SCHEMA_GLOBAL_VARIABLES_VARIABLE_VALUE: &str = "def.performance_schema.global_variables.variable_value";
 
-pub const OPTION_TABLE_TYPE: &str = "TABLE_TYPE";
+pub const TABLE_OPTION_OF_TABLE_TYPE: &str = "TABLE_TYPE";
 pub const OPTION_TABLE_TYPE_BASE_TABLE: &str = "BASE TABLE";
 pub const OPTION_TABLE_TYPE_SYSTEM_VIEW: &str = "SYSTEM VIEW";
 pub const OPTION_TABLE_TYPE_VIEW: &str = "VIEW";
-pub const OPTION_ENGINE: &str = "engine";
+pub const TABLE_OPTION_OF_COLUMN_MAX_STORE_ID: &str = "column_max_store_id";
+pub const TABLE_OPTION_OF_ENGINE: &str = "engine";
 pub const OPTION_ENGINE_NAME_ROCKSDB: &str = "rocksdb";
 pub const OPTION_ENGINE_NAME_SLED: &str = "sled";
 

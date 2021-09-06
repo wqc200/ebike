@@ -53,8 +53,8 @@ impl TableEngine for TableEngineRocksdb {
         Arc::new(provider)
     }
 
-    fn table_iterator(&self, projection: Option<Vec<usize>>) -> Box<dyn Iterator<Item=Result<RecordBatch>>> {
-        let reader = RocksdbReader::new(self.global_context.clone(), self.table_def.clone(), self.full_table_name.clone(), 1024, projection, &[]);
+    fn table_iterator(&self, projection: Option<Vec<usize>>, filters: &[Expr]) -> Box<dyn Iterator<Item=Result<RecordBatch>>> {
+        let reader = RocksdbReader::new(self.global_context.clone(), self.table_def.clone(), self.full_table_name.clone(), 1024, projection, filters);
         Box::new(reader)
     }
 }

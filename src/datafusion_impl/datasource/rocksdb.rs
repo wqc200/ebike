@@ -42,7 +42,7 @@ impl TableProvider for RocksdbTable {
     }
 
     fn schema(&self) -> Arc<Schema> {
-        Arc::new(self.table_schema.to_dfschema().unwrap().into())
+        Arc::new(self.table_schema.to_datafusion_dfschema().unwrap().into())
     }
 
     fn scan(

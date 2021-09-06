@@ -44,7 +44,7 @@ use uuid::Uuid;
 use crate::core::global_context::GlobalContext;
 use crate::core::session_context::SessionContext;
 use crate::meta::{initial, meta_const, meta_util};
-use crate::meta::def::{ColumnDef, DbDef, StatisticsColumn, TableDef};
+use crate::meta::def::{SparrowColumnDef, DbDef, StatisticsColumn, TableDef};
 use crate::meta::initial::information_schema::{key_column_usage, table_constraints};
 use crate::meta::initial::initial_util::{SaveKeyColumnUsage, SaveStatistics, SaveTableConstraints};
 use crate::meta::initial::initial_util;
@@ -61,6 +61,7 @@ use crate::util::convert::{ToIdent, ToObjectName};
 
 use super::super::util;
 use futures::StreamExt;
+use crate::meta::read::get_table_constraints;
 
 // pub const INFORMATION_SCHEMA_NUMBER_SCHEMATA: &str = "information_schema.number_schemata";
 // pub const INFORMATION_SCHEMA_NUMBER_TABLE: &str = "information_schema.number_table";
@@ -103,10 +104,11 @@ pub fn get_all_table_index(global_context: Arc<Mutex<GlobalContext>>, full_table
     Ok(all_index)
 }
 
-pub fn create_column(ordinal_position: usize, sql_column: SQLColumnDef) -> ColumnDef {
-    ColumnDef {
+pub fn create_sparrow_column(store_id: usize, ordinal_position: usize, sql_column: SQLColumnDef) -> SparrowColumnDef {
+    SparrowColumnDef {
+        store_id,
         ordinal_position,
-        sql_column,
+        sql_column: sql_column,
     }
 }
 
@@ -289,27 +291,11 @@ pub async fn init_meta(global_context: Arc<Mutex<GlobalContext>>) -> MysqlResult
     init_tables.insert(meta_const::FULL_TABLE_NAME_OF_DEF_MYSQL_USERS.to_object_name(), initial::mysql::users());
     init_tables.insert(meta_const::FULL_TABLE_NAME_OF_DEF_PERFORMANCE_SCHEMA_GLOBAL_VARIABLES.to_object_name(), initial::performance_schema::global_variables());
 
-
-    // let full_table_name = meta_const::FULL_TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_STATISTICS.to_object_name();
-    // let table_def = initial::information_schema::table_statistics();
-    //
-    // let engine = engine_util::TableEngineFactory::try_new_with_table_def(global_context.clone(), table_def.clone()).unwrap();
-    // let mut table_provider = engine.table_provider();
-    //
-    // let exec = table_provider.scan(&None, 1024, &[], None)?;
-    // let mut it = exec.execute(0).await?;
-    // let batch1 = it.next().await.unwrap()?;
-
     if !meta_has_create() {
-        for (full_table_name, table_def) in init_tables.iter() {
-            store_add_column_serial_number(global_context.clone(), full_table_name.clone(), table_def.to_sqlcolumns());
-            cache_add_column_serial_number(global_context.clone(), full_table_name.clone(), table_def.to_sqlcolumns());
-        }
-
-        for (full_table_name, table_def) in init_tables.iter() {
-            initial_util::add_information_schema_tables(global_context.clone(), full_table_name.clone(), table_def.with_option.clone());
-            initial_util::add_information_schema_columns(global_context.clone(), full_table_name.clone(), table_def.to_sqlcolumns());
-            save_table_constraint(global_context.clone(), full_table_name.clone(), table_def.get_constraints().clone());
+        for (full_table_name, table) in init_tables.iter() {
+            initial_util::add_information_schema_tables(global_context.clone(), table.clone());
+            initial_util::add_information_schema_columns(global_context.clone(), table.clone());
+            save_table_constraint(global_context.clone(), full_table_name.clone(), table.get_constraints().clone());
         }
 
         initial_util::create_schema(global_context.clone(), meta_const::FULL_SCHEMA_NAME_OF_DEF_MYSQL.to_object_name());
@@ -317,18 +303,14 @@ pub async fn init_meta(global_context: Arc<Mutex<GlobalContext>>) -> MysqlResult
 
         let result = initial::mysql::users_data(global_context.clone());
         if let Err(e) = result {
-            return Err(e)
+            return Err(e);
         }
         let result = initial::performance_schema::global_variables_data(global_context.clone());
         if let Err(e) = result {
-            return Err(e)
+            return Err(e);
         }
 
         meta_create_lock();
-    }
-
-    for (full_table_name, table_def) in init_tables.iter() {
-        cache_add_column_serial_number(global_context.clone(), full_table_name.clone(), table_def.to_sqlcolumns());
     }
 
     Ok(())
@@ -367,7 +349,7 @@ pub fn store_delete_column_serial_number(global_context: Arc<Mutex<GlobalContext
     let store_engine = StoreEngineFactory::try_new_schema_engine(global_context.clone()).unwrap();
 
     for column_name in columns {
-        let key = util::dbkey::create_column_serial_number(full_table_name.clone(), column_name.clone());
+        let key = util::dbkey::create_column_id(full_table_name.clone(), column_name.clone());
         let result = store_engine.delete_key(key);
     }
 }
@@ -417,7 +399,7 @@ pub fn store_add_column_serial_number(global_context: Arc<Mutex<GlobalContext>>,
 
         let column_name = column_def.name;
 
-        let key = util::dbkey::create_column_serial_number(full_table_name.clone(), column_name.clone());
+        let key = util::dbkey::create_column_id(full_table_name.clone(), column_name.clone());
         let value = orm_id.to_string();
         let result = store_engine.put_key(key, value.as_bytes());
     }
@@ -431,7 +413,7 @@ pub fn cache_add_column_serial_number(global_context: Arc<Mutex<GlobalContext>>,
     for column_def in columns {
         let column_name = column_def.name;
 
-        let result = store_get_column_serial_number(global_context.clone(), full_table_name.clone(), column_name.clone());
+        let result = store_get_column_id(global_context.clone(), full_table_name.clone(), column_name.clone());
         let orm_id = match result {
             Ok(result) => {
                 match result {
@@ -649,7 +631,7 @@ pub fn convert_sql_data_type_to_text(sql_type: &SQLDataType) -> MysqlResult<Stri
         SQLDataType::Int => Ok(meta_const::MYSQL_DATA_TYPE_INT.to_string()),
         SQLDataType::SmallInt => {
             Ok(meta_const::MYSQL_DATA_TYPE_SMALLINT.to_string())
-        },
+        }
         SQLDataType::Char(_) => {
             Ok(meta_const::MYSQL_DATA_TYPE_CHAR.to_string())
         }
@@ -688,7 +670,7 @@ pub fn convert_sql_data_type_to_arrow_data_type(sql_type: &SQLDataType) -> Mysql
     }
 }
 
-pub fn get_table_column(table: TableDef, column_name: &str) -> Option<ColumnDef> {
+pub fn get_table_column(table: TableDef, column_name: &str) -> Option<SparrowColumnDef> {
     let first = None;
 
     let column = table.get_columns().to_vec()
@@ -703,10 +685,10 @@ pub fn get_table_column(table: TableDef, column_name: &str) -> Option<ColumnDef>
     column
 }
 
-pub fn get_table_max_ordinal_position(global_context: Arc<Mutex<GlobalContext>>, schema_name: ObjectName) -> usize {
+pub fn get_table_max_ordinal_position(global_context: Arc<Mutex<GlobalContext>>, full_table_name: ObjectName) -> usize {
     let first = 0 as usize;
 
-    let mut result = global_context.lock().unwrap().meta_cache.get_table(schema_name.clone());
+    let mut result = global_context.lock().unwrap().meta_cache.get_table(full_table_name.clone());
     match result {
         Some(table) => {
             let ordinal_position = table.get_columns().to_vec()
@@ -729,25 +711,21 @@ pub fn get_table_max_ordinal_position(global_context: Arc<Mutex<GlobalContext>>,
 }
 
 pub fn table_has_primary_key(global_context: Arc<Mutex<GlobalContext>>, full_table_name: ObjectName) -> bool {
-    let schema_table_constraints = initial_util::read_information_schema_statistics(global_context.clone()).unwrap();
-    match schema_table_constraints.get(&full_table_name) {
-        Some(vec_table_constraint) => {
-            let a = &vec_table_constraint.to_vec().iter().any(|table_constraint| {
-                match table_constraint {
-                    TableConstraint::Unique { is_primary, .. } => {
-                        if is_primary.clone() {
-                            true
-                        } else {
-                            false
-                        }
-                    }
-                    _ => false,
+    let constraints = get_table_constraints(global_context.clone(), full_table_name.clone()).unwrap();
+
+    let result = constraints.iter().any(|table_constraint| {
+        match table_constraint {
+            TableConstraint::Unique { is_primary, .. } => {
+                if is_primary.clone() {
+                    true
+                } else {
+                    false
                 }
-            });
-            a.clone()
+            }
+            _ => false,
         }
-        None => false,
-    }
+    });
+    result
 }
 
 pub fn save_table_constraint(global_context: Arc<Mutex<GlobalContext>>, full_table_name: ObjectName, constraints: Vec<TableConstraint>) {
@@ -842,10 +820,10 @@ pub fn read_information_schema_tables_record(global_context: Arc<Mutex<GlobalCon
     Ok(partition)
 }
 
-pub fn store_get_column_serial_number(global_context: Arc<Mutex<GlobalContext>>, full_table_name: ObjectName, column_name: Ident) -> MysqlResult<Option<usize>> {
+pub fn store_get_column_id(global_context: Arc<Mutex<GlobalContext>>, full_table_name: ObjectName, column_name: Ident) -> MysqlResult<Option<usize>> {
     let store_engine = StoreEngineFactory::try_new_schema_engine(global_context.clone()).unwrap();
 
-    let key = util::dbkey::create_column_serial_number(full_table_name, column_name.clone());
+    let key = util::dbkey::create_column_id(full_table_name, column_name.clone());
     match store_engine.get_key(key) {
         Ok(result) => {
             match result {

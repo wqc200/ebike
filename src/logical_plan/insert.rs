@@ -79,7 +79,7 @@ impl Insert {
                 for row_value_ast in &values.0 {
                     let mut row_value: Vec<Expr> = vec![];
                     for column_value_ast in row_value_ast {
-                        let result = query_planner.sql_expr_to_logical_expr(&column_value_ast, &table_def.to_dfschema().unwrap());
+                        let result = query_planner.sql_expr_to_logical_expr(&column_value_ast, &table_def.to_datafusion_dfschema().unwrap());
                         let expr = match result {
                             Ok(v) => v,
                             Err(e) => {

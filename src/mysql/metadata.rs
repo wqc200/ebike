@@ -22,7 +22,7 @@ use super::response::ResponsePayload;
 use crate::mysql::metadata::MysqlType::MYSQL_TYPE_STRING;
 use num::traits::AsPrimitive;
 use crate::mysql::mysql_util;
-use crate::meta::def::ColumnDef;
+use crate::meta::def::SparrowColumnDef;
 use crate::meta::{meta_util, meta_const};
 use sqlparser::ast::{ColumnOption, ObjectName};
 
@@ -56,7 +56,7 @@ pub struct Column {
 }
 
 impl Column {
-    pub fn new(schema_name: ObjectName, table_name: ObjectName, column_def: &ColumnDef) -> Column {
+    pub fn new(schema_name: ObjectName, table_name: ObjectName, column_def: &SparrowColumnDef) -> Column {
         //let schema_name = schema_name.to_string();
         //let table_name = table_name.to_string();
         let column_name = &column_def.sql_column.name.value.clone();

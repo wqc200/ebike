@@ -41,7 +41,7 @@ pub fn create_column_index_to_name(schema_name: &str, column_index: usize) -> Bo
     key(k.as_bytes())
 }
 
-pub fn create_column_serial_number(full_table_name: ObjectName, column_name: Ident) -> String {
+pub fn create_column_id(full_table_name: ObjectName, column_name: Ident) -> String {
     let mut k = String::from("/Schema/ColumnName/ToIndex");
 
     k.push_str("/");

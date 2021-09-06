@@ -48,9 +48,9 @@ use crate::physical_plan::insert::PhysicalPlanInsert;
 
 pub fn global_variables() -> def::TableDef {
     let mut with_option = vec![];
-    let sql_option = SqlOption { name: Ident { value: meta_const::OPTION_TABLE_TYPE.to_string(), quote_style: None }, value: Value::SingleQuotedString(meta_const::OPTION_TABLE_TYPE_SYSTEM_VIEW.to_string()) };
+    let sql_option = SqlOption { name: Ident { value: meta_const::TABLE_OPTION_OF_TABLE_TYPE.to_string(), quote_style: None }, value: Value::SingleQuotedString(meta_const::OPTION_TABLE_TYPE_SYSTEM_VIEW.to_string()) };
     with_option.push(sql_option);
-    let sql_option = SqlOption { name: Ident { value: meta_const::OPTION_ENGINE.to_string(), quote_style: None }, value: Value::SingleQuotedString(meta_const::OPTION_ENGINE_NAME_ROCKSDB.to_string()) };
+    let sql_option = SqlOption { name: Ident { value: meta_const::TABLE_OPTION_OF_ENGINE.to_string(), quote_style: None }, value: Value::SingleQuotedString(meta_const::OPTION_ENGINE_NAME_ROCKSDB.to_string()) };
     with_option.push(sql_option);
 
     let sql_columns = vec![
@@ -95,12 +95,10 @@ pub fn global_variables_data(global_context: Arc<Mutex<GlobalContext>>) -> Mysql
     column_value_map.insert("variable_value".to_ident(), ScalarValue::Utf8(Some("0".to_string())));
     column_value_map_list.push(column_value_map);
 
-    let full_table_name = meta_const::FULL_TABLE_NAME_OF_DEF_PERFORMANCE_SCHEMA_GLOBAL_VARIABLES.to_object_name();
     let table_def = global_variables();
 
     let insert = PhysicalPlanInsert::new(
         global_context.clone(),
-        full_table_name,
         table_def,
         column_name_list.clone(),
         vec![],
