@@ -50,15 +50,9 @@ impl AlterTable {
 
         match self.operation.clone() {
             AlterTableOperation::DropColumn { column_name, .. } => {
-                meta_util::store_delete_column_serial_number(self.global_context.clone(), full_table_name.clone(), vec![column_name.clone()]);
-                meta_util::cache_delete_column_serial_number(self.global_context.clone(), full_table_name.clone(), vec![column_name.clone()]);
-
                 meta_util::cache_add_all_table(self.global_context.clone());
             }
             AlterTableOperation::AddColumn { column_def } => {
-                meta_util::store_add_column_serial_number(self.global_context.clone(), full_table_name.clone(), vec![column_def.clone()]);
-                meta_util::cache_add_column_serial_number(self.global_context.clone(), full_table_name.clone(), vec![column_def.clone()]);
-
                 let result = initial_util::add_information_schema_columns(self.global_context.clone(), full_table_name.clone(), vec![column_def.clone()]);
                 if let Err(mysql_error) = result {
                     return Err(mysql_error)

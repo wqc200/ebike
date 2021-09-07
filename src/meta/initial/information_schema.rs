@@ -40,6 +40,7 @@ use crate::store::reader::rocksdb::RocksdbReader;
 use crate::store::rocksdb::db::DB;
 use crate::store::rocksdb::option::Options;
 use crate::util::convert::ToObjectName;
+use crate::meta::def::{TableDef, TableColumnDef};
 
 pub fn table_columns() -> def::TableDef {
     let mut with_option = vec![];
@@ -94,7 +95,7 @@ pub fn table_tables() -> def::TableDef {
     let sql_option = SqlOption { name: Ident { value: meta_const::TABLE_OPTION_OF_ENGINE.to_string(), quote_style: None }, value: Value::SingleQuotedString(meta_const::OPTION_ENGINE_NAME_ROCKSDB.to_string()) };
     with_option.push(sql_option);
 
-    let columns = vec![
+    let sql_column_list = vec![
         meta_util::create_sql_column(meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_TABLES_TABLE_CATALOG, SQLDataType::Varchar(Some(512)), ColumnOption::NotNull),
         meta_util::create_sql_column(meta_const::COLUMN_INFORMATION_SCHEMA_TABLE_SCHEMA, SQLDataType::Varchar(Some(512)), ColumnOption::NotNull),
         meta_util::create_sql_column(meta_const::COLUMN_INFORMATION_SCHEMA_TABLE_NAME, SQLDataType::Varchar(Some(512)), ColumnOption::NotNull),
@@ -108,9 +109,12 @@ pub fn table_tables() -> def::TableDef {
     ];
 
     let full_table_name = meta_const::FULL_TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_TABLES.to_object_name();
-    let constraints = vec![];
-    let table_def = def::TableDef::new_with_sqlcolumn(full_table_name, columns, constraints, with_option);
-    table_def
+    let mut table = TableDef::new(full_table_name);
+    let table_column = TableColumnDef::from_sql_column_list(sql_column_list);
+    table.with_column(table_column);
+    table.table_option.with_column_max_store_id(table_column.get_max_store_id());
+
+    table
 }
 
 pub fn table_schemata() -> def::TableDef {

@@ -65,46 +65,54 @@ impl Default for TableColumnDef {
 }
 
 impl TableColumnDef {
-    pub fn with_sparrow_column_list(mut self, my_column_list: Vec<SparrowColumnDef>) -> Self {
-        let mut my_column_map = HashMap::new();
+    pub fn from_sparrow_column_list(mut sparrow_column_list: Vec<SparrowColumnDef>) -> Self {
+        let mut table_column = TableColumnDef::default();
+
+        sparrow_column_list.sort_by(|a, b| a.ordinal_position.cmp(&b.ordinal_position));
+
+        let mut sparrow_column_map = HashMap::new();
         let mut sql_column_list = vec![];
 
-        for my_column in my_column_list {
-            let sql_column = my_column.sql_column;
+        for sparrow_column in sparrow_column_list {
+            let sql_column = sparrow_column.sql_column;
             let column_name = sql_column.name.clone();
 
-            my_column_map.insert(column_name, my_column.clone());
+            sparrow_column_map.insert(column_name, sparrow_column.clone());
             sql_column_list.push(sql_column.clone());
         }
 
-        Self {
-            sparrow_column_map: my_column_map,
-            sparrow_column_list: my_column_list,
-            sql_column_list,
-        }
+        table_column.with_sparrow_column_list(sparrow_column_list);
+        table_column.with_sparrow_column_map(sparrow_column_map);
+        table_column.with_sql_column_list(sql_column_list);
+
+        table_column
     }
 
-    pub fn new_with_sql_column_list(sql_column_list: Vec<SQLColumnDef>) -> Self {
-        let mut my_column_map = HashMap::new();
-        let mut my_column_list = vec![];
+    pub fn from_sql_column_list(sql_column_list: Vec<SQLColumnDef>) -> Self {
+        let mut table_column = TableColumnDef::default();
+
+        let mut sparrow_column_map = HashMap::new();
+        let mut sparrow_column_list = vec![];
 
         let mut ordinal_position = 0;
         let mut store_id = 0;
         for sql_column in sql_column_list {
             let column_name = sql_column.name.clone();
+
             ordinal_position += 1;
             store_id += 1;
-            let my_column = SparrowColumnDef::new(store_id, ordinal_position, sql_column);
-            my_column_map.insert(column_name, my_column.clone());
-            my_column_list.push(my_column.clone());
-        }
-        let max_store_id = store_id;
 
-        Self {
-            sparrow_column_map: my_column_map,
-            sparrow_column_list: my_column_list,
-            sql_column_list,
+            let sparrow_column = SparrowColumnDef::new(store_id, ordinal_position, sql_column);
+
+            sparrow_column_map.insert(column_name, sparrow_column.clone());
+            sparrow_column_list.push(sparrow_column.clone());
         }
+
+        table_column.with_sparrow_column_list(sparrow_column_list);
+        table_column.with_sparrow_column_map(sparrow_column_map);
+        table_column.with_sql_column_list(sql_column_list);
+
+        table_column
     }
 }
 
@@ -119,8 +127,26 @@ impl TableColumnDef {
                     format!("My column not found, column name: {:?}", column_name).as_str(),
                 ))
             }
-            Some(my_column) => Ok(my_column.clone())
+            Some(sparrow_column) => Ok(sparrow_column.clone())
         }
+    }
+
+    pub fn get_max_store_id(&self) -> i32 {
+        let mut max_store_id = 0;
+
+        for sparrow_column in self.sparrow_column_list {
+            if sparrow_column.store_id > max_store_id {
+                max_store_id = sparrow_column.store_id;
+            }
+        }
+
+        max_store_id
+    }
+
+    pub fn get_last_sparrow_column(&self) -> SparrowColumnDef {
+        self.sparrow_column_list.
+
+        max_store_id
     }
 }
 
@@ -232,15 +258,18 @@ impl TableDef {
             full_table_name,
             column,
             constraints,
-            sql_options,
+            table_option,
         }
     }
 
     pub fn new_with_sqlcolumn(full_table_name: ObjectName, sql_column_list: Vec<SQLColumnDef>, constraints: Vec<TableConstraint>, with_option: Vec<SqlOption>) -> Self {
-        let table_column = TableColumnDef::new_with_sql_column_list(sql_column_list);
-        let mut table_def = TableDef::new(full_table_name);
-        table_def.with_column(table_column);
-        table_def
+        let table_column = TableColumnDef::from_sql_column_list(sql_column_list);
+
+        let mut table = TableDef::new(full_table_name);
+        table.with_column(table_column);
+        table.table_option.with_column_max_store_id(table_column.get_max_store_id());
+
+        table
     }
 }
 
@@ -253,8 +282,8 @@ impl TableDef {
         self.constraints = constraints
     }
 
-    pub fn with_options(&mut self, sql_options: Vec<SqlOption>) {
-        self.sql_options = sql_options
+    pub fn with_option(&mut self, table_option: TableOptionDef) {
+        self.table_option = table_option
     }
 }
 
@@ -273,10 +302,6 @@ impl TableDef {
 
     pub fn get_constraints(&self) -> &Vec<TableConstraint> {
         &self.constraints
-    }
-
-    pub fn with_option(&self) -> &Vec<SqlOption> {
-        &self.sql_options
     }
 
     pub fn to_datafusion_dfschema(&self) -> error::Result<DFSchema> {
