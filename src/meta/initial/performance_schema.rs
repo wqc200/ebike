@@ -37,23 +37,18 @@ use uuid::Uuid;
 
 use crate::core::global_context::GlobalContext;
 use crate::meta::{def, meta_const, meta_util};
+use crate::meta::initial::initial_util::create_table;
 use crate::mysql::error::MysqlResult;
 use crate::physical_plan::create_table::CreateTable;
+use crate::physical_plan::insert::PhysicalPlanInsert;
 use crate::store::engine::engine_util;
 use crate::store::reader::rocksdb::RocksdbReader;
 use crate::store::rocksdb::db::DB;
 use crate::store::rocksdb::option::Options;
-use crate::util::convert::{ToObjectName, ToIdent};
-use crate::physical_plan::insert::PhysicalPlanInsert;
+use crate::util::convert::{ToIdent, ToObjectName};
 
-pub fn global_variables() -> def::TableDef {
-    let mut with_option = vec![];
-    let sql_option = SqlOption { name: Ident { value: meta_const::NAME_OF_TABLE_OPTION_TABLE_TYPE.to_string(), quote_style: None }, value: Value::SingleQuotedString(meta_const::VALUE_OF_TABLE_OPTION_TABLE_TYPE_SYSTEM_VIEW.to_string()) };
-    with_option.push(sql_option);
-    let sql_option = SqlOption { name: Ident { value: meta_const::NAME_OF_TABLE_OPTION_ENGINE.to_string(), quote_style: None }, value: Value::SingleQuotedString(meta_const::VALUE_OF_TABLE_OPTION_ENGINE_ROCKSDB.to_string()) };
-    with_option.push(sql_option);
-
-    let sql_columns = vec![
+pub fn global_variables(global_context: Arc<Mutex<GlobalContext>>) -> def::TableDef {
+    let sql_column_list = vec![
         meta_util::create_sql_column(meta_const::COLUMN_NAME_OF_DEF_PERFORMANCE_SCHEMA_GLOBAL_VARIABLES_VARIABLE_NAME, SQLDataType::Varchar(Some(512)), ColumnOption::NotNull),
         meta_util::create_sql_column(meta_const::COLUMN_NAME_OF_DEF_PERFORMANCE_SCHEMA_GLOBAL_VARIABLES_VARIABLE_VALUE, SQLDataType::Varchar(Some(512)), ColumnOption::Null),
     ];
@@ -65,46 +60,13 @@ pub fn global_variables() -> def::TableDef {
         columns,
         is_primary: true,
     };
-    let full_table_name = meta_const::FULL_TABLE_NAME_OF_DEF_PERFORMANCE_SCHEMA_GLOBAL_VARIABLES.to_object_name();
     let constraints = vec![table_constraint];
-    let table_def = def::TableDef::new_with_sqlcolumn(full_table_name, sql_columns, constraints, with_option);
-    table_def
-}
 
-pub fn global_variables_data(global_context: Arc<Mutex<GlobalContext>>) -> MysqlResult<u64> {
-    let mut column_name_list = vec![];
-    for column_def in global_variables().get_columns() {
-        column_name_list.push(column_def.sql_column.name.to_string());
-    }
-
-    let mut column_value_map_list: Vec<HashMap<Ident, ScalarValue>> = vec![];
-    let mut column_value_map = HashMap::new();
-    column_value_map.insert("variable_name".to_ident(), ScalarValue::Utf8(Some("auto_increment_increment".to_string())));
-    column_value_map.insert("variable_value".to_ident(), ScalarValue::Utf8(Some("0".to_string())));
-    column_value_map_list.push(column_value_map);
-    let mut column_value_map = HashMap::new();
-    column_value_map.insert("variable_name".to_ident(), ScalarValue::Utf8(Some("lower_case_table_names".to_string())));
-    column_value_map.insert("variable_value".to_ident(), ScalarValue::Utf8(Some("1".to_string())));
-    column_value_map_list.push(column_value_map);
-    let mut column_value_map = HashMap::new();
-    column_value_map.insert("variable_name".to_ident(), ScalarValue::Utf8(Some("transaction_isolation".to_string())));
-    column_value_map.insert("variable_value".to_ident(), ScalarValue::Utf8(None));
-    column_value_map_list.push(column_value_map);
-    let mut column_value_map = HashMap::new();
-    column_value_map.insert("variable_name".to_ident(), ScalarValue::Utf8(Some("transaction_read_only".to_string())));
-    column_value_map.insert("variable_value".to_ident(), ScalarValue::Utf8(Some("0".to_string())));
-    column_value_map_list.push(column_value_map);
-
-    let table_def = global_variables();
-
-    let insert = PhysicalPlanInsert::new(
+    create_table(
         global_context.clone(),
-        table_def,
-        column_name_list.clone(),
-        vec![],
-        column_value_map_list.clone(),
-    );
-    let total = insert.execute().unwrap();
-
-    Ok(total)
+        meta_const::SCHEMA_NAME_OF_DEF_PERFORMANCE_SCHEMA,
+        meta_const::TABLE_NAME_OF_DEF_PERFORMANCE_SCHEMA_GLOBAL_VARIABLES,
+        sql_column_list.clone(),
+        constraints.clone(),
+    )
 }

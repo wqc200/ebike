@@ -5,7 +5,7 @@ use std::fs::File;
 use std::io::{BufReader, BufWriter};
 use std::io::prelude::*;
 use std::process::*;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use arrow::array;
 use arrow::array::{
@@ -40,15 +40,10 @@ use crate::store::reader::rocksdb::RocksdbReader;
 use crate::store::rocksdb::db::DB;
 use crate::store::rocksdb::option::Options;
 use crate::util::convert::ToObjectName;
-use crate::meta::def::{TableDef, TableColumnDef};
+use crate::meta::def::{TableDef, TableColumnDef, TableOptionDef};
+use crate::meta::initial::initial_util::create_table;
 
-pub fn table_columns() -> def::TableDef {
-    let mut with_option = vec![];
-    let sql_option = SqlOption { name: Ident { value: meta_const::NAME_OF_TABLE_OPTION_TABLE_TYPE.to_string(), quote_style: None }, value: Value::SingleQuotedString(meta_const::VALUE_OF_TABLE_OPTION_TABLE_TYPE_SYSTEM_VIEW.to_string()) };
-    with_option.push(sql_option);
-    let sql_option = SqlOption { name: Ident { value: meta_const::NAME_OF_TABLE_OPTION_ENGINE.to_string(), quote_style: None }, value: Value::SingleQuotedString(meta_const::VALUE_OF_TABLE_OPTION_ENGINE_ROCKSDB.to_string()) };
-    with_option.push(sql_option);
-
+pub fn columns(global_context: Arc<Mutex<GlobalContext>>) -> TableDef {
     let mut idents = vec![];
     idents.push(Ident::new(""));
     idents.push(Ident::new("PRI"));
@@ -56,7 +51,7 @@ pub fn table_columns() -> def::TableDef {
     idents.push(Ident::new("MUL"));
     let object_name = ObjectName(idents);
 
-    let sql_columns = vec![
+    let sql_column_list = vec![
         meta_util::create_sql_column(meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_COLUMNS_TABLE_CATALOG, SQLDataType::Varchar(Some(64)), ColumnOption::NotNull),
         meta_util::create_sql_column(meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_COLUMNS_TABLE_SCHEMA, SQLDataType::Varchar(Some(64)), ColumnOption::NotNull),
         meta_util::create_sql_column(meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_COLUMNS_TABLE_NAME, SQLDataType::Varchar(Some(64)), ColumnOption::NotNull),
@@ -81,20 +76,18 @@ pub fn table_columns() -> def::TableDef {
         meta_util::create_sql_column("GENERATION_EXPRESSION", SQLDataType::Varchar(Some(512)), ColumnOption::NotNull),
         meta_util::create_sql_column("SRS_ID", SQLDataType::Int, ColumnOption::Null),
     ];
-
-    let full_table_name = meta_const::FULL_TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_COLUMNS.to_object_name();
     let constraints = vec![];
-    let table_def = def::TableDef::new_with_sqlcolumn(full_table_name, sql_columns, constraints, with_option);
-    table_def
+
+    create_table(
+        global_context.clone(),
+        meta_const::SCHEMA_NAME_OF_DEF_INFORMATION_SCHEMA,
+        meta_const::TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_COLUMNS,
+        sql_column_list.clone(),
+        constraints.clone(),
+    )
 }
 
-pub fn table_tables() -> def::TableDef {
-    let mut with_option = vec![];
-    let sql_option = SqlOption { name: Ident { value: meta_const::NAME_OF_TABLE_OPTION_TABLE_TYPE.to_string(), quote_style: None }, value: Value::SingleQuotedString(meta_const::VALUE_OF_TABLE_OPTION_TABLE_TYPE_SYSTEM_VIEW.to_string()) };
-    with_option.push(sql_option);
-    let sql_option = SqlOption { name: Ident { value: meta_const::NAME_OF_TABLE_OPTION_ENGINE.to_string(), quote_style: None }, value: Value::SingleQuotedString(meta_const::VALUE_OF_TABLE_OPTION_ENGINE_ROCKSDB.to_string()) };
-    with_option.push(sql_option);
-
+pub fn tables(global_context: Arc<Mutex<GlobalContext>>) -> TableDef {
     let sql_column_list = vec![
         meta_util::create_sql_column(meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_TABLES_TABLE_CATALOG, SQLDataType::Varchar(Some(512)), ColumnOption::NotNull),
         meta_util::create_sql_column(meta_const::COLUMN_INFORMATION_SCHEMA_TABLE_SCHEMA, SQLDataType::Varchar(Some(512)), ColumnOption::NotNull),
@@ -107,26 +100,19 @@ pub fn table_tables() -> def::TableDef {
         meta_util::create_sql_column(meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_TABLES_AUTO_INCREMENT, SQLDataType::Int, ColumnOption::NotNull),
         meta_util::create_sql_column(meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_TABLES_COLUMN_MAX_STORE_ID, SQLDataType::Int, ColumnOption::NotNull),
     ];
+    let constraints = vec![];
 
-    let full_table_name = meta_const::FULL_TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_TABLES.to_object_name();
-    let mut table_column = TableColumnDef::default();
-    table_column.use_sql_column_list(sql_column_list);
-
-    let mut table = TableDef::new(full_table_name);
-    table.with_column(table_column.clone());
-    table.option.with_column_max_store_id(table_column.get_max_store_id());
-
-    table
+    create_table(
+        global_context.clone(),
+        meta_const::SCHEMA_NAME_OF_DEF_INFORMATION_SCHEMA,
+        meta_const::TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_TABLES,
+        sql_column_list.clone(),
+        constraints.clone(),
+    )
 }
 
-pub fn table_schemata() -> def::TableDef {
-    let mut with_option = vec![];
-    let sql_option = SqlOption { name: Ident { value: meta_const::NAME_OF_TABLE_OPTION_TABLE_TYPE.to_string(), quote_style: None }, value: Value::SingleQuotedString(meta_const::VALUE_OF_TABLE_OPTION_TABLE_TYPE_SYSTEM_VIEW.to_string()) };
-    with_option.push(sql_option);
-    let sql_option = SqlOption { name: Ident { value: meta_const::NAME_OF_TABLE_OPTION_ENGINE.to_string(), quote_style: None }, value: Value::SingleQuotedString(meta_const::VALUE_OF_TABLE_OPTION_ENGINE_ROCKSDB.to_string()) };
-    with_option.push(sql_option);
-
-    let columns = vec![
+pub fn schemata(global_context: Arc<Mutex<GlobalContext>>) -> TableDef {
+    let sql_column_list = vec![
         meta_util::create_sql_column(meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_SCHEMATA_CATALOG_NAME, SQLDataType::Varchar(Some(512)), ColumnOption::NotNull),
         meta_util::create_sql_column(meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_SCHEMATA_SCHEMA_NAME, SQLDataType::Varchar(Some(512)), ColumnOption::NotNull),
         meta_util::create_sql_column(meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_SCHEMATA_DEFAULT_CHARACTER_SET_NAME, SQLDataType::Varchar(Some(512)), ColumnOption::NotNull),
@@ -134,21 +120,19 @@ pub fn table_schemata() -> def::TableDef {
         meta_util::create_sql_column("SQL_PATH", SQLDataType::Varchar(Some(512)), ColumnOption::NotNull),
         meta_util::create_sql_column("DEFAULT_ENCRYPTION", SQLDataType::Varchar(Some(512)), ColumnOption::NotNull),
     ];
-
-    let full_table_name = meta_const::FULL_TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_SCHEMATA.to_object_name();
     let constraints = vec![];
-    let table_def = def::TableDef::new_with_sqlcolumn(full_table_name, columns, constraints, with_option);
-    table_def
+
+    create_table(
+        global_context.clone(),
+        meta_const::SCHEMA_NAME_OF_DEF_INFORMATION_SCHEMA,
+        meta_const::TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_SCHEMATA,
+        sql_column_list.clone(),
+        constraints.clone(),
+    )
 }
 
-pub fn table_statistics() -> def::TableDef {
-    let mut with_option = vec![];
-    let sql_option = SqlOption { name: Ident { value: meta_const::NAME_OF_TABLE_OPTION_TABLE_TYPE.to_string(), quote_style: None }, value: Value::SingleQuotedString(meta_const::VALUE_OF_TABLE_OPTION_TABLE_TYPE_SYSTEM_VIEW.to_string()) };
-    with_option.push(sql_option);
-    let sql_option = SqlOption { name: Ident { value: meta_const::NAME_OF_TABLE_OPTION_ENGINE.to_string(), quote_style: None }, value: Value::SingleQuotedString(meta_const::VALUE_OF_TABLE_OPTION_ENGINE_ROCKSDB.to_string()) };
-    with_option.push(sql_option);
-
-    let columns = vec![
+pub fn statistics(global_context: Arc<Mutex<GlobalContext>>) -> TableDef {
+    let sql_column_list = vec![
         meta_util::create_sql_column(meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_STATISTICS_TABLE_CATALOG, SQLDataType::Varchar(Some(512)), ColumnOption::NotNull),
         meta_util::create_sql_column(meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_STATISTICS_TABLE_SCHEMA, SQLDataType::Varchar(Some(512)), ColumnOption::NotNull),
         meta_util::create_sql_column(meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_STATISTICS_TABLE_NAME, SQLDataType::Varchar(Some(512)), ColumnOption::NotNull),
@@ -157,21 +141,19 @@ pub fn table_statistics() -> def::TableDef {
         meta_util::create_sql_column(meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_STATISTICS_SEQ_IN_INDEX, SQLDataType::Int, ColumnOption::NotNull),
         meta_util::create_sql_column(meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_STATISTICS_COLUMN_NAME, SQLDataType::Varchar(Some(512)), ColumnOption::NotNull),
     ];
-
-    let full_table_name = meta_const::FULL_TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_STATISTICS.to_object_name();
     let constraints = vec![];
-    let table_def = def::TableDef::new_with_sqlcolumn(full_table_name, columns, constraints, with_option);
-    table_def
+
+    create_table(
+        global_context.clone(),
+        meta_const::SCHEMA_NAME_OF_DEF_INFORMATION_SCHEMA,
+        meta_const::TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_STATISTICS,
+        sql_column_list.clone(),
+        constraints.clone(),
+    )
 }
 
-pub fn key_column_usage() -> def::TableDef {
-    let mut with_option = vec![];
-    let sql_option = SqlOption { name: Ident { value: meta_const::NAME_OF_TABLE_OPTION_TABLE_TYPE.to_string(), quote_style: None }, value: Value::SingleQuotedString(meta_const::VALUE_OF_TABLE_OPTION_TABLE_TYPE_SYSTEM_VIEW.to_string()) };
-    with_option.push(sql_option);
-    let sql_option = SqlOption { name: Ident { value: meta_const::NAME_OF_TABLE_OPTION_ENGINE.to_string(), quote_style: None }, value: Value::SingleQuotedString(meta_const::VALUE_OF_TABLE_OPTION_ENGINE_ROCKSDB.to_string()) };
-    with_option.push(sql_option);
-
-    let columns = vec![
+pub fn key_column_usage(global_context: Arc<Mutex<GlobalContext>>) -> TableDef {
+    let sql_column_list = vec![
         meta_util::create_sql_column("constraint_catalog", SQLDataType::Varchar(Some(512)), ColumnOption::NotNull),
         meta_util::create_sql_column("constraint_schema", SQLDataType::Varchar(Some(512)), ColumnOption::NotNull),
         meta_util::create_sql_column("constraint_name", SQLDataType::Varchar(Some(512)), ColumnOption::NotNull),
@@ -185,21 +167,19 @@ pub fn key_column_usage() -> def::TableDef {
         meta_util::create_sql_column("referenced_table_name", SQLDataType::Varchar(Some(512)), ColumnOption::Null),
         meta_util::create_sql_column("referenced_column_name", SQLDataType::Varchar(Some(512)), ColumnOption::Null),
     ];
-
-    let full_table_name = meta_const::FULL_TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_KEY_COLUMN_USAGE.to_object_name();
     let constraints = vec![];
-    let table_def = def::TableDef::new_with_sqlcolumn(full_table_name, columns, constraints, with_option);
-    table_def
+
+    create_table(
+        global_context.clone(),
+        meta_const::SCHEMA_NAME_OF_DEF_INFORMATION_SCHEMA,
+        meta_const::TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_KEY_COLUMN_USAGE,
+        sql_column_list.clone(),
+        constraints.clone(),
+    )
 }
 
-pub fn table_constraints() -> def::TableDef {
-    let mut with_option = vec![];
-    let sql_option = SqlOption { name: Ident { value: meta_const::NAME_OF_TABLE_OPTION_TABLE_TYPE.to_string(), quote_style: None }, value: Value::SingleQuotedString(meta_const::VALUE_OF_TABLE_OPTION_TABLE_TYPE_SYSTEM_VIEW.to_string()) };
-    with_option.push(sql_option);
-    let sql_option = SqlOption { name: Ident { value: meta_const::NAME_OF_TABLE_OPTION_ENGINE.to_string(), quote_style: None }, value: Value::SingleQuotedString(meta_const::VALUE_OF_TABLE_OPTION_ENGINE_ROCKSDB.to_string()) };
-    with_option.push(sql_option);
-
-    let columns = vec![
+pub fn table_constraints(global_context: Arc<Mutex<GlobalContext>>) -> TableDef {
+    let sql_column_list = vec![
         meta_util::create_sql_column("constraint_catalog", SQLDataType::Varchar(Some(512)), ColumnOption::NotNull),
         meta_util::create_sql_column("constraint_schema", SQLDataType::Varchar(Some(512)), ColumnOption::NotNull),
         meta_util::create_sql_column("constraint_name", SQLDataType::Varchar(Some(512)), ColumnOption::NotNull),
@@ -208,9 +188,13 @@ pub fn table_constraints() -> def::TableDef {
         meta_util::create_sql_column("constraint_type", SQLDataType::Varchar(Some(512)), ColumnOption::NotNull),
         meta_util::create_sql_column("enforced", SQLDataType::Varchar(Some(512)), ColumnOption::NotNull),
     ];
-
-    let full_table_name = meta_const::FULL_TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_TABLE_CONSTRAINTS.to_object_name();
     let constraints = vec![];
-    let table_def = def::TableDef::new_with_sqlcolumn(full_table_name, columns, constraints, with_option);
-    table_def
+
+    create_table(
+        global_context.clone(),
+        meta_const::SCHEMA_NAME_OF_DEF_INFORMATION_SCHEMA,
+        meta_const::TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_TABLE_CONSTRAINTS,
+        sql_column_list.clone(),
+        constraints.clone(),
+    )
 }

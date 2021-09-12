@@ -47,7 +47,7 @@ impl RocksdbReader {
         filters: &[Expr],
     ) -> Self {
         let schema_ref = table.to_schema_ref();
-        let full_table_name = table.full_table_name.clone();
+        let full_table_name = table.option.full_table_name.clone();
 
         let projected_schema = match projection.clone() {
             Some(projection) => {
@@ -103,7 +103,7 @@ impl Iterator for RocksdbReader {
         let global_context = &self.global_context.lock().unwrap();
         let rocksdb_db = global_context.engine.rocksdb_db.as_ref().unwrap();
         let table_column = self.table.get_table_column();
-        let full_table_name = self.table.full_table_name.clone();
+        let full_table_name = self.table.option.full_table_name.clone();
 
         let mut rowids: Vec<String> = vec![];
         while self.rocksdb_iter.valid() {

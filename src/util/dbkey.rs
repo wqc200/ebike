@@ -126,7 +126,7 @@ pub fn scan_record_rowid(full_table_name: ObjectName) -> String {
 
 pub fn create_table_index_key(table: TableDef, table_index: TableIndexDef, column_value_map: HashMap<Ident, ScalarValue>) -> MysqlResult<String> {
     let mut k = String::from("/Table/index/key/");
-    k.push_str(table.full_table_name.to_string().as_str());
+    k.push_str(table.option.full_table_name.to_string().as_str());
     k.push_str("/");
     k.push_str(table_index.index_name.as_str());
     k.push_str("/");

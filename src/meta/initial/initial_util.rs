@@ -7,21 +7,76 @@ use datafusion::catalog::TableReference;
 use datafusion::logical_plan::Expr;
 use datafusion::scalar::ScalarValue;
 use futures::StreamExt;
-use sqlparser::ast::{ColumnDef as SQLColumnDef, ColumnOption, Ident, ObjectName, SqlOption, TableConstraint, Value, ColumnDef};
+use sqlparser::ast::{ColumnDef as SQLColumnDef, ColumnDef, ColumnOption, Ident, ObjectName, SqlOption, TableConstraint, Value};
 
 use crate::core::global_context::GlobalContext;
 use crate::meta::{initial, meta_const, meta_util};
-use crate::meta::def::{SparrowColumnDef, SchemaDef, StatisticsColumn, TableDef, TableColumnDef, TableOptionDef, SchemaOptionDef};
-use crate::meta::initial::information_schema;
-use crate::meta::initial::performance_schema;
+use crate::meta::def::{SchemaDef, SchemaOptionDef, SparrowColumnDef, StatisticsColumn, TableColumnDef, TableDef, TableOptionDef};
+use crate::meta::initial::{information_schema, mysql, performance_schema};
+use crate::meta::read::get_all_full_table_names;
 use crate::mysql::error::{MysqlError, MysqlResult};
-use crate::store::engine::engine_util;
-use crate::store::engine::engine_util::{TableEngine, ADD_ENTRY_TYPE};
-use crate::store::reader::rocksdb::RocksdbReader;
-use crate::util::convert::{ToIdent, ToObjectName};
 use crate::physical_plan;
 use crate::physical_plan::insert::PhysicalPlanInsert;
-use crate::meta::read::{get_all_full_table_names};
+use crate::store::engine::engine_util;
+use crate::store::engine::engine_util::{ADD_ENTRY_TYPE, TableEngine};
+use crate::store::reader::rocksdb::RocksdbReader;
+use crate::util::convert::{ToIdent, ToObjectName};
+
+pub fn create_table(global_context: Arc<Mutex<GlobalContext>>, schema_name: &str, table_name: &str, sql_column_list: Vec<SQLColumnDef>, constraints: Vec<TableConstraint>) -> TableDef {
+    let gc = global_context.lock().unwrap();
+
+    let mut table_column = TableColumnDef::default();
+    table_column.use_sql_column_list(sql_column_list);
+
+    let column_max_store_id = table_column.get_max_store_id();
+
+    let mut table_option = TableOptionDef::new(
+        meta_const::CATALOG_NAME,
+        schema_name,
+        table_name,
+    );
+    table_option.with_engine(gc.my_config.schema.engine.as_str());
+    table_option.with_table_type(meta_const::VALUE_OF_TABLE_OPTION_TABLE_TYPE_BASE_TABLE);
+    table_option.with_column_max_store_id(column_max_store_id);
+
+    let mut table = TableDef::new();
+    table.with_column(table_column.clone());
+    table.with_option(table_option.clone());
+    table.with_constraints(constraints.clone());
+
+    table
+}
+
+pub fn create_schema(global_context: Arc<Mutex<GlobalContext>>, full_schema_name: ObjectName) -> MysqlResult<u64> {
+    let mut column_name_list = vec![];
+    for sql_column in initial::information_schema::schemata(global_context.clone()).column.sql_column_list {
+        column_name_list.push(sql_column.name.to_string());
+    }
+
+    let catalog_name = meta_util::cut_out_catalog_name(full_schema_name.clone());
+    let schema_name = meta_util::cut_out_schema_name(full_schema_name.clone());
+
+    let mut column_value_map_list: Vec<HashMap<Ident, ScalarValue>> = vec![];
+    let mut column_value_map = HashMap::new();
+    column_value_map.insert("catalog_name".to_ident(), ScalarValue::Utf8(Some(catalog_name.to_string())));
+    column_value_map.insert("schema_name".to_ident(), ScalarValue::Utf8(Some(schema_name.to_string())));
+    column_value_map.insert("default_character_set_name".to_ident(), ScalarValue::Utf8(Some("utf8mb4".to_string())));
+    column_value_map.insert("default_collation_name".to_ident(), ScalarValue::Utf8(Some("utf8mb4_0900_ai_ci".to_string())));
+    column_value_map.insert("SQL_PATH".to_ident(), ScalarValue::Utf8(Some("".to_string())));
+    column_value_map.insert("DEFAULT_ENCRYPTION".to_ident(), ScalarValue::Utf8(Some("NO".to_string())));
+    column_value_map_list.push(column_value_map);
+
+    let table_def = initial::information_schema::schemata(global_context.clone());
+    let insert = physical_plan::insert::PhysicalPlanInsert::new(
+        global_context.clone(),
+        table_def,
+        column_name_list.clone(),
+        vec![],
+        column_value_map_list.clone(),
+    );
+    let total = insert.execute();
+    total
+}
 
 #[derive(Debug, Clone)]
 pub struct SaveTableConstraints {
@@ -56,7 +111,7 @@ impl SaveTableConstraints {
     }
 
     pub fn save(&mut self) -> MysqlResult<u64> {
-        let table_def = initial::information_schema::table_constraints();
+        let table_def = initial::information_schema::table_constraints(self.global_context.clone());
 
         let mut column_name_list = vec![];
         for column_def in table_def.get_columns() {
@@ -114,7 +169,7 @@ impl SaveKeyColumnUsage {
     }
 
     pub fn save(&mut self) -> MysqlResult<u64> {
-        let table_def = initial::information_schema::key_column_usage();
+        let table_def = initial::information_schema::key_column_usage(self.global_context.clone());
 
         let mut column_name_list = vec![];
         for column_def in table_def.get_columns() {
@@ -166,10 +221,10 @@ impl SaveStatistics {
     }
 
     pub fn save(&mut self) -> MysqlResult<u64> {
-        let table_def = initial::information_schema::table_statistics();
+        let table_def = initial::information_schema::statistics(self.global_context.clone());
 
         let mut column_name_list = vec![];
-        for column_def in initial::information_schema::table_statistics().get_columns() {
+        for column_def in initial::information_schema::statistics(self.global_context.clone()).get_columns() {
             column_name_list.push(column_def.sql_column.name.to_string());
         }
 
@@ -241,7 +296,7 @@ pub fn delete_db_form_information_schema(global_context: Arc<Mutex<GlobalContext
 }
 
 pub fn add_information_schema_tables(global_context: Arc<Mutex<GlobalContext>>, table_option: TableOptionDef) -> MysqlResult<u64> {
-    let table_of_def_information_schema_tables = initial::information_schema::table_tables();
+    let table_of_def_information_schema_tables = initial::information_schema::tables(global_context.clone());
 
     let mut column_name_list = vec![];
     for sql_column in table_of_def_information_schema_tables.column.sql_column_list.clone() {
@@ -281,7 +336,7 @@ pub fn add_information_schema_tables(global_context: Arc<Mutex<GlobalContext>>, 
 }
 
 pub fn add_information_schema_columns(global_context: Arc<Mutex<GlobalContext>>, table_option: TableOptionDef, sparrow_column_list: Vec<SparrowColumnDef>) -> MysqlResult<u64> {
-    let meta_table = initial::information_schema::table_columns();
+    let meta_table = initial::information_schema::columns(global_context.clone());
 
     let mut column_name_list = vec![];
     for sql_column in &meta_table.column.sql_column_list {
@@ -388,36 +443,6 @@ pub fn add_information_schema_columns(global_context: Arc<Mutex<GlobalContext>>,
     total
 }
 
-pub fn create_schema(global_context: Arc<Mutex<GlobalContext>>, full_schema_name: ObjectName) -> MysqlResult<u64> {
-    let mut column_name_list = vec![];
-    for sql_column in initial::information_schema::table_schemata().column.sql_column_list {
-        column_name_list.push(sql_column.name.to_string());
-    }
-
-    let catalog_name = meta_util::cut_out_catalog_name(full_schema_name.clone());
-    let schema_name = meta_util::cut_out_schema_name(full_schema_name.clone());
-
-    let mut column_value_map_list: Vec<HashMap<Ident, ScalarValue>> = vec![];
-    let mut column_value_map = HashMap::new();
-    column_value_map.insert("catalog_name".to_ident(), ScalarValue::Utf8(Some(catalog_name.to_string())));
-    column_value_map.insert("schema_name".to_ident(), ScalarValue::Utf8(Some(schema_name.to_string())));
-    column_value_map.insert("default_character_set_name".to_ident(), ScalarValue::Utf8(Some("utf8mb4".to_string())));
-    column_value_map.insert("default_collation_name".to_ident(), ScalarValue::Utf8(Some("utf8mb4_0900_ai_ci".to_string())));
-    column_value_map.insert("SQL_PATH".to_ident(), ScalarValue::Utf8(Some("".to_string())));
-    column_value_map.insert("DEFAULT_ENCRYPTION".to_ident(), ScalarValue::Utf8(Some("NO".to_string())));
-    column_value_map_list.push(column_value_map);
-
-    let table_def = initial::information_schema::table_schemata();
-    let insert = physical_plan::insert::PhysicalPlanInsert::new(
-        global_context.clone(),
-        table_def,
-        column_name_list.clone(),
-        vec![],
-        column_value_map_list.clone(),
-    );
-    let total = insert.execute();
-    total
-}
 
 pub fn read_all_table(global_context: Arc<Mutex<GlobalContext>>) -> MysqlResult<HashMap<ObjectName, TableDef>> {
     let schema_table_sql_options = read_information_schema_tables(global_context.clone()).unwrap();
@@ -443,7 +468,7 @@ pub fn read_all_table(global_context: Arc<Mutex<GlobalContext>>) -> MysqlResult<
             }
         }
 
-        let mut table_def = TableDef::new(full_table_name.clone());
+        let mut table_def = TableDef::new();
         table_def.with_column(table_column);
         table_def.with_constraints(table_constraints);
         table_def.with_option(table_option);
@@ -455,7 +480,7 @@ pub fn read_all_table(global_context: Arc<Mutex<GlobalContext>>) -> MysqlResult<
 }
 
 pub fn read_information_schema_tables(global_context: Arc<Mutex<GlobalContext>>) -> MysqlResult<HashMap<ObjectName, TableOptionDef>> {
-    let table_of_def_information_schema_tables = information_schema::table_tables();
+    let table_of_def_information_schema_tables = information_schema::tables(global_context.clone());
 
     let engine = engine_util::TableEngineFactory::try_new_with_table(global_context.clone(), table_of_def_information_schema_tables.clone()).unwrap();
     let mut table_iterator = engine.table_iterator(None, &[]);
@@ -508,7 +533,7 @@ pub fn read_information_schema_tables(global_context: Arc<Mutex<GlobalContext>>)
 }
 
 pub fn read_information_schema_schemata(global_context: Arc<Mutex<GlobalContext>>) -> MysqlResult<HashMap<ObjectName, SchemaDef>> {
-    let table_of_information_schema_schemata = information_schema::table_schemata();
+    let table_of_information_schema_schemata = information_schema::schemata(global_context.clone());
 
     let engine = engine_util::TableEngineFactory::try_new_with_table(global_context.clone(), table_of_information_schema_schemata.clone()).unwrap();
     let mut table_iterator = engine.table_iterator(None, &[]);
@@ -556,7 +581,7 @@ pub fn read_information_schema_schemata(global_context: Arc<Mutex<GlobalContext>
 }
 
 pub fn read_information_schema_statistics(global_context: Arc<Mutex<GlobalContext>>) -> MysqlResult<HashMap<ObjectName, Vec<TableConstraint>>> {
-    let table_def = information_schema::table_statistics();
+    let table_def = information_schema::statistics(global_context.clone());
 
     let engine = engine_util::TableEngineFactory::try_new_with_table(global_context.clone(), table_def.clone()).unwrap();
     let mut table_iterator = engine.table_iterator(None, &[]);
@@ -633,7 +658,7 @@ pub fn read_information_schema_statistics(global_context: Arc<Mutex<GlobalContex
 }
 
 pub fn read_information_schema_columns(global_context: Arc<Mutex<GlobalContext>>) -> MysqlResult<HashMap<ObjectName, Vec<SparrowColumnDef>>> {
-    let table_def = information_schema::table_columns();
+    let table_def = information_schema::columns(global_context.clone());
 
     let engine = engine_util::TableEngineFactory::try_new_with_table(global_context.clone(), table_def.clone()).unwrap();
     let mut table_iterator = engine.table_iterator(None, &[]);
@@ -693,12 +718,12 @@ pub fn read_information_schema_columns(global_context: Arc<Mutex<GlobalContext>>
 }
 
 pub fn read_performance_schema_global_variables(global_context: Arc<Mutex<GlobalContext>>) -> MysqlResult<HashMap<String, String>> {
-    let table_def = performance_schema::global_variables();
+    let table_def = performance_schema::global_variables(global_context.clone());
 
     let engine = engine_util::TableEngineFactory::try_new_with_table(global_context.clone(), table_def.clone()).unwrap();
     let mut table_iterator = engine.table_iterator(None, &[]);
 
-    let projection_schema = performance_schema::global_variables().to_schema();
+    let projection_schema = performance_schema::global_variables(global_context.clone()).to_schema();
 
     let column_index_of_variable_name = projection_schema.index_of(meta_const::COLUMN_NAME_OF_DEF_PERFORMANCE_SCHEMA_GLOBAL_VARIABLES_VARIABLE_NAME).unwrap();
     let column_index_of_variable_value = projection_schema.index_of(meta_const::COLUMN_NAME_OF_DEF_PERFORMANCE_SCHEMA_GLOBAL_VARIABLES_VARIABLE_VALUE).unwrap();
@@ -786,3 +811,167 @@ pub fn read_performance_schema_global_variables(global_context: Arc<Mutex<Global
 //
 //     Ok(schema_column_index.clone())
 // }
+
+pub fn add_def_mysql_users(global_context: Arc<Mutex<GlobalContext>>) -> MysqlResult<u64> {
+    let table_of_def_mysql_users = mysql::users(global_context.clone());
+
+    let mut column_name_list = vec![];
+    for sql_column in table_of_def_mysql_users.column.sql_column_list.clone() {
+        column_name_list.push(sql_column.name.to_string());
+    }
+
+    let mut column_value_map_list: Vec<HashMap<Ident, ScalarValue>> = vec![];
+    let mut column_value_map = HashMap::new();
+    // Host
+    column_value_map.insert("Host".to_ident(), ScalarValue::Utf8(Some("%".to_string())));
+    // User
+    column_value_map.insert("User".to_ident(), ScalarValue::Utf8(Some("root".to_string())));
+    // Select_priv
+    column_value_map.insert("Select_priv".to_ident(), ScalarValue::Utf8(Some("Y".to_string())));
+    // Insert_priv
+    column_value_map.insert("Insert_priv".to_ident(), ScalarValue::Utf8(Some("Y".to_string())));
+    // Update_priv
+    column_value_map.insert("Update_priv".to_ident(), ScalarValue::Utf8(Some("Y".to_string())));
+    // Delete_priv
+    column_value_map.insert("Delete_priv".to_ident(), ScalarValue::Utf8(Some("Y".to_string())));
+    // Create_priv
+    column_value_map.insert("Create_priv".to_ident(), ScalarValue::Utf8(Some("Y".to_string())));
+    // Drop_priv
+    column_value_map.insert("Drop_priv".to_ident(), ScalarValue::Utf8(Some("Y".to_string())));
+    // Reload_priv
+    column_value_map.insert("Reload_priv".to_ident(), ScalarValue::Utf8(Some("Y".to_string())));
+    // Shutdown_priv
+    column_value_map.insert("Shutdown_priv".to_ident(), ScalarValue::Utf8(Some("Y".to_string())));
+    // Process_priv
+    column_value_map.insert("Process_priv".to_ident(), ScalarValue::Utf8(Some("Y".to_string())));
+    // File_priv
+    column_value_map.insert("File_priv".to_ident(), ScalarValue::Utf8(Some("Y".to_string())));
+    // Grant_priv
+    column_value_map.insert("Grant_priv".to_ident(), ScalarValue::Utf8(Some("Y".to_string())));
+    // References_priv
+    column_value_map.insert("References_priv".to_ident(), ScalarValue::Utf8(Some("Y".to_string())));
+    // Index_priv
+    column_value_map.insert("Index_priv".to_ident(), ScalarValue::Utf8(Some("Y".to_string())));
+    // Alter_priv
+    column_value_map.insert("Alter_priv".to_ident(), ScalarValue::Utf8(Some("Y".to_string())));
+    // Show_db_priv
+    column_value_map.insert("Show_db_priv".to_ident(), ScalarValue::Utf8(Some("Y".to_string())));
+    // Super_priv
+    column_value_map.insert("Super_priv".to_ident(), ScalarValue::Utf8(Some("Y".to_string())));
+    // Create_tmp_table_priv
+    column_value_map.insert("Create_tmp_table_priv".to_ident(), ScalarValue::Utf8(Some("Y".to_string())));
+    // Lock_tables_priv
+    column_value_map.insert("Lock_tables_priv".to_ident(), ScalarValue::Utf8(Some("Y".to_string())));
+    // Execute_priv
+    column_value_map.insert("Execute_priv".to_ident(), ScalarValue::Utf8(Some("Y".to_string())));
+    // Repl_slave_priv
+    column_value_map.insert("Repl_slave_priv".to_ident(), ScalarValue::Utf8(Some("Y".to_string())));
+    // Repl_client_priv
+    column_value_map.insert("Repl_client_priv".to_ident(), ScalarValue::Utf8(Some("Y".to_string())));
+    // Create_view_priv
+    column_value_map.insert("Create_view_priv".to_ident(), ScalarValue::Utf8(Some("Y".to_string())));
+    // Show_view_priv
+    column_value_map.insert("Show_view_priv".to_ident(), ScalarValue::Utf8(Some("Y".to_string())));
+    // Create_routine_priv
+    column_value_map.insert("Create_routine_priv".to_ident(), ScalarValue::Utf8(Some("Y".to_string())));
+    // Alter_routine_priv
+    column_value_map.insert("Alter_routine_priv".to_ident(), ScalarValue::Utf8(Some("Y".to_string())));
+    // Create_user_priv
+    column_value_map.insert("Create_user_priv".to_ident(), ScalarValue::Utf8(Some("Y".to_string())));
+    // Event_priv
+    column_value_map.insert("Event_priv".to_ident(), ScalarValue::Utf8(Some("Y".to_string())));
+    // Trigger_priv
+    column_value_map.insert("Trigger_priv".to_ident(), ScalarValue::Utf8(Some("Y".to_string())));
+    // Create_tablespace_priv
+    column_value_map.insert("Create_tablespace_priv".to_ident(), ScalarValue::Utf8(Some("Y".to_string())));
+    // ssl_type
+    column_value_map.insert("ssl_type".to_ident(), ScalarValue::Utf8(None));
+    // ssl_cipher
+    column_value_map.insert("ssl_cipher".to_ident(), ScalarValue::Utf8(None));
+    // x509_issuer
+    column_value_map.insert("x509_issuer".to_ident(), ScalarValue::Utf8(None));
+    // x509_subject
+    column_value_map.insert("x509_subject".to_ident(), ScalarValue::Utf8(None));
+    // max_questions
+    column_value_map.insert("max_questions".to_ident(), ScalarValue::UInt64(Some(0)));
+    // max_updates
+    column_value_map.insert("max_updates".to_ident(), ScalarValue::UInt64(Some(0)));
+    // max_connections
+    column_value_map.insert("max_connections".to_ident(), ScalarValue::UInt64(Some(0)));
+    // max_user_connections
+    column_value_map.insert("max_user_connections".to_ident(), ScalarValue::UInt64(Some(0)));
+    // plugin
+    column_value_map.insert("plugin".to_ident(), ScalarValue::Utf8(Some("mysql_native_password".to_string())));
+    // authentication_string
+    column_value_map.insert("authentication_string".to_ident(), ScalarValue::Utf8(Some("*6BB4837EB74329105EE4568DDA7DC67ED2CA2AD9".to_string())));
+    // password_expired
+    column_value_map.insert("password_expired".to_ident(), ScalarValue::Utf8(Some("N".to_string())));
+    // password_last_changed
+    column_value_map.insert("password_last_changed".to_ident(), ScalarValue::Utf8(None));
+    // password_lifetime
+    column_value_map.insert("password_lifetime".to_ident(), ScalarValue::Utf8(None));
+    // account_locked
+    column_value_map.insert("account_locked".to_ident(), ScalarValue::Utf8(Some("N".to_string())));
+    // Create_role_priv
+    column_value_map.insert("Create_role_priv".to_ident(), ScalarValue::Utf8(Some("Y".to_string())));
+    // Drop_role_priv
+    column_value_map.insert("Drop_role_priv".to_ident(), ScalarValue::Utf8(Some("Y".to_string())));
+    // Password_reuse_history
+    column_value_map.insert("Password_reuse_history".to_ident(), ScalarValue::Utf8(None));
+    // Password_reuse_time
+    column_value_map.insert("Password_reuse_time".to_ident(), ScalarValue::Utf8(None));
+    // Password_require_current
+    column_value_map.insert("Password_require_current".to_ident(), ScalarValue::Utf8(None));
+    // User_attributes
+    column_value_map.insert("User_attributes".to_ident(), ScalarValue::Utf8(None));
+    column_value_map_list.push(column_value_map);
+
+    let insert = PhysicalPlanInsert::new(
+        global_context.clone(),
+        table_of_def_mysql_users,
+        column_name_list.clone(),
+        vec![],
+        column_value_map_list.clone(),
+    );
+    let total = insert.execute().unwrap();
+
+    Ok(total)
+}
+
+pub fn add_def_performance_schmea_global_variables(global_context: Arc<Mutex<GlobalContext>>) -> MysqlResult<u64> {
+    let mut column_name_list = vec![];
+    for column_def in performance_schema::global_variables(global_context.clone()).get_columns() {
+        column_name_list.push(column_def.sql_column.name.to_string());
+    }
+
+    let mut column_value_map_list: Vec<HashMap<Ident, ScalarValue>> = vec![];
+    let mut column_value_map = HashMap::new();
+    column_value_map.insert("variable_name".to_ident(), ScalarValue::Utf8(Some("auto_increment_increment".to_string())));
+    column_value_map.insert("variable_value".to_ident(), ScalarValue::Utf8(Some("0".to_string())));
+    column_value_map_list.push(column_value_map);
+    let mut column_value_map = HashMap::new();
+    column_value_map.insert("variable_name".to_ident(), ScalarValue::Utf8(Some("lower_case_table_names".to_string())));
+    column_value_map.insert("variable_value".to_ident(), ScalarValue::Utf8(Some("1".to_string())));
+    column_value_map_list.push(column_value_map);
+    let mut column_value_map = HashMap::new();
+    column_value_map.insert("variable_name".to_ident(), ScalarValue::Utf8(Some("transaction_isolation".to_string())));
+    column_value_map.insert("variable_value".to_ident(), ScalarValue::Utf8(None));
+    column_value_map_list.push(column_value_map);
+    let mut column_value_map = HashMap::new();
+    column_value_map.insert("variable_name".to_ident(), ScalarValue::Utf8(Some("transaction_read_only".to_string())));
+    column_value_map.insert("variable_value".to_ident(), ScalarValue::Utf8(Some("0".to_string())));
+    column_value_map_list.push(column_value_map);
+
+    let table_def = performance_schema::global_variables(global_context.clone());
+
+    let insert = PhysicalPlanInsert::new(
+        global_context.clone(),
+        table_def,
+        column_name_list.clone(),
+        vec![],
+        column_value_map_list.clone(),
+    );
+    let total = insert.execute().unwrap();
+
+    Ok(total)
+}

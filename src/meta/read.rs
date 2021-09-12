@@ -13,12 +13,12 @@ use datafusion::logical_plan::Expr as DatafusionExpr;
 use std::convert::TryFrom;
 
 pub fn get_all_full_table_names(global_context: Arc<Mutex<GlobalContext>>) -> MysqlResult<Vec<ObjectName>> {
-    let meta_table = information_schema::table_tables();
+    let meta_table = information_schema::tables(global_context.clone());
 
     let engine = TableEngineFactory::try_new_with_table(global_context.clone(), meta_table).unwrap();
     let mut table_iterator = engine.table_iterator(None, &[]);
 
-    let projection_schema = information_schema::table_tables().to_schema();
+    let projection_schema = information_schema::tables(global_context.clone()).to_schema();
 
     let column_index_of_db_name = projection_schema.index_of(meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_TABLES_TABLE_SCHEMA).unwrap();
     let column_index_of_table_name = projection_schema.index_of(meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_TABLES_TABLE_NAME).unwrap();

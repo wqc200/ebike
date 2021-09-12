@@ -321,20 +321,18 @@ pub struct TableIndexDef {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TableDef {
-    pub full_table_name: ObjectName,
     pub column: TableColumnDef,
     pub constraints: Vec<TableConstraint>,
     pub option: TableOptionDef,
 }
 
 impl TableDef {
-    pub fn new(full_table_name: ObjectName) -> Self {
+    pub fn new() -> Self {
         let table_constraints: Vec<TableConstraint> = vec![];
         let table_option = TableOptionDef::default();
         let table_column = TableColumnDef::default();
 
         Self {
-            full_table_name,
             column: table_column,
             constraints: table_constraints,
             option: table_option,
@@ -345,7 +343,7 @@ impl TableDef {
         let mut table_column = TableColumnDef::default();
         table_column.use_sql_column_list(sql_column_list);
 
-        let mut table = TableDef::new(full_table_name);
+        let mut table = TableDef::new();
         table.with_column(table_column.clone());
         table.option.with_column_max_store_id(table_column.get_max_store_id());
 
@@ -369,7 +367,7 @@ impl TableDef {
 
 impl TableDef {
     pub fn get_full_table_name(&self) -> ObjectName {
-        self.full_table_name.clone()
+        self.option.full_table_name.clone()
     }
 
     pub fn get_columns(&self) -> &Vec<SparrowColumnDef> {
@@ -386,14 +384,14 @@ impl TableDef {
 
     pub fn to_datafusion_dfschema(&self) -> error::Result<DFSchema> {
         let mut dffields = vec![];
-        dffields.push(DFField::new(Some(self.full_table_name.to_string().as_str()), meta_const::COLUMN_ROWID, DataType::Utf8, false));
+        dffields.push(DFField::new(Some(self.option.full_table_name.to_string().as_str()), meta_const::COLUMN_ROWID, DataType::Utf8, false));
         for sql_column in self.column.sql_column_list.clone() {
             let field_name = sql_column.name.to_string();
             let data_type = meta_util::convert_sql_data_type_to_arrow_data_type(&sql_column.data_type).unwrap();
             let nullable = sql_column.options
                 .iter()
                 .any(|x| x.option == ColumnOption::Null);
-            dffields.push(DFField::new(Some(self.full_table_name.to_string().as_str()), field_name.as_ref(), data_type, nullable));
+            dffields.push(DFField::new(Some(self.option.full_table_name.to_string().as_str()), field_name.as_ref(), data_type, nullable));
         }
 
         DFSchema::new(dffields)

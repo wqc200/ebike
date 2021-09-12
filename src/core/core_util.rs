@@ -117,7 +117,7 @@ pub fn register_all_table(global_context: Arc<Mutex<GlobalContext>>, datafusion_
             register_schema(datafusion_context, catalog_name.as_str(), schema_name.as_str());
 
             for (table_name, table) in table_map.iter() {
-                let full_table_name = table.full_table_name.clone();
+                let full_table_name = table.option.full_table_name.clone();
                 let engine = TableEngineFactory::try_new_with_table_name(global_context.clone(), full_table_name.clone());
                 let table_provider = match engine {
                     Ok(engine) => engine.table_provider(),

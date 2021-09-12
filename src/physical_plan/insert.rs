@@ -32,17 +32,17 @@ use crate::store::engine::engine_util::{TableEngineFactory, StoreEngineFactory};
 
 pub struct PhysicalPlanInsert {
     global_context: Arc<Mutex<GlobalContext>>,
-    table_def: TableDef,
+    table: TableDef,
     column_name_list: Vec<String>,
     index_keys_list: Vec<Vec<IndexDef>>,
     column_value_map_list: Vec<HashMap<Ident, ScalarValue>>,
 }
 
 impl PhysicalPlanInsert {
-    pub fn new(global_context: Arc<Mutex<GlobalContext>>, table_def: TableDef, column_name_list: Vec<String>, index_keys_list: Vec<Vec<IndexDef>>, column_value_map_list: Vec<HashMap<Ident, ScalarValue>>) -> Self {
+    pub fn new(global_context: Arc<Mutex<GlobalContext>>, table: TableDef, column_name_list: Vec<String>, index_keys_list: Vec<Vec<IndexDef>>, column_value_map_list: Vec<HashMap<Ident, ScalarValue>>) -> Self {
         Self {
             global_context,
-            table_def,
+            table,
             column_name_list,
             index_keys_list,
             column_value_map_list,
@@ -50,13 +50,13 @@ impl PhysicalPlanInsert {
     }
 
     pub fn execute(&self) -> MysqlResult<u64> {
-        let store_engine = StoreEngineFactory::try_new_with_table(self.global_context.clone(), self.table_def.clone()).unwrap();
+        let store_engine = StoreEngineFactory::try_new_with_table(self.global_context.clone(), self.table.clone()).unwrap();
 
         for row_number in 0..self.column_value_map_list.len() {
             let rowid = Uuid::new_v4().to_simple().encode_lower(&mut Uuid::encode_buffer()).to_string();
             let column_value_map = self.column_value_map_list[row_number].clone();
 
-            let column_rowid_key = util::dbkey::create_column_rowid_key(self.table_def.full_table_name.clone(), rowid.as_str());
+            let column_rowid_key = util::dbkey::create_column_rowid_key(self.table.option.full_table_name.clone(), rowid.as_str());
             log::debug!("rowid_key: {:?}", column_rowid_key);
             store_engine.put_key(column_rowid_key, rowid.as_bytes());
 
@@ -93,10 +93,10 @@ impl PhysicalPlanInsert {
                     Some(column_value) => column_value.clone(),
                 };
 
-                let sparrow_column = self.table_def.get_table_column().get_sparrow_column(column_name).unwrap();
+                let sparrow_column = self.table.get_table_column().get_sparrow_column(column_name).unwrap();
                 let store_id = sparrow_column.store_id;
 
-                let column_key = util::dbkey::create_column_key(self.table_def.full_table_name.clone(), store_id, rowid.as_str());
+                let column_key = util::dbkey::create_column_key(self.table.option.full_table_name.clone(), store_id, rowid.as_str());
                 log::debug!("column_key: {:?}", column_key);
                 let result = core_util::convert_scalar_value(column_value.clone()).unwrap();
                 log::debug!("column_value: {:?}", result);

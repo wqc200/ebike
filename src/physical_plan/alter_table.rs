@@ -55,7 +55,7 @@ impl AlterTable {
 
                 let before_sparrow_column = self.table.column.get_last_sparrow_column().unwrap();
                 let mut ordinal_position = before_sparrow_column.ordinal_position;
-                let mut store_id = self.table.option.column_max_store_id;
+                let mut store_id = self.table.column.get_max_store_id();
                 ordinal_position += 1;
                 store_id += 1;
                 let sparrow_column = SparrowColumnDef::new(store_id, ordinal_position, column_def);

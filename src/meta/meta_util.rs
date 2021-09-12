@@ -36,6 +36,7 @@ use datafusion::datasource::TableProvider;
 use datafusion::error::{DataFusionError, Result};
 use datafusion::logical_plan::{col, DFField, DFSchema, DFSchemaRef, Expr};
 use datafusion::scalar::ScalarValue;
+use futures::StreamExt;
 use parquet::data_type::AsBytes;
 use sqlparser::ast::{Assignment, BinaryOperator, ColumnDef as SQLColumnDef, ColumnOption, ColumnOptionDef, DataType as SQLDataType, Expr as SQLExpr, Ident, ObjectName, SqlOption, TableConstraint, Value};
 use tempdir::TempDir;
@@ -44,7 +45,7 @@ use uuid::Uuid;
 use crate::core::global_context::GlobalContext;
 use crate::core::session_context::SessionContext;
 use crate::meta::{initial, meta_const, meta_util};
-use crate::meta::def::{SparrowColumnDef, SchemaDef, StatisticsColumn, TableDef, TableOptionDef, TableIndexDef};
+use crate::meta::def::{SchemaDef, SparrowColumnDef, StatisticsColumn, TableDef, TableIndexDef, TableOptionDef};
 use crate::meta::initial::information_schema::{key_column_usage, table_constraints};
 use crate::meta::initial::initial_util::{SaveKeyColumnUsage, SaveStatistics, SaveTableConstraints};
 use crate::meta::initial::initial_util;
@@ -53,14 +54,13 @@ use crate::physical_plan::create_table::CreateTable;
 use crate::physical_plan::delete::Delete;
 use crate::physical_plan::insert::PhysicalPlanInsert;
 use crate::store::engine::engine_util;
-use crate::store::engine::engine_util::{TableEngine, TableEngineFactory, StoreEngine, StoreEngineFactory};
+use crate::store::engine::engine_util::{StoreEngine, StoreEngineFactory, TableEngine, TableEngineFactory};
 use crate::store::reader::rocksdb::RocksdbReader;
 use crate::store::rocksdb::db::DB;
 use crate::store::rocksdb::option::Options;
 use crate::util::convert::{ToIdent, ToObjectName};
 
 use super::super::util;
-use futures::StreamExt;
 
 // pub const INFORMATION_SCHEMA_NUMBER_SCHEMATA: &str = "information_schema.number_schemata";
 // pub const INFORMATION_SCHEMA_NUMBER_TABLE: &str = "information_schema.number_table";
@@ -312,17 +312,17 @@ pub fn load_all_table(global_context: Arc<Mutex<GlobalContext>>) -> MysqlResult<
 
 pub async fn init_meta(global_context: Arc<Mutex<GlobalContext>>) -> MysqlResult<()> {
     let mut init_tables: HashMap<ObjectName, TableDef> = HashMap::new();
-    init_tables.insert(meta_const::FULL_TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_TABLES.to_object_name(), initial::information_schema::table_tables());
-    init_tables.insert(meta_const::FULL_TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_COLUMNS.to_object_name(), initial::information_schema::table_columns());
-    init_tables.insert(meta_const::FULL_TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_SCHEMATA.to_object_name(), initial::information_schema::table_schemata());
-    init_tables.insert(meta_const::FULL_TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_STATISTICS.to_object_name(), initial::information_schema::table_statistics());
-    init_tables.insert(meta_const::FULL_TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_KEY_COLUMN_USAGE.to_object_name(), key_column_usage());
-    init_tables.insert(meta_const::FULL_TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_TABLE_CONSTRAINTS.to_object_name(), table_constraints());
-    init_tables.insert(meta_const::FULL_TABLE_NAME_OF_DEF_MYSQL_USERS.to_object_name(), initial::mysql::users());
-    init_tables.insert(meta_const::FULL_TABLE_NAME_OF_DEF_PERFORMANCE_SCHEMA_GLOBAL_VARIABLES.to_object_name(), initial::performance_schema::global_variables());
+    init_tables.insert(meta_const::FULL_TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_TABLES.to_object_name(), initial::information_schema::tables(global_context.clone()));
+    init_tables.insert(meta_const::FULL_TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_COLUMNS.to_object_name(), initial::information_schema::columns(global_context.clone()));
+    init_tables.insert(meta_const::FULL_TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_SCHEMATA.to_object_name(), initial::information_schema::schemata(global_context.clone()));
+    init_tables.insert(meta_const::FULL_TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_STATISTICS.to_object_name(), initial::information_schema::statistics(global_context.clone()));
+    init_tables.insert(meta_const::FULL_TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_KEY_COLUMN_USAGE.to_object_name(), key_column_usage(global_context.clone()));
+    init_tables.insert(meta_const::FULL_TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_TABLE_CONSTRAINTS.to_object_name(), table_constraints(global_context.clone()));
+    init_tables.insert(meta_const::FULL_TABLE_NAME_OF_DEF_MYSQL_USERS.to_object_name(), initial::mysql::users(global_context.clone()));
+    init_tables.insert(meta_const::FULL_TABLE_NAME_OF_DEF_PERFORMANCE_SCHEMA_GLOBAL_VARIABLES.to_object_name(), initial::performance_schema::global_variables(global_context.clone()));
 
     if !meta_has_create() {
-        for (full_table_name, table) in init_tables.iter() {
+        for (_, table) in init_tables.iter() {
             initial_util::add_information_schema_tables(global_context.clone(), table.option.clone());
             initial_util::add_information_schema_columns(global_context.clone(), table.option.clone(), table.column.sparrow_column_list.clone());
             save_table_constraint(global_context.clone(), table.option.clone(), table.get_constraints().clone());
@@ -331,11 +331,11 @@ pub async fn init_meta(global_context: Arc<Mutex<GlobalContext>>) -> MysqlResult
         initial_util::create_schema(global_context.clone(), meta_const::FULL_SCHEMA_NAME_OF_DEF_MYSQL.to_object_name());
         initial_util::create_schema(global_context.clone(), meta_const::FULL_SCHEMA_NAME_OF_DEF_PERFORMANCE_SCHEMA.to_object_name());
 
-        let result = initial::mysql::users_data(global_context.clone());
+        let result = initial::initial_util::add_def_mysql_users(global_context.clone());
         if let Err(e) = result {
             return Err(e);
         }
-        let result = initial::performance_schema::global_variables_data(global_context.clone());
+        let result = initial::initial_util::add_def_performance_schmea_global_variables(global_context.clone());
         if let Err(e) = result {
             return Err(e);
         }
