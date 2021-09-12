@@ -51,6 +51,9 @@ use crate::mysql::error::{MysqlError, MysqlResult};
 
 use crate::test;
 use crate::util;
+use crate::meta::initial::initial_util::{read_all_table, read_information_schema_schemata};
+use crate::store::engine::engine_util::TableEngineFactory;
+use crate::meta::meta_util::read_all_schema;
 
 pub fn register_catalog(global_context: Arc<Mutex<GlobalContext>>, execution_context: &mut ExecutionContext, catalog_name: &str) {
     let state = execution_context.state.lock().unwrap();
@@ -87,6 +90,46 @@ pub fn get_schema_provider(execution_context: &mut ExecutionContext, catalog_nam
     let catalog_provider = get_catalog_provider(execution_context, catalog_name);
     let schema_provider = catalog_provider.schema(schema_name).unwrap();
     schema_provider
+}
+
+pub fn register_all_table(global_context: Arc<Mutex<GlobalContext>>, datafusion_context: &mut ExecutionContext) -> MysqlResult<()> {
+    let mut catalog_map = HashMap::new();
+
+    let schema_map = read_all_schema(global_context.clone()).unwrap();
+    for (_, schema) in schema_map.iter() {
+        catalog_map
+            .entry(meta_const::CATALOG_NAME.to_string()).or_insert(HashMap::new())
+            .entry(schema.schema_option.schema_name.clone()).or_insert(HashMap::new());
+    }
+
+    let table_map = read_all_table(global_context.clone()).unwrap();
+    for (_, table) in table_map.iter() {
+        catalog_map
+            .entry(meta_const::CATALOG_NAME.to_string()).or_insert(HashMap::new())
+            .entry(table.option.schema_name.clone()).or_insert(HashMap::new())
+            .entry(table.option.table_name.clone()).or_insert(table.clone());
+    }
+
+    for (catalog_name, schema_map) in catalog_map.iter() {
+        register_catalog(global_context.clone(), datafusion_context, catalog_name.as_str());
+
+        for (schema_name, table_map) in schema_map.iter() {
+            register_schema(datafusion_context, catalog_name.as_str(), schema_name.as_str());
+
+            for (table_name, table) in table_map.iter() {
+                let full_table_name = table.full_table_name.clone();
+                let engine = TableEngineFactory::try_new_with_table_name(global_context.clone(), full_table_name.clone());
+                let table_provider = match engine {
+                    Ok(engine) => engine.table_provider(),
+                    Err(mysql_error) => return Err(mysql_error),
+                };
+
+                register_table(datafusion_context, catalog_name.as_str(), schema_name.as_str(), table_name.as_str(), table_provider);
+            }
+        }
+    }
+
+    Ok(())
 }
 
 pub fn convert_record_to_scalar_value(record_batch: RecordBatch) -> Vec<Vec<ScalarValue>> {
@@ -577,7 +620,7 @@ pub fn build_find_table_sqlwhere(catalog_name: &str, schema_name: &str, table_na
     selection
 }
 
-pub fn build_find_column_ordinal_position_sqlwhere(catalog_name: &str, schema_name: &str, table_name: &str, ordinal_position: usize) -> SQLExpr {
+pub fn build_find_column_ordinal_position_sqlwhere(catalog_name: &str, schema_name: &str, table_name: &str, ordinal_position: i32) -> SQLExpr {
     let selection_catalog = SQLExpr::BinaryOp {
         left: Box::new(SQLExpr::Identifier(Ident::new(meta_const::COLUMN_INFORMATION_SCHEMA_TABLE_CATALOG))),
         op: BinaryOperator::Eq,

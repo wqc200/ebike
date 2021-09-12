@@ -40,22 +40,23 @@ use crate::test;
 use crate::util;
 use crate::store::rocksdb::db::Error;
 use crate::core::session_context::SessionContext;
+use crate::meta::def::TableDef;
 
 pub struct Delete {
     global_context: Arc<Mutex<GlobalContext>>,
-    table_name: ObjectName,
+    table: TableDef,
     execution_plan: Arc<dyn ExecutionPlan>,
 }
 
 impl Delete {
     pub fn new(
         global_context: Arc<Mutex<GlobalContext>>,
-        table_name: ObjectName,
+        table: TableDef,
         execution_plan: Arc<dyn ExecutionPlan>,
     ) -> Self {
         Self {
             global_context,
-            table_name,
+            table,
             execution_plan,
         }
     }
@@ -81,9 +82,7 @@ impl Delete {
     }
 
     pub fn delete_record(&self, session_context: &mut SessionContext, batch: RecordBatch) -> MysqlResult<u64> {
-        let full_table_name = meta_util::fill_up_table_name(session_context, self.table_name.clone()).unwrap();
-
-        let store_engine = StoreEngineFactory::try_new_with_table_name(self.global_context.clone(), full_table_name.clone()).unwrap();
+        let store_engine = StoreEngineFactory::try_new_with_table(self.global_context.clone(), self.table.clone()).unwrap();
 
         let rowid_array = batch
             .column(0)
@@ -91,29 +90,23 @@ impl Delete {
             .downcast_ref::<StringArray>()
             .unwrap();
 
-        let catalog_name = meta_util::cut_out_catalog_name(full_table_name.clone()).to_string();
-        let schema_name = meta_util::cut_out_schema_name(full_table_name.clone()).to_string();
-        let table_name = meta_util::cut_out_table_name(full_table_name.clone()).to_string();
-
-        let table = self.global_context.lock().unwrap().meta_cache.get_table(full_table_name.clone()).unwrap();
-
         for row_index in 0..rowid_array.len() {
             let rowid = rowid_array.value(row_index);
 
-            let record_rowid_key = util::dbkey::create_record_rowid(full_table_name.clone(), rowid.as_ref());
+            let record_rowid_key = util::dbkey::create_record_rowid(self.table.option.full_table_name.clone(), rowid.as_ref());
             log::debug!("record_rowid_key: {:?}", record_rowid_key);
             store_engine.delete_key(record_rowid_key);
 
-            for sql_column in table.get_table_column().sql_column_list {
+            for sql_column in self.table.get_table_column().sql_column_list {
                 let column_name = sql_column.name;
                 if column_name.to_string().contains(meta_const::COLUMN_ROWID) {
                     continue;
                 }
 
-                let sparrow_column = table.get_table_column().get_sparrow_column(column_name).unwrap();
+                let sparrow_column = self.table.get_table_column().get_sparrow_column(column_name).unwrap();
                 let store_id = sparrow_column.store_id;
 
-                let record_column_key = util::dbkey::create_record_column(full_table_name.clone(), store_id, rowid.as_ref());
+                let record_column_key = util::dbkey::create_column_key(self.table.option.full_table_name.clone(), store_id, rowid.as_ref());
                 let result = store_engine.delete_key(record_column_key.clone());
                 match result {
                     Err(error) => {

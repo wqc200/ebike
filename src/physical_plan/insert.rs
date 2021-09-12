@@ -20,7 +20,7 @@ use crate::core::global_context::GlobalContext;
 use crate::core::output::CoreOutput;
 use crate::core::output::FinalCount;
 use crate::core::session_context::SessionContext;
-use crate::meta::def::TableDef;
+use crate::meta::def::{TableDef, IndexDef};
 use crate::meta::meta_util;
 use crate::mysql::error::{MysqlError, MysqlResult};
 use crate::store::engine::engine_util;
@@ -34,12 +34,12 @@ pub struct PhysicalPlanInsert {
     global_context: Arc<Mutex<GlobalContext>>,
     table_def: TableDef,
     column_name_list: Vec<String>,
-    index_keys_list: Vec<Vec<(String, usize, String)>>,
+    index_keys_list: Vec<Vec<IndexDef>>,
     column_value_map_list: Vec<HashMap<Ident, ScalarValue>>,
 }
 
 impl PhysicalPlanInsert {
-    pub fn new(global_context: Arc<Mutex<GlobalContext>>, table_def: TableDef, column_name_list: Vec<String>, index_keys_list: Vec<Vec<(String, usize, String)>>, column_value_map_list: Vec<HashMap<Ident, ScalarValue>>) -> Self {
+    pub fn new(global_context: Arc<Mutex<GlobalContext>>, table_def: TableDef, column_name_list: Vec<String>, index_keys_list: Vec<Vec<IndexDef>>, column_value_map_list: Vec<HashMap<Ident, ScalarValue>>) -> Self {
         Self {
             global_context,
             table_def,
@@ -50,31 +50,31 @@ impl PhysicalPlanInsert {
     }
 
     pub fn execute(&self) -> MysqlResult<u64> {
-        let store_engine = StoreEngineFactory::try_new_with_table_def(self.global_context.clone(), self.table_def.clone()).unwrap();
+        let store_engine = StoreEngineFactory::try_new_with_table(self.global_context.clone(), self.table_def.clone()).unwrap();
 
-        for row_index in 0..self.column_value_map_list.len() {
+        for row_number in 0..self.column_value_map_list.len() {
             let rowid = Uuid::new_v4().to_simple().encode_lower(&mut Uuid::encode_buffer()).to_string();
-            let column_value_map = self.column_value_map_list[row_index].clone();
+            let column_value_map = self.column_value_map_list[row_number].clone();
 
             let column_rowid_key = util::dbkey::create_column_rowid_key(self.table_def.full_table_name.clone(), rowid.as_str());
             log::debug!("rowid_key: {:?}", column_rowid_key);
             store_engine.put_key(column_rowid_key, rowid.as_bytes());
 
             if self.index_keys_list.len() > 0 {
-                let result = self.index_keys_list.get(row_index);
+                let result = self.index_keys_list.get(row_number);
                 let index_keys = match result {
                     None => {
                         return Err(MysqlError::new_global_error(1105, format!(
                             "Index keys not found, row_index: {:?}",
-                            row_index,
+                            row_number,
                         ).as_str()));
                     }
                     Some(index_keys) => index_keys.clone(),
                 };
 
                 if index_keys.len() > 0 {
-                    for (index_name, level, index_key) in index_keys {
-                        store_engine.put_key(index_key, rowid.as_bytes());
+                    for index in index_keys {
+                        store_engine.put_key(index.index_key, rowid.as_bytes());
                     }
                 }
             }
@@ -86,7 +86,7 @@ impl PhysicalPlanInsert {
                     None => {
                         return Err(MysqlError::new_global_error(1105, format!(
                             "Column value not found, row_index: {:?}, column_index: {:?}",
-                            row_index,
+                            row_number,
                             column_index,
                         ).as_str()));
                     }

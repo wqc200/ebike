@@ -21,61 +21,62 @@ use crate::physical_plan::insert::PhysicalPlanInsert;
 use crate::store::engine::engine_util;
 
 use crate::util;
+use crate::meta::def::{SparrowColumnDef, TableDef};
+use crate::meta::meta_util::load_all_table;
+use crate::store::engine::engine_util::TableEngineFactory;
+use crate::core::core_util::register_all_table;
 
 pub struct AlterTable {
     global_context: Arc<Mutex<GlobalContext>>,
-    table_name: ObjectName,
+    table: TableDef,
     operation: AlterTableOperation,
 }
 
 impl AlterTable {
     pub fn new(
         global_context: Arc<Mutex<GlobalContext>>,
-        table_name: ObjectName,
+        table: TableDef,
         operation: AlterTableOperation,
     ) -> Self {
         Self {
             global_context,
-            table_name,
+            table,
             operation,
         }
     }
 
     pub fn execute(&self, datafusion_context: &mut ExecutionContext, session_context: &mut SessionContext) -> MysqlResult<u64> {
-        let full_table_name = meta_util::fill_up_table_name(session_context, self.table_name.clone()).unwrap();
-
-        let catalog_name = meta_util::cut_out_catalog_name(full_table_name.clone());
-        let schema_name = meta_util::cut_out_schema_name(full_table_name.clone());
-        let table_name = meta_util::cut_out_table_name(full_table_name.clone());
-
         match self.operation.clone() {
             AlterTableOperation::DropColumn { column_name, .. } => {
                 meta_util::cache_add_all_table(self.global_context.clone());
             }
             AlterTableOperation::AddColumn { column_def } => {
-                let result = initial_util::add_information_schema_columns(self.global_context.clone(), full_table_name.clone(), vec![column_def.clone()]);
-                if let Err(mysql_error) = result {
-                    return Err(mysql_error)
-                }
+                let mut sparrow_column_list = vec![];
 
-                let mut table = self.global_context.lock().unwrap().meta_cache.get_table(full_table_name.clone()).unwrap();
-                table.add_sqlcolumn(column_def.clone());
-                self.global_context.lock().unwrap().meta_cache.add_table(full_table_name.clone(), table);
+                let before_sparrow_column = self.table.column.get_last_sparrow_column().unwrap();
+                let mut ordinal_position = before_sparrow_column.ordinal_position;
+                let mut store_id = self.table.option.column_max_store_id;
+                ordinal_position += 1;
+                store_id += 1;
+                let sparrow_column = SparrowColumnDef::new(store_id, ordinal_position, column_def);
+                sparrow_column_list.push(sparrow_column.clone());
+
+                let result = initial_util::add_information_schema_columns(self.global_context.clone(), self.table.option.clone(), sparrow_column_list);
+                if let Err(mysql_error) = result {
+                    return Err(mysql_error);
+                }
             }
             _ => {}
         }
 
-        let result = self.global_context.lock().unwrap().meta_cache.get_table(full_table_name.clone());
-        match result {
-            Some(table_def) => {
-                let engine = engine_util::TableEngineFactory::try_new_with_table_name(self.global_context.clone(), self.table_name.clone());
-                let provider = match engine {
-                    Ok(engine) => engine.table_provider(),
-                    Err(mysql_error) => return Err(mysql_error),
-                };
-                datafusion_context.register_table(full_table_name.to_string().as_str(), provider);
-            }
-            None => {}
+        let result = load_all_table(self.global_context.clone());
+        if let Err(mysql_error) = result {
+            return Err(mysql_error);
+        }
+
+        let result = register_all_table(self.global_context.clone(), datafusion_context);
+        if let Err(mysql_error) = result {
+            return Err(mysql_error);
         }
 
         Ok(1)

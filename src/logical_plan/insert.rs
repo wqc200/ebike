@@ -24,7 +24,7 @@ use crate::core::global_context::GlobalContext;
 use crate::core::output::CoreOutput;
 use crate::core::output::FinalCount;
 use crate::core::session_context::SessionContext;
-use crate::meta::def::TableDef;
+use crate::meta::def::{TableDef, IndexDef};
 use crate::meta::meta_util;
 use crate::mysql::error::{MysqlError, MysqlResult};
 use crate::store::engine::engine_util;
@@ -60,18 +60,7 @@ impl Insert {
 
         let store_engine = StoreEngineFactory::try_new_with_table_name(self.global_context.clone(), full_table_name.clone()).unwrap();
 
-        let table_map = self.global_context.lock().unwrap().meta_cache.get_table_map();
-        if !table_map.contains_key(&full_table_name) {
-            let message = format!("Table '{}' doesn't exist", self.table_name.to_string());
-            log::error!("{}", message);
-            return Err(MysqlError::new_server_error(
-                1146,
-                "42S02",
-                message.as_str(),
-            ));
-        }
-
-        let table_def = self.global_context.lock().unwrap().meta_cache.get_table(full_table_name.clone()).unwrap().clone();
+        let table = meta_util::get_table(self.global_context.clone(), full_table_name.clone()).unwrap();
 
         let mut column_values_list = vec![];
         match &self.source.body {
@@ -79,7 +68,8 @@ impl Insert {
                 for row_value_ast in &values.0 {
                     let mut row_value: Vec<Expr> = vec![];
                     for column_value_ast in row_value_ast {
-                        let result = query_planner.sql_expr_to_logical_expr(&column_value_ast, &table_def.to_datafusion_dfschema().unwrap());
+                        let datafusion_dfschema = table.to_datafusion_dfschema().unwrap();
+                        let result = query_planner.sql_expr_to_logical_expr(&column_value_ast, &datafusion_dfschema);
                         let expr = match result {
                             Ok(v) => v,
                             Err(e) => {
@@ -100,9 +90,9 @@ impl Insert {
             _ => {}
         }
 
-        let mut column_name_list = vec![];
+        let mut column_name_list: Vec<String> = vec![];
         if self.columns.len() < 1 {
-            for column_def in table_def.get_columns() {
+            for column_def in table.get_columns() {
                 column_name_list.push(column_def.sql_column.name.to_string())
             };
         } else {
@@ -165,30 +155,30 @@ impl Insert {
             column_value_map_list.push(column_value_map);
         }
 
-        let table_name = meta_util::cut_out_table_name(full_table_name.clone()).to_string();
+        let table_name = table.option.table_name.clone();
 
-        let all_table_index = meta_util::get_all_table_index(self.global_context.clone(), full_table_name.clone()).unwrap();
+        let table_index_list = meta_util::get_table_index_list(self.global_context.clone(), full_table_name.clone()).unwrap();
 
         let serial_number_map = self.global_context.lock().unwrap().meta_cache.get_serial_number_map(full_table_name.clone()).unwrap();
 
         let mut index_keys_list = vec![];
-        for row_index in 0..column_value_map_list.len() {
-            let column_value_map = column_value_map_list[row_index].clone();
+        for row_number in 0..column_value_map_list.len() {
+            let column_value_map = column_value_map_list[row_number].clone();
 
             let mut index_keys = vec![];
-            for (index_name, level, index_column_names) in all_table_index.clone() {
-                let serial_number_value_vec = engine_util::build_column_serial_number_value(index_column_names.clone(), serial_number_map.clone(), column_value_map.clone()).unwrap();
-                let index_key = util::dbkey::create_index(full_table_name.clone(), index_name.as_str(), serial_number_value_vec).unwrap();
-                index_keys.push((index_name.clone(), level, index_key.clone()));
+            for table_index in table_index_list.clone() {
+                let index_key = util::dbkey::create_table_index_key(table.clone(), table_index.clone(), column_value_map.clone()).unwrap();
+                let index = IndexDef::new(table_index.index_name.as_str(), table_index.level, index_key.as_str());
+                index_keys.push(index);
             }
 
             index_keys_list.push(index_keys);
         }
 
         for index_keys in index_keys_list.clone() {
-            for (index_name, level, index_key) in index_keys {
-                if level == 1 || level == 2 {
-                    match store_engine.get_key(index_key.clone()).unwrap() {
+            for row_index in index_keys {
+                if row_index.level == 1 || row_index.level == 2 {
+                    match store_engine.get_key(row_index.index_key.clone()).unwrap() {
                         None => {}
                         Some(_) => {
                             if !self.overwrite {
@@ -197,9 +187,9 @@ impl Insert {
                                     "23000",
                                     format!(
                                         "Duplicate entry '{:?}' for key '{:?}.{:?}'",
-                                        index_key,
+                                        row_index.index_key,
                                         table_name,
-                                        index_name,
+                                        row_index.index_name,
                                     ).as_str(),
                                 ));
                             }
@@ -209,6 +199,6 @@ impl Insert {
             }
         }
 
-        Ok(CoreLogicalPlan::Insert { full_table_name, table_def, column_name_list, index_keys_list, column_value_map_list })
+        Ok(CoreLogicalPlan::Insert { table, column_name_list, index_keys_list, column_value_map_list })
     }
 }

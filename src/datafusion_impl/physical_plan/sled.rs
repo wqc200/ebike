@@ -52,7 +52,6 @@ use crate::util;
 pub struct SledExec {
     global_context: Arc<Mutex<GlobalContext>>,
     table_def: def::TableDef,
-    full_table_name: ObjectName,
     projection: Option<Vec<usize>>,
     /// Schema after the projection has been applied
     projected_schema: SchemaRef,
@@ -65,12 +64,11 @@ impl SledExec {
     pub fn try_new(
         global_context: Arc<Mutex<GlobalContext>>,
         table_def: def::TableDef,
-        full_table_name: ObjectName,
         projection: Option<Vec<usize>>,
         batch_size: usize,
         filters: &[Expr],
     ) -> Result<Self> {
-        let schema_ref = table_def.to_schemaref();
+        let schema_ref = table_def.to_schema_ref();
         let projected_schema = match &projection {
             None => schema_ref,
             Some(p) => SchemaRef::new(Schema::new(p.iter().map(|i| schema_ref.field(*i).clone()).collect())),
@@ -78,7 +76,6 @@ impl SledExec {
 
         Ok(Self {
             global_context,
-            full_table_name,
             table_def,
             projection,
             projected_schema,
@@ -127,7 +124,6 @@ impl ExecutionPlan for SledExec {
         let reader = RocksdbReader::new(
             self.global_context.clone(),
             self.table_def.clone(),
-            self.full_table_name.clone(),
             self.batch_size,
             self.projection.clone(),
             self.filters.as_slice(),
@@ -139,28 +135,6 @@ impl ExecutionPlan for SledExec {
 
 struct RocksdbStream {
     reader: RocksdbReader,
-}
-
-impl RocksdbStream {
-    pub fn try_new(
-        core_context: Arc<Mutex<GlobalContext>>,
-        schema: def::TableDef,
-        full_table_name: ObjectName,
-        projection: Option<Vec<usize>>,
-        batch_size: usize,
-        filters: &[Expr],
-    ) -> Result<Self> {
-        let reader = RocksdbReader::new(
-            core_context,
-            schema.clone(),
-            full_table_name,
-            batch_size,
-            projection.clone(),
-            filters,
-        );
-
-        Ok(Self { reader })
-    }
 }
 
 impl Stream for RocksdbStream {

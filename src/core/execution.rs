@@ -81,6 +81,8 @@ use crate::variable::user_defined::UserDefinedVar;
 use std::process::id;
 use crate::meta::read::get_all_full_table_names;
 use crate::physical_plan::insert::PhysicalPlanInsert;
+use crate::store::engine::engine_util::TableEngineFactory;
+use crate::meta::def::TableDef;
 
 /// Execution context for registering data sources and executing queries
 pub struct Execution {
@@ -120,43 +122,7 @@ impl Execution {
         let variable = SystemVar::new(self.global_context.clone());
         self.datafusion_context.register_variable(VarType::System, Arc::new(variable));
 
-        let mut catalog_map = HashMap::new();
-
-        for (full_schema_name, schema_def) in self.global_context.lock().unwrap().meta_cache.get_schema_map().iter() {
-            let schema_name = meta_util::cut_out_schema_name(full_schema_name.clone());
-            catalog_map
-                .entry(meta_const::CATALOG_NAME.to_string()).or_insert(HashMap::new())
-                .entry(schema_name.to_string()).or_insert(HashMap::new());
-        }
-
-        for (full_table_name, table_def) in self.global_context.lock().unwrap().meta_cache.get_table_map().iter() {
-            let schema_name = meta_util::cut_out_schema_name(full_table_name.clone());
-            let table_name = meta_util::cut_out_table_name(full_table_name.clone());
-
-            catalog_map
-                .entry(meta_const::CATALOG_NAME.to_string()).or_insert(HashMap::new())
-                .entry(schema_name.to_string()).or_insert(HashMap::new())
-                .entry(table_name.to_string()).or_insert(table_def.clone());
-        }
-
-        core_util::register_catalog(self.global_context.clone(), &mut self.datafusion_context, meta_const::CATALOG_NAME);
-
-        for (catalog_name, schema_map) in catalog_map.iter() {
-            for (schema_name, table_map) in schema_map.iter() {
-                core_util::register_schema(&mut self.datafusion_context, catalog_name.as_str(), schema_name.as_str());
-
-                for (table_name, table_def) in table_map.iter() {
-                    let full_table_name = meta_util::create_full_table_name(catalog_name.to_string().as_str(), schema_name.to_string().as_str(), table_name.to_string().as_str());
-                    let engine = engine_util::TableEngineFactory::try_new_with_table_name(self.global_context.clone(), full_table_name.clone());
-                    let table_provider = match engine {
-                        Ok(engine) => engine.table_provider(),
-                        Err(mysql_error) => return Err(mysql_error),
-                    };
-
-                    core_util::register_table(&mut self.datafusion_context, catalog_name.as_str(), schema_name.as_str(), table_name.as_str(), table_provider);
-                }
-            }
-        }
+        core_util::register_all_table(self.global_context.clone(), &mut self.datafusion_context).unwrap();
 
         self.init_udf();
 
@@ -695,36 +661,43 @@ impl Execution {
                 }
 
                 let full_table_name = meta_util::fill_up_table_name(&mut self.session_context, name.clone()).unwrap();
-                let tables_reference = TableReference::try_from(&full_table_name).unwrap();
-                let resolved_table_reference = tables_reference.resolve(meta_const::CATALOG_NAME, meta_const::SCHEMA_NAME_OF_DEF_INFORMATION_SCHEMA);
-                let catalog_name = resolved_table_reference.catalog.to_string();
-                let schema_name = resolved_table_reference.schema.to_string();
-                let table_name = resolved_table_reference.table.to_string();
+
+                let table_map = self.global_context.lock().unwrap().meta_cache.get_table_map();
+                let table = match table_map.get(&full_table_name) {
+                    None => {
+                        let message = format!("Table '{}' doesn't exist", name.to_string());
+                        log::error!("{}", message);
+                        return Err(MysqlError::new_server_error(
+                            1146,
+                            "42S02",
+                            message.as_str(),
+                        ));
+                    }
+                    Some(table) => table.clone()
+                };
 
                 match operation.clone() {
                     AlterTableOperation::DropColumn { column_name, .. } => {
-                        let column_name = column_name.value.to_string();
+                        let sparrow_column = table.column.get_sparrow_column(column_name.clone()).unwrap();
 
                         // delete column from information_schema.columns
-                        let selection = core_util::build_find_column_sqlwhere(catalog_name.as_ref(), schema_name.as_str(), table_name.as_str(), column_name.as_str());
+                        let selection = core_util::build_find_column_sqlwhere(table.option.catalog_name.as_ref(), table.option.schema_name.as_str(), table.option.table_name.as_str(), column_name.to_string().as_str());
                         let select = core_util::build_select_rowid_sqlselect(meta_util::convert_to_object_name(meta_const::FULL_TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_COLUMNS), Some(selection));
                         let logical_plan = query_planner.select_to_plan(&select, &mut Default::default())?;
                         let select_from_columns_for_delete = CoreSelectFrom::new(meta_const::FULL_TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_COLUMNS, logical_plan);
 
                         // update ordinal_position from information_schema.columns
-                        let table_def = self.global_context.lock().unwrap().meta_cache.get_table(full_table_name.clone()).unwrap();
-                        let column = meta_util::get_table_column(table_def, column_name.as_str()).unwrap();
-                        let ordinal_position = column.ordinal_position;
+                        let ordinal_position = sparrow_column.ordinal_position;
                         let assignments = core_util::build_update_column_assignments();
-                        let selection = core_util::build_find_column_ordinal_position_sqlwhere(catalog_name.as_ref(), schema_name.as_str(), table_name.as_str(), ordinal_position);
+                        let selection = core_util::build_find_column_ordinal_position_sqlwhere(table.option.catalog_name.as_ref(), table.option.schema_name.as_str(), table.option.table_name.as_str(), ordinal_position);
                         let select = core_util::build_update_sqlselect(meta_util::convert_to_object_name(meta_const::FULL_TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_COLUMNS), assignments.clone(), Some(selection));
                         let logical_plan = query_planner.select_to_plan(&select, &mut Default::default())?;
                         let select_from_columns_for_update = CoreSelectFromWithAssignment::new(meta_const::FULL_TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_COLUMNS, assignments, logical_plan);
 
-                        Ok(CoreLogicalPlan::AlterTableDropColumn { table_name: name.clone(), operation, select_from_columns_for_delete, select_from_columns_for_update })
+                        Ok(CoreLogicalPlan::AlterTableDropColumn { table, operation, select_from_columns_for_delete, select_from_columns_for_update })
                     }
                     AlterTableOperation::AddColumn { .. } => {
-                        Ok(CoreLogicalPlan::AlterTableAddColumn { table_name: name.clone(), operation })
+                        Ok(CoreLogicalPlan::AlterTableAddColumn { table, operation })
                     }
                     _ => {
                         return Err(MysqlError::new_global_error(1105, format!(
@@ -1131,39 +1104,45 @@ impl Execution {
             SQLStatement::Update { table_name, assignments, selection } => {
                 let full_table_name = meta_util::fill_up_table_name(&mut self.session_context, table_name.clone()).unwrap();
 
-                let full_table_names = get_all_full_table_names(self.global_context.clone()).unwrap();
-                if !full_table_names.contains(&full_table_name) {
-                    let message = format!("Table '{}' doesn't exist", table_name.to_string());
-                    log::error!("{}", message);
-                    return Err(MysqlError::new_server_error(
-                        1146,
-                        "42S02",
-                        message.as_str(),
-                    ));
-                }
+                let table_map = self.global_context.lock().unwrap().meta_cache.get_table_map();
+                let table = match table_map.get(&full_table_name) {
+                    None => {
+                        let message = format!("Table '{}' doesn't exist", table_name.to_string());
+                        log::error!("{}", message);
+                        return Err(MysqlError::new_server_error(
+                            1146,
+                            "42S02",
+                            message.as_str(),
+                        ));
+                    }
+                    Some(table) => table.clone()
+                };
 
                 let select = core_util::build_update_sqlselect(table_name.clone(), assignments.clone(), selection);
                 let logical_plan = query_planner.select_to_plan(&select, &mut Default::default())?;
-                Ok(CoreLogicalPlan::Update { logical_plan, table_name, assignments: assignments.clone() })
+                Ok(CoreLogicalPlan::Update { logical_plan, table, assignments })
             }
             SQLStatement::Delete { table_name, selection } => {
                 let full_table_name = meta_util::fill_up_table_name(&mut self.session_context, table_name.clone()).unwrap();
 
-                let table_map = initial_util::read_all_table(self.global_context.clone()).unwrap();
-                if !table_map.contains_key(&full_table_name) {
-                    let message = format!("Table '{}' doesn't exist", table_name.to_string());
-                    log::error!("{}", message);
-                    return Err(MysqlError::new_server_error(
-                        1146,
-                        "42S02",
-                        message.as_str(),
-                    ));
-                }
+                let table_map = self.global_context.lock().unwrap().meta_cache.get_table_map();
+                let table = match table_map.get(&full_table_name) {
+                    None => {
+                        let message = format!("Table '{}' doesn't exist", table_name.to_string());
+                        log::error!("{}", message);
+                        return Err(MysqlError::new_server_error(
+                            1146,
+                            "42S02",
+                            message.as_str(),
+                        ));
+                    }
+                    Some(table) => table.clone()
+                };
 
-                let select = core_util::build_select_rowid_sqlselect(table_name.clone(), selection);
+                let select = core_util::build_select_rowid_sqlselect(full_table_name.clone(), selection);
                 let logical_plan = query_planner.select_to_plan(&select, &mut Default::default())?;
 
-                Ok(CoreLogicalPlan::Delete { logical_plan, table_name })
+                Ok(CoreLogicalPlan::Delete { logical_plan, table })
             }
             SQLStatement::Commit { chain } => {
                 Ok(CoreLogicalPlan::Commit)
@@ -1243,19 +1222,22 @@ impl Execution {
 
     pub fn create_physical_plan(&mut self, core_logical_plan: &CoreLogicalPlan) -> MysqlResult<CorePhysicalPlan> {
         match core_logical_plan {
-            CoreLogicalPlan::AlterTableDropColumn { table_name, operation, select_from_columns_for_delete: for_delete, select_from_columns_for_update: for_update } => {
-                let alter_table = physical_plan::alter_table::AlterTable::new(self.global_context.clone(), table_name.clone(), operation.clone());
+            CoreLogicalPlan::AlterTableDropColumn { table, operation, select_from_columns_for_delete: for_delete, select_from_columns_for_update: for_update } => {
+                let alter_table = physical_plan::alter_table::AlterTable::new(self.global_context.clone(), table.clone(), operation.clone());
+
+                let full_table_name_of_def_information_schema_columns = meta_util::create_full_table_name(meta_const::CATALOG_NAME, meta_const::SCHEMA_NAME_OF_DEF_INFORMATION_SCHEMA, meta_const::TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_COLUMNS);
+                let table_of_def_information_schema_columns = meta_util::get_table(self.global_context.clone(), full_table_name_of_def_information_schema_columns).unwrap();
 
                 let execution_plan = self.datafusion_context.create_physical_plan(for_delete.logical_plan()).unwrap();
-                let physical_plan_delete_from_columns = physical_plan::delete::Delete::new(self.global_context.clone(), meta_util::convert_to_object_name(meta_const::FULL_TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_COLUMNS), execution_plan);
+                let physical_plan_delete_from_columns = physical_plan::delete::Delete::new(self.global_context.clone(), table_of_def_information_schema_columns.clone(), execution_plan);
 
                 let execution_plan = self.datafusion_context.create_physical_plan(for_update.logical_plan()).unwrap();
-                let physical_plan_update_from_columns = physical_plan::update::Update::new(self.global_context.clone(), meta_util::convert_to_object_name(meta_const::FULL_TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_COLUMNS), for_update.assignments(), execution_plan);
+                let physical_plan_update_from_columns = physical_plan::update::Update::new(self.global_context.clone(), table_of_def_information_schema_columns.clone(), for_update.assignments(), execution_plan);
 
                 Ok(CorePhysicalPlan::AlterTableDropColumn(alter_table, physical_plan_delete_from_columns, physical_plan_update_from_columns))
             }
-            CoreLogicalPlan::AlterTableAddColumn { table_name, operation } => {
-                let alter_table = physical_plan::alter_table::AlterTable::new(self.global_context.clone(), table_name.clone(), operation.clone());
+            CoreLogicalPlan::AlterTableAddColumn { table, operation } => {
+                let alter_table = physical_plan::alter_table::AlterTable::new(self.global_context.clone(), table.clone(), operation.clone());
                 Ok(CorePhysicalPlan::AlterTableAddColumn(alter_table))
             }
             CoreLogicalPlan::Select(logical_plan) => {
@@ -1282,14 +1264,21 @@ impl Execution {
             CoreLogicalPlan::DropTable { input_table_name, select_from_columns: delete_from_columns, select_from_statistics: delete_from_statistics, select_from_tables: delete_from_tables } => {
                 let drop_table = physical_plan::drop_table::DropTable::new(self.global_context.clone(), input_table_name.clone());
 
+                let full_table_name_of_def_information_schema_columns = meta_util::create_full_table_name(meta_const::CATALOG_NAME, meta_const::SCHEMA_NAME_OF_DEF_INFORMATION_SCHEMA, meta_const::TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_COLUMNS);
+                let table_of_def_information_schema_columns = meta_util::get_table(self.global_context.clone(), full_table_name_of_def_information_schema_columns).unwrap();
+                let full_table_name_of_def_information_schema_statistics = meta_util::create_full_table_name(meta_const::CATALOG_NAME, meta_const::SCHEMA_NAME_OF_DEF_INFORMATION_SCHEMA, meta_const::TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_STATISTICS);
+                let table_of_def_information_schema_statistics = meta_util::get_table(self.global_context.clone(), full_table_name_of_def_information_schema_statistics).unwrap();
+                let full_table_name_of_def_information_schema_tables = meta_util::create_full_table_name(meta_const::CATALOG_NAME, meta_const::SCHEMA_NAME_OF_DEF_INFORMATION_SCHEMA, meta_const::TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_TABLES);
+                let table_of_def_information_schema_tables = meta_util::get_table(self.global_context.clone(), full_table_name_of_def_information_schema_tables).unwrap();
+
                 let execution_plan = self.datafusion_context.create_physical_plan(delete_from_columns.logical_plan()).unwrap();
-                let physical_plan_delete_from_columns = physical_plan::delete::Delete::new(self.global_context.clone(), meta_util::convert_to_object_name(meta_const::FULL_TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_COLUMNS), execution_plan);
+                let physical_plan_delete_from_columns = physical_plan::delete::Delete::new(self.global_context.clone(), table_of_def_information_schema_columns, execution_plan);
 
                 let execution_plan = self.datafusion_context.create_physical_plan(delete_from_statistics.logical_plan()).unwrap();
-                let physical_plan_delete_from_statistics = physical_plan::delete::Delete::new(self.global_context.clone(), meta_util::convert_to_object_name(meta_const::FULL_TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_STATISTICS), execution_plan);
+                let physical_plan_delete_from_statistics = physical_plan::delete::Delete::new(self.global_context.clone(), table_of_def_information_schema_statistics, execution_plan);
 
                 let execution_plan = self.datafusion_context.create_physical_plan(delete_from_tables.logical_plan()).unwrap();
-                let physical_plan_delete_from_tables = physical_plan::delete::Delete::new(self.global_context.clone(), meta_util::convert_to_object_name(meta_const::FULL_TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_TABLES), execution_plan);
+                let physical_plan_delete_from_tables = physical_plan::delete::Delete::new(self.global_context.clone(), table_of_def_information_schema_tables, execution_plan);
 
                 Ok(CorePhysicalPlan::DropTable(drop_table, physical_plan_delete_from_columns, physical_plan_delete_from_statistics, physical_plan_delete_from_tables))
             }
@@ -1305,18 +1294,18 @@ impl Execution {
                 let mut create_table = physical_plan::create_table::CreateTable::new(self.global_context.clone(), table_name.clone(), columns.clone(), constraints.clone(), with_options.clone());
                 Ok(CorePhysicalPlan::CreateTable(create_table))
             }
-            CoreLogicalPlan::Insert { full_table_name, table_def, column_name_list, index_keys_list, column_value_map_list } => {
-                let cd = PhysicalPlanInsert::new(self.global_context.clone(),  table_def.clone(), column_name_list.clone(), index_keys_list.clone(), column_value_map_list.clone());
+            CoreLogicalPlan::Insert { table, column_name_list, index_keys_list, column_value_map_list } => {
+                let cd = PhysicalPlanInsert::new(self.global_context.clone(),  table.clone(), column_name_list.clone(), index_keys_list.clone(), column_value_map_list.clone());
                 Ok(CorePhysicalPlan::Insert(cd))
             }
-            CoreLogicalPlan::Update { logical_plan, table_name, assignments } => {
+            CoreLogicalPlan::Update { logical_plan, table, assignments } => {
                 let execution_plan = self.datafusion_context.create_physical_plan(logical_plan)?;
-                let update = physical_plan::update::Update::new(self.global_context.clone(), table_name.clone(), assignments.clone(), execution_plan);
+                let update = physical_plan::update::Update::new(self.global_context.clone(), table.clone(), assignments.clone(), execution_plan);
                 Ok(CorePhysicalPlan::Update(update))
             }
-            CoreLogicalPlan::Delete { logical_plan, table_name } => {
+            CoreLogicalPlan::Delete { logical_plan, table } => {
                 let execution_plan = self.datafusion_context.create_physical_plan(logical_plan)?;
-                let delete = physical_plan::delete::Delete::new(self.global_context.clone(), table_name.clone(), execution_plan);
+                let delete = physical_plan::delete::Delete::new(self.global_context.clone(), table.clone(), execution_plan);
                 Ok(CorePhysicalPlan::Delete(delete))
             }
             CoreLogicalPlan::SetVariable { variable, value } => {

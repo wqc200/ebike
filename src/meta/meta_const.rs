@@ -36,7 +36,7 @@ pub const FULL_TABLE_NAME_OF_DEF_MYSQL_USERS: &str = "def.mysql.user";
 pub const TABLE_NAME_OF_DEF_PERFORMANCE_SCHEMA_GLOBAL_VARIABLES: &str = "global_variables";
 pub const FULL_TABLE_NAME_OF_DEF_PERFORMANCE_SCHEMA_GLOBAL_VARIABLES: &str = "def.performance_schema.global_variables";
 
-pub const PRIMARY_NAME: &str = "PRIMARY";
+pub const NAME_OF_PRIMARY: &str = "PRIMARY";
 pub const CONSTRAINT_TYPE_PRIMARY: &str = "PRIMARY KEY";
 pub const CONSTRAINT_TYPE_UNIQUE: &str = "UNIQUE";
 
@@ -128,14 +128,19 @@ pub const FULL_COLUMN_NAME_OF_DEF_PERFORMANCE_SCHEMA_GLOBAL_VARIABLES_VARIABLE_N
 pub const COLUMN_NAME_OF_DEF_PERFORMANCE_SCHEMA_GLOBAL_VARIABLES_VARIABLE_VALUE: &str = "variable_value";
 pub const FULL_COLUMN_NAME_OF_DEF_PERFORMANCE_SCHEMA_GLOBAL_VARIABLES_VARIABLE_VALUE: &str = "def.performance_schema.global_variables.variable_value";
 
-pub const TABLE_OPTION_OF_TABLE_TYPE: &str = "TABLE_TYPE";
-pub const OPTION_TABLE_TYPE_BASE_TABLE: &str = "BASE TABLE";
-pub const OPTION_TABLE_TYPE_SYSTEM_VIEW: &str = "SYSTEM VIEW";
-pub const OPTION_TABLE_TYPE_VIEW: &str = "VIEW";
-pub const TABLE_OPTION_OF_COLUMN_MAX_STORE_ID: &str = "column_max_store_id";
-pub const TABLE_OPTION_OF_ENGINE: &str = "engine";
-pub const OPTION_ENGINE_NAME_ROCKSDB: &str = "rocksdb";
-pub const OPTION_ENGINE_NAME_SLED: &str = "sled";
+// schema option
+pub const NAME_OF_SCHEMA_OPTION_DEFAULT_CHARACTER_SET_NAME: &str = "default_character_set_name";
+pub const NAME_OF_SCHEMA_OPTION_DEFAULT_COLLATION_NAME: &str = "default_collation_name";
+
+// table option
+pub const NAME_OF_TABLE_OPTION_TABLE_TYPE: &str = "TABLE_TYPE";
+pub const VALUE_OF_TABLE_OPTION_TABLE_TYPE_BASE_TABLE: &str = "BASE TABLE";
+pub const VALUE_OF_TABLE_OPTION_TABLE_TYPE_SYSTEM_VIEW: &str = "SYSTEM VIEW";
+pub const VALUE_OF_TABLE_OPTION_TABLE_TYPE_VIEW: &str = "VIEW";
+pub const NAME_OF_TABLE_OPTION_COLUMN_MAX_STORE_ID: &str = "column_max_store_id";
+pub const NAME_OF_TABLE_OPTION_ENGINE: &str = "engine";
+pub const VALUE_OF_TABLE_OPTION_ENGINE_ROCKSDB: &str = "rocksdb";
+pub const VALUE_OF_TABLE_OPTION_ENGINE_SLED: &str = "sled";
 
 // SHOW ......
 pub const SHOW_VARIABLE_DATABASES: &str = "DATABASES";

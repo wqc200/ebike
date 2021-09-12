@@ -29,8 +29,7 @@ use crate::meta::def::TableDef;
 
 pub struct RocksdbReader {
     global_context: Arc<Mutex<GlobalContext>>,
-    table_schema: TableDef,
-    full_table_name: ObjectName,
+    table: TableDef,
     projection: Option<Vec<usize>>,
     projected_schema: SchemaRef,
     batch_size: usize,
@@ -42,13 +41,13 @@ pub struct RocksdbReader {
 impl RocksdbReader {
     pub fn new(
         global_context: Arc<Mutex<GlobalContext>>,
-        table_schema: TableDef,
-        full_table_name: ObjectName,
+        table: TableDef,
         batch_size: usize,
         projection: Option<Vec<usize>>,
         filters: &[Expr],
     ) -> Self {
-        let schema_ref = table_schema.to_schemaref();
+        let schema_ref = table.to_schema_ref();
+        let full_table_name = table.full_table_name.clone();
 
         let projected_schema = match projection.clone() {
             Some(projection) => {
@@ -65,7 +64,7 @@ impl RocksdbReader {
 
         let mut start_scan_key = CreateScanKey::new("");
         let mut end_scan_key = CreateScanKey::new("");
-        let table_index_prefix = reader_util::get_seek_prefix(global_context.clone(), full_table_name.clone(), table_schema.clone(), filters.clone()).unwrap();
+        let table_index_prefix = reader_util::get_seek_prefix(global_context.clone(), full_table_name.clone(), table.clone(), filters.clone()).unwrap();
         match table_index_prefix {
             SeekType::NoRecord => {},
             SeekType::FullTableScan { start, end} => {
@@ -82,8 +81,7 @@ impl RocksdbReader {
 
         Self {
             global_context,
-            table_schema,
-            full_table_name,
+            table,
             projection,
             projected_schema,
             batch_size,
@@ -104,13 +102,10 @@ impl Iterator for RocksdbReader {
     fn next(&mut self) -> Option<Self::Item> {
         let global_context = &self.global_context.lock().unwrap();
         let rocksdb_db = global_context.engine.rocksdb_db.as_ref().unwrap();
+        let table_column = self.table.get_table_column();
+        let full_table_name = self.table.full_table_name.clone();
 
         let mut rowids: Vec<String> = vec![];
-
-        let catalog_name = meta_util::cut_out_catalog_name(self.full_table_name.clone());
-        let schema_name = meta_util::cut_out_schema_name(self.full_table_name.clone());
-        let table_name = meta_util::cut_out_table_name(self.full_table_name.clone());
-
         while self.rocksdb_iter.valid() {
             let key = self.rocksdb_iter.key().unwrap();
             let key = String::from_utf8(key.to_vec()).expect("Found invalid UTF-8");
@@ -180,21 +175,11 @@ impl Iterator for RocksdbReader {
                 }
             } else {
                 let column_name = field_name.to_ident();
-
-                let result = global_context.meta_cache.get_serial_number(self.full_table_name.clone(), column_name.clone());
-                let column_index = match result {
-                    Ok(value) => value,
-                    Err(error) => {
-                        return Some(Err(ArrowError::SchemaError(format!(
-                            "Error get serial number '{:?}'",
-                            error
-                        ))));
-                    }
-                };
+                let sparrow_column = table_column.get_sparrow_column(column_name.clone()).unwrap();
 
                 for rowid in rowids.clone() {
-                    let record_column_key = util::dbkey::create_column_key(self.full_table_name.clone(), column_index, rowid.as_str());
-                    log::debug!("column name: {:?}, record_column_key: {:?}", column_name, record_column_key);
+                    let record_column_key = util::dbkey::create_column_key(full_table_name.clone(), sparrow_column.store_id, rowid.as_str());
+                    log::debug!("column name: {:?}, record_column_key: {:?}", column_name.clone(), record_column_key);
                     let db_value = rocksdb_db.get(record_column_key.clone());
 
                     match db_value {

@@ -49,9 +49,9 @@ use crate::mysql::metadata::MysqlType::MYSQL_TYPE_BIT;
 
 pub fn users() -> def::TableDef {
     let mut with_option = vec![];
-    let sql_option = SqlOption { name: Ident { value: meta_const::TABLE_OPTION_OF_TABLE_TYPE.to_string(), quote_style: None }, value: Value::SingleQuotedString(meta_const::OPTION_TABLE_TYPE_SYSTEM_VIEW.to_string()) };
+    let sql_option = SqlOption { name: Ident { value: meta_const::NAME_OF_TABLE_OPTION_TABLE_TYPE.to_string(), quote_style: None }, value: Value::SingleQuotedString(meta_const::VALUE_OF_TABLE_OPTION_TABLE_TYPE_SYSTEM_VIEW.to_string()) };
     with_option.push(sql_option);
-    let sql_option = SqlOption { name: Ident { value: meta_const::TABLE_OPTION_OF_ENGINE.to_string(), quote_style: None }, value: Value::SingleQuotedString(meta_const::OPTION_ENGINE_NAME_ROCKSDB.to_string()) };
+    let sql_option = SqlOption { name: Ident { value: meta_const::NAME_OF_TABLE_OPTION_ENGINE.to_string(), quote_style: None }, value: Value::SingleQuotedString(meta_const::VALUE_OF_TABLE_OPTION_ENGINE_ROCKSDB.to_string()) };
     with_option.push(sql_option);
 
     let sql_columns = vec![
@@ -112,7 +112,7 @@ pub fn users() -> def::TableDef {
     columns.push(Ident::new("Host"));
     columns.push(Ident::new("user"));
     let table_constraint = TableConstraint::Unique {
-        name: Some(Ident { value: meta_const::PRIMARY_NAME.to_string(), quote_style: None }),
+        name: Some(Ident { value: meta_const::NAME_OF_PRIMARY.to_string(), quote_style: None }),
         columns,
         is_primary: true,
     };
@@ -123,10 +123,10 @@ pub fn users() -> def::TableDef {
 }
 
 pub fn users_data(global_context: Arc<Mutex<GlobalContext>>) -> MysqlResult<u64> {
-    let table_def = users();
+    let table_of_def_information_schema_users = users();
 
     let mut column_name_list = vec![];
-    for sql_column in table_def.column.sql_column_list {
+    for sql_column in table_of_def_information_schema_users.column.sql_column_list.clone() {
         column_name_list.push(sql_column.name.to_string());
     }
 
@@ -238,7 +238,7 @@ pub fn users_data(global_context: Arc<Mutex<GlobalContext>>) -> MysqlResult<u64>
 
     let insert = PhysicalPlanInsert::new(
         global_context.clone(),
-        table_def,
+        table_of_def_information_schema_users,
         column_name_list.clone(),
         vec![],
         column_value_map_list.clone(),

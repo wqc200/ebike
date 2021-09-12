@@ -40,10 +40,12 @@ use crate::core::session_context::SessionContext;
 use crate::meta::meta_util;
 use crate::util::convert::ToObjectName;
 use crate::store::engine::engine_util::StoreEngineFactory;
+use crate::util::dbkey::create_column_key;
+use crate::meta::def::TableDef;
 
 pub struct Update {
     global_context: Arc<Mutex<GlobalContext>>,
-    table_name: ObjectName,
+    table: TableDef,
     assignments: Vec<Assignment>,
     execution_plan: Arc<ExecutionPlan>,
 }
@@ -51,13 +53,13 @@ pub struct Update {
 impl Update {
     pub fn new(
         global_context: Arc<Mutex<GlobalContext>>,
-        table_name: ObjectName,
+        table: TableDef,
         assignments: Vec<Assignment>,
         execution_plan: Arc<ExecutionPlan>,
     ) -> Self {
         Self {
             global_context,
-            table_name,
+            table,
             assignments,
             execution_plan,
         }
@@ -84,13 +86,7 @@ impl Update {
     }
 
     pub fn update_record(&self, session_context: &mut SessionContext, batch: RecordBatch) -> MysqlResult<(u64)> {
-        let full_table_name = meta_util::fill_up_table_name(session_context, self.table_name.clone()).unwrap();
-
-        let store_engine = StoreEngineFactory::try_new_with_table_name(self.global_context.clone(), full_table_name.clone()).unwrap();
-
-        let catalog_name = meta_util::cut_out_catalog_name(full_table_name.clone());
-        let schema_name = meta_util::cut_out_schema_name(full_table_name.clone());
-        let table_name = meta_util::cut_out_table_name(full_table_name.clone());
+        let store_engine = StoreEngineFactory::try_new_with_table(self.global_context.clone(), self.table.clone()).unwrap();
 
         let mut assignment_column_value: Vec<metadata::ArrayCell> = Vec::new();
         for column_id in 1..batch.num_columns() {
@@ -237,8 +233,10 @@ impl Update {
 
                 let column_name = &assignment.id;
 
-                let column_index = self.global_context.lock().unwrap().meta_cache.get_serial_number(full_table_name.clone(), column_name.clone()).unwrap();
-                let record_column_key = util::dbkey::create_record_column(full_table_name.clone(), column_index, rowid.as_ref());
+                let sparrow_column = self.table.get_table_column().get_sparrow_column(column_name.clone()).unwrap();
+                let store_id = sparrow_column.store_id;
+
+                let record_column_key = create_column_key(self.table.option.full_table_name.clone(), store_id, rowid.as_ref());
                 let result = store_engine.put_key(record_column_key.clone(), column_value.as_bytes());
                 match result {
                     Err(error) => {

@@ -44,7 +44,7 @@ use uuid::Uuid;
 use crate::core::global_context::GlobalContext;
 use crate::core::session_context::SessionContext;
 use crate::meta::{initial, meta_const, meta_util};
-use crate::meta::def::{SparrowColumnDef, DbDef, StatisticsColumn, TableDef};
+use crate::meta::def::{SparrowColumnDef, SchemaDef, StatisticsColumn, TableDef, TableOptionDef, TableIndexDef};
 use crate::meta::initial::information_schema::{key_column_usage, table_constraints};
 use crate::meta::initial::initial_util::{SaveKeyColumnUsage, SaveStatistics, SaveTableConstraints};
 use crate::meta::initial::initial_util;
@@ -61,41 +61,57 @@ use crate::util::convert::{ToIdent, ToObjectName};
 
 use super::super::util;
 use futures::StreamExt;
-use crate::meta::read::get_table_constraints;
 
 // pub const INFORMATION_SCHEMA_NUMBER_SCHEMATA: &str = "information_schema.number_schemata";
 // pub const INFORMATION_SCHEMA_NUMBER_TABLE: &str = "information_schema.number_table";
 // pub const INFORMATION_SCHEMA_NUMBER_COLUMN: &str = "information_schema.number_column";
 
-pub fn get_all_table_index(global_context: Arc<Mutex<GlobalContext>>, full_table_name: ObjectName) -> MysqlResult<Vec<(String, usize, Vec<Ident>)>> {
-    let table_def = match global_context.lock().unwrap().meta_cache.get_table(full_table_name.clone()) {
+pub fn get_table(global_context: Arc<Mutex<GlobalContext>>, full_table_name: ObjectName) -> MysqlResult<TableDef> {
+    let table_map = global_context.lock().unwrap().meta_cache.get_table_map();
+    match table_map.get(&full_table_name) {
+        Some(table) => {
+            Ok((table.clone()))
+        }
         None => {
-            return Err(MysqlError::new_global_error(1105, format!("Unknown error, xxxxx: {:?}.", full_table_name).as_str()));
+            let message = format!("Table '{}' doesn't exist", full_table_name.to_string());
+            log::error!("{}", message);
+            Err(MysqlError::new_server_error(
+                1146,
+                "42S02",
+                message.as_str(),
+            ))
         }
-        Some(table_def) => {
-            table_def
-        }
-    };
+    }
+}
+
+pub fn get_table_index_list(global_context: Arc<Mutex<GlobalContext>>, full_table_name: ObjectName) -> MysqlResult<Vec<TableIndexDef>> {
+    let table = meta_util::get_table(global_context.clone(), full_table_name.clone()).unwrap();
 
     let mut all_index = vec![];
-    for table_constraint in table_def.get_constraints() {
+    for table_constraint in table.get_constraints() {
         match table_constraint {
             TableConstraint::Unique { name, columns, is_primary } => {
                 let index_name = name.clone().unwrap().value.to_string();
 
-                let mut column_names = vec![];
+                let mut column_name_list = vec![];
                 for column_name in columns {
-                    column_names.push(column_name.clone());
+                    column_name_list.push(column_name.clone());
                 }
 
-                let mut level: usize = 0;
+                let mut level = 0;
                 if is_primary.clone() {
                     level = 1;
                 } else {
                     level = 2;
                 }
 
-                all_index.push((index_name.clone(), level, column_names));
+                let table_index = TableIndexDef {
+                    index_name,
+                    level,
+                    column_name_list,
+                };
+
+                all_index.push(table_index);
             }
             _ => {}
         }
@@ -104,7 +120,7 @@ pub fn get_all_table_index(global_context: Arc<Mutex<GlobalContext>>, full_table
     Ok(all_index)
 }
 
-pub fn create_sparrow_column(store_id: usize, ordinal_position: usize, sql_column: SQLColumnDef) -> SparrowColumnDef {
+pub fn create_sparrow_column(store_id: i32, ordinal_position: i32, sql_column: SQLColumnDef) -> SparrowColumnDef {
     SparrowColumnDef {
         store_id,
         ordinal_position,
@@ -145,8 +161,8 @@ pub fn create_full_table_name(catalog_name: &str, schema_name: &str, table_name:
     idents.push(ident);
     let ident = Ident::new(table_name);
     idents.push(ident);
-
     let object_name = ObjectName(idents);
+
     object_name
 }
 
@@ -280,6 +296,20 @@ pub fn load_global_variable(global_context: Arc<Mutex<GlobalContext>>) -> MysqlR
     Ok(())
 }
 
+pub fn load_all_table(global_context: Arc<Mutex<GlobalContext>>) -> MysqlResult<()> {
+    let result = initial_util::read_all_table(global_context.clone());
+    match result {
+        Ok(table_map) => {
+            global_context.lock().unwrap().meta_cache.add_all_table(table_map);
+            Ok(())
+        }
+        Err(mysql_error) => {
+            log::error!("load all table error: {}", mysql_error);
+            Err(mysql_error)
+        }
+    }
+}
+
 pub async fn init_meta(global_context: Arc<Mutex<GlobalContext>>) -> MysqlResult<()> {
     let mut init_tables: HashMap<ObjectName, TableDef> = HashMap::new();
     init_tables.insert(meta_const::FULL_TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_TABLES.to_object_name(), initial::information_schema::table_tables());
@@ -293,9 +323,9 @@ pub async fn init_meta(global_context: Arc<Mutex<GlobalContext>>) -> MysqlResult
 
     if !meta_has_create() {
         for (full_table_name, table) in init_tables.iter() {
-            initial_util::add_information_schema_tables(global_context.clone(), table.clone());
-            initial_util::add_information_schema_columns(global_context.clone(), table.clone());
-            save_table_constraint(global_context.clone(), full_table_name.clone(), table.get_constraints().clone());
+            initial_util::add_information_schema_tables(global_context.clone(), table.option.clone());
+            initial_util::add_information_schema_columns(global_context.clone(), table.option.clone(), table.column.sparrow_column_list.clone());
+            save_table_constraint(global_context.clone(), table.option.clone(), table.get_constraints().clone());
         }
 
         initial_util::create_schema(global_context.clone(), meta_const::FULL_SCHEMA_NAME_OF_DEF_MYSQL.to_object_name());
@@ -408,33 +438,33 @@ pub fn store_add_column_serial_number(global_context: Arc<Mutex<GlobalContext>>,
     store_engine.put_key(key, value.as_bytes());
     Ok(())
 }
-
-pub fn cache_add_column_serial_number(global_context: Arc<Mutex<GlobalContext>>, full_table_name: ObjectName, columns: Vec<SQLColumnDef>) {
-    for column_def in columns {
-        let column_name = column_def.name;
-
-        let result = store_get_column_id(global_context.clone(), full_table_name.clone(), column_name.clone());
-        let orm_id = match result {
-            Ok(result) => {
-                match result {
-                    None => {
-                        let message = format!("table column store serial_number not found, table: {}, column: {}", full_table_name, column_name);
-                        log::error!("{}", message);
-                        panic!(message)
-                    }
-                    Some(value) => {
-                        value
-                    }
-                }
-            }
-            Err(e) => {
-                log::error!("{}", e);
-                panic!(e)
-            }
-        };
-        global_context.lock().unwrap().meta_cache.add_serial_number(full_table_name.clone(), column_name.clone(), orm_id);
-    }
-}
+//
+// pub fn cache_add_column_serial_number(global_context: Arc<Mutex<GlobalContext>>, full_table_name: ObjectName, columns: Vec<SQLColumnDef>) {
+//     for column_def in columns {
+//         let column_name = column_def.name;
+//
+//         let result = store_get_column_id(global_context.clone(), full_table_name.clone(), column_name.clone());
+//         let orm_id = match result {
+//             Ok(result) => {
+//                 match result {
+//                     None => {
+//                         let message = format!("table column store serial_number not found, table: {}, column: {}", full_table_name, column_name);
+//                         log::error!("{}", message);
+//                         panic!(message)
+//                     }
+//                     Some(value) => {
+//                         value
+//                     }
+//                 }
+//             }
+//             Err(e) => {
+//                 log::error!("{}", e);
+//                 panic!(e)
+//             }
+//         };
+//         global_context.lock().unwrap().meta_cache.add_serial_number(full_table_name.clone(), column_name.clone(), orm_id);
+//     }
+// }
 
 pub fn schema_name_not_allow_exist(global_context: Arc<Mutex<GlobalContext>>, session_context: &mut SessionContext, table_name: ObjectName) -> MysqlResult<()> {
     let full_table_name = meta_util::fill_up_table_name(session_context, table_name.clone()).unwrap();
@@ -685,55 +715,50 @@ pub fn get_table_column(table: TableDef, column_name: &str) -> Option<SparrowCol
     column
 }
 
-pub fn get_table_max_ordinal_position(global_context: Arc<Mutex<GlobalContext>>, full_table_name: ObjectName) -> usize {
-    let first = 0 as usize;
+// pub fn get_table_max_ordinal_position(global_context: Arc<Mutex<GlobalContext>>, full_table_name: ObjectName) -> MysqlResult<i32> {
+//     let first = 0;
+//
+//     let table = get_table(global_context.clone(), full_table_name).unwrap();
+//     let ordinal_position = table.column.sparrow_column_list.to_vec()
+//         .iter()
+//         .fold(first, |current, b| {
+//             let cmp = b.ordinal_position.partial_cmp(&current).unwrap();
+//             let max = if let std::cmp::Ordering::Greater = cmp {
+//                 b.ordinal_position
+//             } else {
+//                 current
+//             };
+//             max
+//         });
+//     Ok(ordinal_position)
+// }
 
-    let mut result = global_context.lock().unwrap().meta_cache.get_table(full_table_name.clone());
-    match result {
-        Some(table) => {
-            let ordinal_position = table.get_columns().to_vec()
-                .iter()
-                .fold(first, |current, b| {
-                    let cmp = b.ordinal_position.partial_cmp(&current).unwrap();
-                    let max = if let std::cmp::Ordering::Greater = cmp {
-                        b.ordinal_position
-                    } else {
-                        current
-                    };
-                    max
-                });
-            ordinal_position
+pub fn table_has_primary_key(global_context: Arc<Mutex<GlobalContext>>, full_table_name: ObjectName) -> bool {
+    let schema_table_constraints = initial_util::read_information_schema_statistics(global_context.clone()).unwrap();
+    match schema_table_constraints.get(&full_table_name) {
+        Some(vec_table_constraint) => {
+            let a = &vec_table_constraint.to_vec().iter().any(|table_constraint| {
+                match table_constraint {
+                    TableConstraint::Unique { is_primary, .. } => {
+                        if is_primary.clone() {
+                            true
+                        } else {
+                            false
+                        }
+                    }
+                    _ => false,
+                }
+            });
+            a.clone()
         }
-        None => {
-            first
-        }
+        None => false,
     }
 }
 
-pub fn table_has_primary_key(global_context: Arc<Mutex<GlobalContext>>, full_table_name: ObjectName) -> bool {
-    let constraints = get_table_constraints(global_context.clone(), full_table_name.clone()).unwrap();
-
-    let result = constraints.iter().any(|table_constraint| {
-        match table_constraint {
-            TableConstraint::Unique { is_primary, .. } => {
-                if is_primary.clone() {
-                    true
-                } else {
-                    false
-                }
-            }
-            _ => false,
-        }
-    });
-    result
-}
-
-pub fn save_table_constraint(global_context: Arc<Mutex<GlobalContext>>, full_table_name: ObjectName, constraints: Vec<TableConstraint>) {
-    let tables_reference = TableReference::try_from(&full_table_name).unwrap();
-    let resolved_table_reference = tables_reference.resolve(meta_const::CATALOG_NAME, meta_const::SCHEMA_NAME_OF_DEF_INFORMATION_SCHEMA);
-    let catalog_name = resolved_table_reference.catalog.to_string();
-    let schema_name = resolved_table_reference.schema.to_string();
-    let table_name = resolved_table_reference.table.to_string();
+pub fn save_table_constraint(global_context: Arc<Mutex<GlobalContext>>, table_option: TableOptionDef, constraints: Vec<TableConstraint>) {
+    let catalog_name = table_option.catalog_name;
+    let schema_name = table_option.schema_name;
+    let table_name = table_option.table_name;
 
     let mut save_create_statistics = SaveStatistics::new(global_context.clone(), catalog_name.as_str(), schema_name.as_str(), table_name.as_str());
     let mut save_key_column_usage = SaveKeyColumnUsage::new(global_context.clone(), catalog_name.as_str(), schema_name.as_str(), table_name.as_str());
@@ -743,7 +768,7 @@ pub fn save_table_constraint(global_context: Arc<Mutex<GlobalContext>>, full_tab
         match constraint {
             TableConstraint::Unique { name, columns, is_primary } => {
                 let constraint_name = if is_primary == true {
-                    meta_const::PRIMARY_NAME.to_string()
+                    meta_const::NAME_OF_PRIMARY.to_string()
                 } else {
                     match name {
                         Some(n) => {
@@ -782,7 +807,7 @@ pub fn create_unique_index_name(columns: Vec<Ident>) -> String {
     format!("Unique_{}", columns.iter().map(|column_name| column_name.to_string()).collect::<Vec<_>>().join("_"))
 }
 
-pub fn read_all_schema(global_context: Arc<Mutex<GlobalContext>>) -> MysqlResult<HashMap<ObjectName, DbDef>> {
+pub fn read_all_schema(global_context: Arc<Mutex<GlobalContext>>) -> MysqlResult<HashMap<ObjectName, SchemaDef>> {
     initial_util::read_information_schema_schemata(global_context.clone())
 }
 
@@ -790,59 +815,59 @@ pub fn cache_add_all_table(global_context: Arc<Mutex<GlobalContext>>) {
     let all_table = initial_util::read_all_table(global_context.clone()).unwrap();
     global_context.lock().unwrap().meta_cache.add_all_table(all_table);
 }
-
-pub fn read_information_schema_tables_record(global_context: Arc<Mutex<GlobalContext>>) -> MysqlResult<Vec<RecordBatch>> {
-    let mut reader = RocksdbReader::new(
-        global_context.clone(),
-        initial::information_schema::table_tables(),
-        meta_const::FULL_TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_TABLES.to_object_name(),
-        1024,
-        None,
-        &[],
-    );
-
-    let mut partition: Vec<RecordBatch> = vec![];
-
-    loop {
-        match reader.next() {
-            Some(item) => {
-                match item {
-                    Ok(record_batch) => {
-                        partition.push(record_batch);
-                    }
-                    Err(arrow_error) => return Err(MysqlError::from(arrow_error)),
-                }
-            }
-            None => break,
-        }
-    }
-
-    Ok(partition)
-}
-
-pub fn store_get_column_id(global_context: Arc<Mutex<GlobalContext>>, full_table_name: ObjectName, column_name: Ident) -> MysqlResult<Option<usize>> {
-    let store_engine = StoreEngineFactory::try_new_schema_engine(global_context.clone()).unwrap();
-
-    let key = util::dbkey::create_column_id(full_table_name, column_name.clone());
-    match store_engine.get_key(key) {
-        Ok(result) => {
-            match result {
-                Some(value) => match std::str::from_utf8(&value) {
-                    Ok(v) => Ok(Some(v.to_string().parse::<usize>().unwrap())),
-                    Err(_) => Err(MysqlError::new_global_error(
-                        meta_const::MYSQL_ERROR_CODE_UNKNOWN_ERROR,
-                        "did not read valid utf-8 out of the db",
-                    )),
-                },
-                None => Ok(None),
-            }
-        }
-        Err(_) => Err(MysqlError::new_global_error(
-            meta_const::MYSQL_ERROR_CODE_UNKNOWN_ERROR,
-            "rocksdb get error",
-        )),
-    }
-}
+//
+// pub fn read_information_schema_tables_record(global_context: Arc<Mutex<GlobalContext>>) -> MysqlResult<Vec<RecordBatch>> {
+//     let mut reader = RocksdbReader::new(
+//         global_context.clone(),
+//         initial::information_schema::table_tables(),
+//         meta_const::FULL_TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_TABLES.to_object_name(),
+//         1024,
+//         None,
+//         &[],
+//     );
+//
+//     let mut partition: Vec<RecordBatch> = vec![];
+//
+//     loop {
+//         match reader.next() {
+//             Some(item) => {
+//                 match item {
+//                     Ok(record_batch) => {
+//                         partition.push(record_batch);
+//                     }
+//                     Err(arrow_error) => return Err(MysqlError::from(arrow_error)),
+//                 }
+//             }
+//             None => break,
+//         }
+//     }
+//
+//     Ok(partition)
+// }
+//
+// pub fn store_get_column_id(global_context: Arc<Mutex<GlobalContext>>, full_table_name: ObjectName, column_name: Ident) -> MysqlResult<Option<usize>> {
+//     let store_engine = StoreEngineFactory::try_new_schema_engine(global_context.clone()).unwrap();
+//
+//     let key = util::dbkey::create_column_id(full_table_name, column_name.clone());
+//     match store_engine.get_key(key) {
+//         Ok(result) => {
+//             match result {
+//                 Some(value) => match std::str::from_utf8(&value) {
+//                     Ok(v) => Ok(Some(v.to_string().parse::<usize>().unwrap())),
+//                     Err(_) => Err(MysqlError::new_global_error(
+//                         meta_const::MYSQL_ERROR_CODE_UNKNOWN_ERROR,
+//                         "did not read valid utf-8 out of the db",
+//                     )),
+//                 },
+//                 None => Ok(None),
+//             }
+//         }
+//         Err(_) => Err(MysqlError::new_global_error(
+//             meta_const::MYSQL_ERROR_CODE_UNKNOWN_ERROR,
+//             "rocksdb get error",
+//         )),
+//     }
+// }
 
 #[cfg(test)]
 mod tests {

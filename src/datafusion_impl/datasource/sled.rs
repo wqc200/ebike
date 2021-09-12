@@ -22,17 +22,15 @@ use crate::meta::def::TableDef;
 
 pub struct SledTable {
     global_context: Arc<Mutex<GlobalContext>>,
-    table_def: TableDef,
-    full_table_name: ObjectName,
+    table: TableDef,
 }
 
 impl SledTable {
     #[allow(missing_docs)]
-    pub fn new(global_context: Arc<Mutex<GlobalContext>>, table_def: TableDef, full_table_name: ObjectName) -> Self {
+    pub fn new(global_context: Arc<Mutex<GlobalContext>>, table: TableDef) -> Self {
         Self {
             global_context,
-            table_def,
-            full_table_name,
+            table,
         }
     }
 }
@@ -43,7 +41,7 @@ impl TableProvider for SledTable {
     }
 
     fn schema(&self) -> Arc<Schema> {
-        self.table_def.to_schemaref()
+        self.table.to_schema_ref()
     }
 
     fn scan(
@@ -55,8 +53,7 @@ impl TableProvider for SledTable {
     ) -> Result<Arc<dyn ExecutionPlan>> {
         let exec = SledExec::try_new(
             self.global_context.clone(),
-            self.table_def.clone(),
-            self.full_table_name.clone(),
+            self.table.clone(),
             projection.clone(),
             batch_size,
             &[])?;

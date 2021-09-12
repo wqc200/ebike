@@ -48,9 +48,9 @@ use crate::physical_plan::insert::PhysicalPlanInsert;
 
 pub fn global_variables() -> def::TableDef {
     let mut with_option = vec![];
-    let sql_option = SqlOption { name: Ident { value: meta_const::TABLE_OPTION_OF_TABLE_TYPE.to_string(), quote_style: None }, value: Value::SingleQuotedString(meta_const::OPTION_TABLE_TYPE_SYSTEM_VIEW.to_string()) };
+    let sql_option = SqlOption { name: Ident { value: meta_const::NAME_OF_TABLE_OPTION_TABLE_TYPE.to_string(), quote_style: None }, value: Value::SingleQuotedString(meta_const::VALUE_OF_TABLE_OPTION_TABLE_TYPE_SYSTEM_VIEW.to_string()) };
     with_option.push(sql_option);
-    let sql_option = SqlOption { name: Ident { value: meta_const::TABLE_OPTION_OF_ENGINE.to_string(), quote_style: None }, value: Value::SingleQuotedString(meta_const::OPTION_ENGINE_NAME_ROCKSDB.to_string()) };
+    let sql_option = SqlOption { name: Ident { value: meta_const::NAME_OF_TABLE_OPTION_ENGINE.to_string(), quote_style: None }, value: Value::SingleQuotedString(meta_const::VALUE_OF_TABLE_OPTION_ENGINE_ROCKSDB.to_string()) };
     with_option.push(sql_option);
 
     let sql_columns = vec![
@@ -61,7 +61,7 @@ pub fn global_variables() -> def::TableDef {
     let mut columns = vec![];
     columns.push(Ident::new(meta_const::COLUMN_NAME_OF_DEF_PERFORMANCE_SCHEMA_GLOBAL_VARIABLES_VARIABLE_NAME));
     let table_constraint = TableConstraint::Unique {
-        name: Some(Ident { value: meta_const::PRIMARY_NAME.to_string(), quote_style: None }),
+        name: Some(Ident { value: meta_const::NAME_OF_PRIMARY.to_string(), quote_style: None }),
         columns,
         is_primary: true,
     };

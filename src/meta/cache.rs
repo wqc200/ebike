@@ -15,10 +15,11 @@ use crate::mysql::error::{MysqlError, MysqlResult};
 use crate::store::rocksdb::db::DB as rocksdbDB;
 use crate::test;
 use crate::util;
+use crate::meta::def::TableDef;
 
 #[derive(Debug, Clone)]
 pub struct MetaCache {
-    schema_map: HashMap<ObjectName, def::DbDef>,
+    schema_map: HashMap<ObjectName, def::SchemaDef>,
     table_map: HashMap<ObjectName, def::TableDef>,
     /// Map the column name to an serial number
     serial_number_map: HashMap<ObjectName, HashMap<Ident, usize>>,
@@ -26,7 +27,7 @@ pub struct MetaCache {
 
 impl MetaCache {
     pub fn new() -> Self {
-        let schema_map: HashMap<ObjectName, def::DbDef> = HashMap::new();
+        let schema_map: HashMap<ObjectName, def::SchemaDef> = HashMap::new();
         let table_map: HashMap<ObjectName, def::TableDef> = HashMap::new();
         let serial_number_map: HashMap<ObjectName, HashMap<Ident, usize>> = HashMap::new();
 
@@ -43,17 +44,9 @@ impl MetaCache {
         }
     }
 
-    pub fn add_all_schema(&mut self, schema_map: HashMap<ObjectName, def::DbDef>) {
+    pub fn add_all_schema(&mut self, schema_map: HashMap<ObjectName, def::SchemaDef>) {
         for (schema_name, schema_def) in schema_map.iter() {
             self.add_schema(schema_name.clone(), schema_def.clone());
-        }
-    }
-
-    pub fn add_all_serial_number(&mut self, table_column_map: HashMap<ObjectName, HashMap<Ident, usize>>) {
-        for (full_table_name, column_map) in table_column_map.iter() {
-            for (column_name, serial_number) in column_map.iter() {
-                self.add_serial_number(full_table_name.clone(), column_name.clone(), serial_number.to_owned());
-            }
         }
     }
 
@@ -62,7 +55,7 @@ impl MetaCache {
         *t = table;
     }
 
-    pub fn add_schema(&mut self, full_schema_name: ObjectName, schema_def: def::DbDef) {
+    pub fn add_schema(&mut self, full_schema_name: ObjectName, schema_def: def::SchemaDef) {
         self.schema_map.entry(full_schema_name.clone()).or_insert(schema_def.clone());
         ()
     }
@@ -105,7 +98,7 @@ impl MetaCache {
         self.table_map.remove(&schema_name).unwrap();
     }
 
-    pub fn get_schema_map(&self) -> HashMap<ObjectName, def::DbDef> {
+    pub fn get_schema_map(&self) -> HashMap<ObjectName, def::SchemaDef> {
         self.schema_map.clone()
     }
 
@@ -113,13 +106,8 @@ impl MetaCache {
         self.table_map.clone()
     }
 
-    pub fn get_table(&self, full_table_name: ObjectName) -> Option<def::TableDef> {
+    pub fn get_table(&self, full_table_name: ObjectName) -> Option<&TableDef> {
         let table_schema = self.table_map.get(&full_table_name);
-        match table_schema {
-            Some(table) => {
-                Some(table.clone())
-            }
-            None => None,
-        }
+        table_schema
     }
 }

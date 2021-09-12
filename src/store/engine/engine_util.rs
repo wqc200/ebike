@@ -41,61 +41,31 @@ pub struct TableEngineFactory;
 
 impl TableEngineFactory {
     pub fn try_new_with_table_name(global_context: Arc<Mutex<GlobalContext>>, full_table_name: ObjectName) -> MysqlResult<Box<dyn TableEngine>> {
-        let result = global_context.lock().unwrap().meta_cache.get_table(full_table_name.clone());
-        let table_def = match result {
+        let gc = global_context.lock().unwrap();
+        let result = gc.meta_cache.get_table(full_table_name.clone());
+        let table = match result {
             None => {
                 return Err(MysqlError::new_global_error(1105, format!(
                     "Unknown error. The table def not found. table_name: {}",
                     full_table_name,
                 ).as_str()))
             },
-            Some(table_def) => table_def,
+            Some(table) => table.clone(),
         };
 
-        match table_def.clone().get_engine() {
-            Some(engine) => {
-                match engine.as_str() {
-                    meta_const::OPTION_ENGINE_NAME_ROCKSDB => Ok(Box::new(rocksdb::TableEngineRocksdb::new(global_context, full_table_name, table_def))),
-                    meta_const::OPTION_ENGINE_NAME_SLED => Ok(Box::new(sled::TableEngineSled::new(global_context, full_table_name, table_def))),
-                    _ => {
-                        Err(MysqlError::new_global_error(1105, format!(
-                            "Unknown error. The table engine is not supported, table: {:?}, engine: {:?}",
-                            full_table_name,
-                            engine,
-                        ).as_str()))
-                    }
-                }
-            }
-            None => {
-                Err(MysqlError::new_global_error(1105, format!(
-                    "Unknown error. The engine in table not found. table_name: {}",
-                    full_table_name,
-                ).as_str()))
-            }
-        }
+        TableEngineFactory::try_new_with_table(global_context.clone(), table)
     }
 
-    pub fn try_new_with_table_def(global_context: Arc<Mutex<GlobalContext>>, table_def: TableDef) -> MysqlResult<Box<dyn TableEngine>> {
-        let full_table_name = table_def.get_full_table_name();
-
-        match table_def.clone().get_engine() {
-            Some(engine) => {
-                match engine.as_str() {
-                    meta_const::OPTION_ENGINE_NAME_ROCKSDB => Ok(Box::new(rocksdb::TableEngineRocksdb::new(global_context, full_table_name, table_def))),
-                    meta_const::OPTION_ENGINE_NAME_SLED => Ok(Box::new(sled::TableEngineSled::new(global_context, full_table_name, table_def))),
-                    _ => {
-                        Err(MysqlError::new_global_error(1105, format!(
-                            "Unknown error. The table engine is not supported, table: {:?}, engine: {:?}",
-                            full_table_name,
-                            engine,
-                        ).as_str()))
-                    }
-                }
-            }
-            None => {
+    pub fn try_new_with_table(global_context: Arc<Mutex<GlobalContext>>, table: TableDef) -> MysqlResult<Box<dyn TableEngine>> {
+        let engine = table.clone().get_engine();
+        match engine.as_str() {
+            meta_const::VALUE_OF_TABLE_OPTION_ENGINE_ROCKSDB => Ok(Box::new(rocksdb::TableEngineRocksdb::new(global_context, table))),
+            meta_const::VALUE_OF_TABLE_OPTION_ENGINE_SLED => Ok(Box::new(sled::TableEngineSled::new(global_context, table))),
+            _ => {
                 Err(MysqlError::new_global_error(1105, format!(
-                    "Unknown error. The engine in table not found. table_name: {}",
-                    full_table_name,
+                    "Unknown error. The table engine is not supported, table: {:?}, engine: {:?}",
+                    table.option.full_table_name,
+                    engine,
                 ).as_str()))
             }
         }
@@ -106,40 +76,25 @@ pub struct StoreEngineFactory;
 
 impl StoreEngineFactory {
     pub fn try_new_with_table_name(global_context: Arc<Mutex<GlobalContext>>, full_table_name: ObjectName) -> MysqlResult<Box<dyn StoreEngine>> {
-        let result = global_context.lock().unwrap().meta_cache.get_table(full_table_name.clone());
-        let table_def = match result {
+        let gc = global_context.lock().unwrap();
+        let result = gc.meta_cache.get_table(full_table_name.clone());
+        let table = match result {
             None => {
                 return Err(MysqlError::new_global_error(1105, format!(
                     "Unknown error. The table def not found. table_name: {}",
                     full_table_name,
                 ).as_str()))
             },
-            Some(table_def) => table_def,
+            Some(table) => table.clone(),
         };
 
-        match table_def.clone().get_engine() {
-            Some(engine) => StoreEngineFactory::try_new_with_engine(global_context.clone(), engine.as_str()),
-            None => {
-                Err(MysqlError::new_global_error(1105, format!(
-                    "Unknown error. The engine in table not found. table_name: {}",
-                    full_table_name,
-                ).as_str()))
-            }
-        }
+        let engine = table.get_engine();
+        StoreEngineFactory::try_new_with_engine(global_context.clone(), engine.as_str())
     }
 
-    pub fn try_new_with_table_def(global_context: Arc<Mutex<GlobalContext>>, table_def: TableDef) -> MysqlResult<Box<dyn StoreEngine>> {
-        let full_table_name = table_def.get_full_table_name();
-
-        match table_def.clone().get_engine() {
-            Some(engine) => StoreEngineFactory::try_new_with_engine(global_context.clone(), engine.as_str()),
-            None => {
-                Err(MysqlError::new_global_error(1105, format!(
-                    "Unknown error. The engine in table not found. table_name: {}",
-                    full_table_name
-                ).as_str()))
-            }
-        }
+    pub fn try_new_with_table(global_context: Arc<Mutex<GlobalContext>>, table: TableDef) -> MysqlResult<Box<dyn StoreEngine>> {
+        let engine = table.get_engine();
+        StoreEngineFactory::try_new_with_engine(global_context.clone(), engine.as_str())
     }
 
     pub fn try_new_schema_engine(global_context: Arc<Mutex<GlobalContext>>) -> MysqlResult<Box<dyn StoreEngine>> {
@@ -151,11 +106,11 @@ impl StoreEngineFactory {
         let gc = global_context.lock().unwrap();
 
         match engine {
-            meta_const::OPTION_ENGINE_NAME_ROCKSDB => {
+            meta_const::VALUE_OF_TABLE_OPTION_ENGINE_ROCKSDB => {
                 let rocksdb_db = gc.engine.rocksdb_db.as_ref().unwrap();
                 Ok(Box::new(rocksdb::StoreEngineRocksdb::new(rocksdb_db.clone())))
             },
-            meta_const::OPTION_ENGINE_NAME_SLED => {
+            meta_const::VALUE_OF_TABLE_OPTION_ENGINE_SLED => {
                 let sled_db = gc.engine.sled_db.as_ref().unwrap();
                 Ok(Box::new(sled::StoreEngineSled::new(sled_db.clone())))
             }

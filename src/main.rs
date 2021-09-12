@@ -88,18 +88,6 @@ async fn main() {
         }
     }
 
-    // column index
-    let result = initial_util::read_column_index(global_context.clone());
-    match result {
-        Ok(table_column_index) => {
-            global_context.lock().unwrap().meta_cache.add_all_serial_number(table_column_index);
-        }
-        Err(e) => {
-            log::error!("init meta column index error: {}", e);
-            return;
-        }
-    }
-
     loop {
         match listener.accept().await {
             Ok((socket, _)) => {

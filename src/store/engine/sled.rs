@@ -26,32 +26,29 @@ use crate::store::engine::engine_util::StoreEngine;
 
 pub struct TableEngineSled {
     global_context: Arc<Mutex<GlobalContext>>,
-    full_table_name: ObjectName,
-    table_def: TableDef,
+    table: TableDef,
 }
 
 impl TableEngineSled {
     pub fn new(
         global_context: Arc<Mutex<GlobalContext>>,
-        full_table_name: ObjectName,
-        table_def: TableDef,
+        table: TableDef,
     ) -> Self {
         Self {
             global_context,
-            full_table_name,
-            table_def,
+            table: table,
         }
     }
 }
 
 impl TableEngine for TableEngineSled {
     fn table_provider(&self) -> Arc<dyn TableProvider> {
-        let provider = SledTable::new(self.global_context.clone(), self.table_def.clone(), self.full_table_name.clone());
+        let provider = SledTable::new(self.global_context.clone(), self.table.clone());
         Arc::new(provider)
     }
 
     fn table_iterator(&self, projection: Option<Vec<usize>>, filters: &[Expr]) -> Box<dyn Iterator<Item = Result<RecordBatch>>> {
-        let reader = SledReader::new(self.global_context.clone(), self.table_def.clone(), self.full_table_name.clone(), 1024, projection, filters);
+        let reader = SledReader::new(self.global_context.clone(), self.table.clone(), 1024, projection, filters);
         Box::new(reader)
     }
 }

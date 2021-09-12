@@ -11,6 +11,7 @@ use sqlparser::ast::{AlterTableOperation, Assignment, ColumnDef, Ident, ObjectNa
 use crate::meta::{def, meta_util};
 use std::collections::HashMap;
 use datafusion::scalar::ScalarValue;
+use crate::meta::def::{TableDef, IndexDef};
 
 #[derive(Clone)]
 pub struct CoreSelectFrom {
@@ -71,11 +72,11 @@ impl CoreSelectFromWithAssignment {
 #[derive(Clone)]
 pub enum CoreLogicalPlan {
     AlterTableAddColumn {
-        table_name: ObjectName,
+        table: TableDef,
         operation: AlterTableOperation,
     },
     AlterTableDropColumn {
-        table_name: ObjectName,
+        table: TableDef,
         operation: AlterTableOperation,
         select_from_columns_for_delete: CoreSelectFrom,
         select_from_columns_for_update: CoreSelectFromWithAssignment,
@@ -93,18 +94,17 @@ pub enum CoreLogicalPlan {
     Explain(LogicalPlan),
     Delete {
         logical_plan: LogicalPlan,
-        table_name: ObjectName,
+        table: TableDef,
     },
     Update {
         logical_plan: LogicalPlan,
-        table_name: ObjectName,
+        table: TableDef,
         assignments: Vec<Assignment>,
     },
     Insert {
-        full_table_name: ObjectName,
-        table_def: def::TableDef,
+        table: TableDef,
         column_name_list: Vec<String>,
-        index_keys_list: Vec<Vec<(String, usize, String)>>,
+        index_keys_list: Vec<Vec<IndexDef>>,
         column_value_map_list: Vec<HashMap<Ident, ScalarValue>>,
     },
     CreateDb {

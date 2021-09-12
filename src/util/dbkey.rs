@@ -9,6 +9,8 @@ use crate::mysql::error::{MysqlResult, MysqlError};
 use crate::meta::meta_const::MYSQL_ERROR_CODE_UNKNOWN_ERROR;
 use sqlparser::ast::{ObjectName, Ident};
 use crate::meta::meta_const;
+use crate::meta::def::{TableDef, TableIndexDef};
+use std::collections::HashMap;
 
 pub fn scan_column_name(schema_name: &str) -> Box<[u8]> {
     let mut k = String::from("/Schema/ColumnName/ToIndex");
@@ -87,7 +89,7 @@ pub fn create_column_rowid_key(full_table_name: ObjectName, uuid: &str) -> Strin
     k
 }
 
-pub fn create_column_key(full_table_name: ObjectName, orm_id: usize, uuid: &str) -> String {
+pub fn create_column_key(full_table_name: ObjectName, orm_id: i32, uuid: &str) -> String {
     let mut k = String::from("/Table/index/column");
 
     k.push_str("/");
@@ -122,25 +124,23 @@ pub fn scan_record_rowid(full_table_name: ObjectName) -> String {
     k
 }
 
-pub fn create_index(full_table_name: ObjectName, index_name: &str, serial_number_value_vec: Vec<(usize, ScalarValue)>) -> MysqlResult<String> {
+pub fn create_table_index_key(table: TableDef, table_index: TableIndexDef, column_value_map: HashMap<Ident, ScalarValue>) -> MysqlResult<String> {
     let mut k = String::from("/Table/index/key/");
-    k.push_str(full_table_name.to_string().as_str());
+    k.push_str(table.full_table_name.to_string().as_str());
     k.push_str("/");
-    k.push_str(index_name);
+    k.push_str(table_index.index_name.as_str());
     k.push_str("/");
 
-    for (serial_number, scalar_value) in serial_number_value_vec {
-        k.push_str(serial_number.to_string().as_str());
+    for column_name in table_index.column_name_list {
+        let sparrow_column = table.column.get_sparrow_column(column_name.clone()).unwrap();
+        let column_value = column_value_map.get(&column_name).unwrap();
+
+        let column_store_id = sparrow_column.store_id;
+
+        k.push_str(column_store_id.to_string().as_str());
         k.push_str("/");
 
-        match scalar_value {
-            // ScalarValue::Binary(limit) => {
-            //     if let Some(value) = limit {
-            //         Ok(Some(value.as_bytes().to_hex()))
-            //     } else {
-            //         Ok(None)
-            //     }
-            // }
+        match column_value.clone() {
             ScalarValue::Int32(limit) => {
                 if let Some(value) = limit {
                     let new_value = (value as u64) ^ meta_const::SIGN_MASK;
@@ -172,7 +172,7 @@ pub fn create_index(full_table_name: ObjectName, index_name: &str, serial_number
             }
             _ => return Err(MysqlError::new_global_error(
                 MYSQL_ERROR_CODE_UNKNOWN_ERROR,
-                format!("Unsupported convert scalar value to string: {:?}", scalar_value).as_str(),
+                format!("Unsupported convert scalar value to string: {:?}", column_value).as_str(),
             )),
         }
     }
@@ -365,21 +365,6 @@ pub fn scan_record_unique(schema_name: &str, column_tuple_vec: Vec<(usize, Strin
     }
 
     key(k.as_bytes())
-}
-
-pub fn create_record_column(full_table_name: ObjectName, orm_id: usize, uuid: &str) -> String {
-    let mut k = String::from("/Table/index/column");
-
-    k.push_str("/");
-    k.push_str(full_table_name.to_string().as_str());
-
-    k.push_str("/");
-    k.push_str(orm_id.to_string().as_str());
-
-    k.push_str("/");
-    k.push_str(&uuid);
-
-    k
 }
 
 pub fn parse_record_column(key: Box<[u8]>) -> (usize, usize) {
