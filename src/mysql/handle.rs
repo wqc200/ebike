@@ -148,7 +148,7 @@ impl Handle {
     }
 
     pub async fn exec_command(&mut self) {
-        let mut buf = [0; 1024*1024];
+        let mut buf = [0; 102400];
 
         loop {
             let n = match self.socket.read(&mut buf).await {
