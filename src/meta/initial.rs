@@ -14,12 +14,11 @@ use crate::meta::{def, initial, meta_const, meta_util};
 use crate::meta::def::{information_schema, mysql};
 use crate::meta::def::performance_schema;
 use crate::meta::meta_def::{SchemaDef, SchemaOptionDef, SparrowColumnDef, StatisticsColumn, TableColumnDef, TableDef, TableOptionDef};
-use crate::meta::read::get_all_full_table_names;
 use crate::mysql::error::{MysqlError, MysqlResult};
 use crate::physical_plan;
 use crate::physical_plan::insert::PhysicalPlanInsert;
 use crate::store::engine::engine_util;
-use crate::store::engine::engine_util::{ADD_ENTRY_TYPE, TableEngine};
+use crate::store::engine::engine_util::{ADD_ENTRY_TYPE, TableEngine, TableEngineFactory};
 use crate::store::reader::rocksdb::RocksdbReader;
 use crate::util::convert::{ToIdent, ToObjectName};
 
@@ -975,4 +974,42 @@ pub fn add_def_performance_schmea_global_variables(global_context: Arc<Mutex<Glo
     let total = insert.execute().unwrap();
 
     Ok(total)
+}
+
+pub fn get_all_full_table_names(global_context: Arc<Mutex<GlobalContext>>) -> MysqlResult<Vec<ObjectName>> {
+    let meta_table = information_schema::tables(global_context.clone());
+
+    let engine = TableEngineFactory::try_new_with_table(global_context.clone(), meta_table).unwrap();
+    let mut table_iterator = engine.table_iterator(None, &[]);
+
+    let projection_schema = information_schema::tables(global_context.clone()).to_schema();
+
+    let column_index_of_db_name = projection_schema.index_of(meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_TABLES_TABLE_SCHEMA).unwrap();
+    let column_index_of_table_name = projection_schema.index_of(meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_TABLES_TABLE_NAME).unwrap();
+
+    let mut table_list: Vec<ObjectName> = vec![];
+    loop {
+        match table_iterator.next() {
+            Some(item) => {
+                match item {
+                    Ok(record_batch) => {
+                        let db_name_row: &StringArray = as_string_array(record_batch.column(column_index_of_db_name));
+                        let table_name_row: &StringArray = as_string_array(record_batch.column(column_index_of_table_name));
+
+                        for row_index in 0..record_batch.num_rows() {
+                            let db_name = db_name_row.value(row_index).to_string();
+                            let table_name = table_name_row.value(row_index).to_string();
+
+                            let full_table_name = meta_util::create_full_table_name(meta_const::CATALOG_NAME, db_name.as_str(), table_name.as_str());
+                            table_list.push(full_table_name);
+                        }
+                    }
+                    Err(arrow_error) => return Err(MysqlError::from(arrow_error)),
+                }
+            }
+            None => break,
+        }
+    }
+
+    Ok(table_list)
 }

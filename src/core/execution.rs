@@ -79,7 +79,7 @@ use crate::util::convert::{convert_ident_to_lowercase, ToLowercase, ToObjectName
 use crate::variable::system::SystemVar;
 use crate::variable::user_defined::UserDefinedVar;
 use std::process::id;
-use crate::meta::read::get_all_full_table_names;
+use crate::meta::initial::get_all_full_table_names;
 use crate::physical_plan::insert::PhysicalPlanInsert;
 use crate::store::engine::engine_util::TableEngineFactory;
 use crate::meta::meta_def::TableDef;
