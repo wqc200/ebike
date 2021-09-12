@@ -16,7 +16,7 @@ use sqlparser::ast::{DataType as SQLDataType, Ident, ObjectName};
 use tokio::net::TcpListener;
 
 use crate::meta::meta_def::TableDef;
-use crate::meta::initial::initial_util;
+use meta::initial;
 use crate::mysql::error::MysqlError;
 use crate::core::global_context::GlobalContext;
 use crate::meta::meta_util;
@@ -77,7 +77,7 @@ async fn main() {
     }
 
     // table def
-    let result = initial_util::read_all_table(global_context.clone());
+    let result = initial::read_all_table(global_context.clone());
     match result {
         Ok(table_def_map) => {
             global_context.lock().unwrap().meta_cache.add_all_table(table_def_map);

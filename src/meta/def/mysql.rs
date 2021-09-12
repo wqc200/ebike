@@ -38,7 +38,7 @@ use uuid::Uuid;
 use crate::core::global_context::GlobalContext;
 use crate::meta::{meta_def, meta_const, meta_util};
 use crate::meta::meta_def::{TableColumnDef, TableDef, TableOptionDef};
-use crate::meta::initial::initial_util::create_table;
+use crate::meta::initial::create_table;
 use crate::mysql::error::MysqlResult;
 use crate::mysql::metadata::MysqlType::MYSQL_TYPE_BIT;
 use crate::physical_plan::create_table::CreateTable;

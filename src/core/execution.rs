@@ -64,7 +64,7 @@ use crate::core::udf;
 use crate::datafusion_impl::catalog::information_schema::CatalogWithInformationSchemaProvider;
 use crate::datafusion_impl::datasource::rocksdb::RocksdbTable;
 use crate::meta::{meta_const, meta_util};
-use crate::meta::initial::initial_util;
+use crate::meta::initial;
 use crate::mysql::error::{MysqlError, MysqlResult};
 use crate::mysql::metadata::MysqlType::MYSQL_TYPE_BIT;
 use crate::physical_plan;

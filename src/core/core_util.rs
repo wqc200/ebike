@@ -51,7 +51,7 @@ use crate::mysql::error::{MysqlError, MysqlResult};
 
 use crate::test;
 use crate::util;
-use crate::meta::initial::initial_util::{read_all_table, read_information_schema_schemata};
+use crate::meta::initial::{read_all_table, read_information_schema_schemata};
 use crate::store::engine::engine_util::TableEngineFactory;
 use crate::meta::meta_util::read_all_schema;
 

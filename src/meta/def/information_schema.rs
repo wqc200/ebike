@@ -41,7 +41,7 @@ use crate::store::rocksdb::db::DB;
 use crate::store::rocksdb::option::Options;
 use crate::util::convert::ToObjectName;
 use crate::meta::meta_def::{TableDef, TableColumnDef, TableOptionDef};
-use crate::meta::initial::initial_util::create_table;
+use crate::meta::initial::create_table;
 
 pub fn columns(global_context: Arc<Mutex<GlobalContext>>) -> TableDef {
     let mut idents = vec![];

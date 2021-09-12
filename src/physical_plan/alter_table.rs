@@ -16,7 +16,7 @@ use crate::core::output::FinalCount;
 use crate::core::session_context::SessionContext;
 use crate::datafusion_impl::datasource::rocksdb::RocksdbTable;
 use crate::meta::def::information_schema;
-use crate::meta::initial::initial_util;
+use crate::meta::initial;
 use crate::meta::meta_def::{SparrowColumnDef, TableDef};
 use crate::meta::meta_util;
 use crate::meta::meta_util::load_all_table;
@@ -61,7 +61,7 @@ impl AlterTable {
                 let sparrow_column = SparrowColumnDef::new(store_id, ordinal_position, column_def);
                 sparrow_column_list.push(sparrow_column.clone());
 
-                let result = initial_util::add_information_schema_columns(self.global_context.clone(), self.table.option.clone(), sparrow_column_list);
+                let result = initial::add_information_schema_columns(self.global_context.clone(), self.table.option.clone(), sparrow_column_list);
                 if let Err(mysql_error) = result {
                     return Err(mysql_error);
                 }

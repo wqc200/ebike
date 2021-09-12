@@ -20,7 +20,7 @@ use crate::core::session_context::SessionContext;
 use crate::datafusion_impl::datasource::rocksdb::RocksdbTable;
 use crate::meta::{meta_const, meta_util};
 use crate::meta::def::information_schema;
-use crate::meta::initial::initial_util;
+use crate::meta::initial;
 use crate::meta::meta_def::{SparrowColumnDef, TableDef, TableOptionDef};
 use crate::meta::meta_util::load_all_table;
 use crate::mysql::error::{MysqlError, MysqlResult};
@@ -76,8 +76,8 @@ impl CreateTable {
         table_option.with_table_type(meta_const::VALUE_OF_TABLE_OPTION_TABLE_TYPE_BASE_TABLE);
         table_option.with_column_max_store_id(column_store_id);
 
-        initial_util::add_information_schema_tables(self.global_context.clone(), table_option.clone());
-        initial_util::add_information_schema_columns(self.global_context.clone(), table_option.clone(), sparrow_column_list);
+        initial::add_information_schema_tables(self.global_context.clone(), table_option.clone());
+        initial::add_information_schema_columns(self.global_context.clone(), table_option.clone(), sparrow_column_list);
         meta_util::save_table_constraint(self.global_context.clone(), table_option.clone(), self.constraints.clone());
 
         let result = load_all_table(self.global_context.clone());

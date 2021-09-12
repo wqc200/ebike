@@ -12,7 +12,7 @@ use crate::core::output::CoreOutput;
 use crate::core::output::FinalCount;
 use crate::core::session_context::SessionContext;
 use crate::meta::{meta_const, meta_util};
-use crate::meta::initial::initial_util;
+use crate::meta::initial;
 use crate::mysql::error::{MysqlError, MysqlResult};
 
 use crate::util;
@@ -31,7 +31,7 @@ impl CreateDb {
 
         let db_name = meta_util::cut_out_schema_name(full_schema_name.clone());
 
-        initial_util::create_schema(global_context, full_schema_name);
+        initial::create_schema(global_context, full_schema_name);
         core_util::register_schema(execution_context, meta_const::CATALOG_NAME, db_name.to_string().as_str());
 
         Ok(1)

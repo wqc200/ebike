@@ -45,9 +45,9 @@ use uuid::Uuid;
 use crate::core::global_context::GlobalContext;
 use crate::core::session_context::SessionContext;
 use crate::meta::{def, initial, meta_const, meta_util};
+use crate::meta;
 use crate::meta::def::information_schema::{key_column_usage, table_constraints};
-use crate::meta::initial::initial_util::{SaveKeyColumnUsage, SaveStatistics, SaveTableConstraints};
-use crate::meta::initial::initial_util;
+use crate::meta::initial::{SaveKeyColumnUsage, SaveStatistics, SaveTableConstraints};
 use crate::meta::meta_def::{SchemaDef, SparrowColumnDef, StatisticsColumn, TableDef, TableIndexDef, TableOptionDef};
 use crate::mysql::error::{MysqlError, MysqlResult};
 use crate::physical_plan::create_table::CreateTable;
@@ -291,13 +291,13 @@ pub fn convert_to_object_name(schema_name: &str) -> ObjectName {
 }
 
 pub fn load_global_variable(global_context: Arc<Mutex<GlobalContext>>) -> MysqlResult<()> {
-    let variable_map = initial_util::read_performance_schema_global_variables(global_context.clone()).unwrap();
+    let variable_map = initial::read_performance_schema_global_variables(global_context.clone()).unwrap();
     global_context.lock().unwrap().variable.add_variable_map(variable_map);
     Ok(())
 }
 
 pub fn load_all_table(global_context: Arc<Mutex<GlobalContext>>) -> MysqlResult<()> {
-    let result = initial_util::read_all_table(global_context.clone());
+    let result = initial::read_all_table(global_context.clone());
     match result {
         Ok(table_map) => {
             global_context.lock().unwrap().meta_cache.add_all_table(table_map);
@@ -323,19 +323,19 @@ pub async fn init_meta(global_context: Arc<Mutex<GlobalContext>>) -> MysqlResult
 
     if !meta_has_create() {
         for table in init_tables.iter() {
-            initial_util::add_information_schema_tables(global_context.clone(), table.option.clone());
-            initial_util::add_information_schema_columns(global_context.clone(), table.option.clone(), table.column.sparrow_column_list.clone());
+            initial::add_information_schema_tables(global_context.clone(), table.option.clone());
+            initial::add_information_schema_columns(global_context.clone(), table.option.clone(), table.column.sparrow_column_list.clone());
             save_table_constraint(global_context.clone(), table.option.clone(), table.get_constraints().clone());
         }
 
-        initial_util::create_schema(global_context.clone(), meta_const::FULL_SCHEMA_NAME_OF_DEF_MYSQL.to_object_name());
-        initial_util::create_schema(global_context.clone(), meta_const::FULL_SCHEMA_NAME_OF_DEF_PERFORMANCE_SCHEMA.to_object_name());
+        initial::create_schema(global_context.clone(), meta_const::FULL_SCHEMA_NAME_OF_DEF_MYSQL.to_object_name());
+        initial::create_schema(global_context.clone(), meta_const::FULL_SCHEMA_NAME_OF_DEF_PERFORMANCE_SCHEMA.to_object_name());
 
-        let result = initial::initial_util::add_def_mysql_users(global_context.clone());
+        let result = meta::initial::add_def_mysql_users(global_context.clone());
         if let Err(e) = result {
             return Err(e);
         }
-        let result = initial::initial_util::add_def_performance_schmea_global_variables(global_context.clone());
+        let result = meta::initial::add_def_performance_schmea_global_variables(global_context.clone());
         if let Err(e) = result {
             return Err(e);
         }
@@ -469,7 +469,7 @@ pub fn store_add_column_serial_number(global_context: Arc<Mutex<GlobalContext>>,
 pub fn schema_name_not_allow_exist(global_context: Arc<Mutex<GlobalContext>>, session_context: &mut SessionContext, table_name: ObjectName) -> MysqlResult<()> {
     let full_table_name = meta_util::fill_up_table_name(session_context, table_name.clone()).unwrap();
 
-    let map_table_schema = initial_util::read_all_table(global_context.clone()).unwrap();
+    let map_table_schema = initial::read_all_table(global_context.clone()).unwrap();
     if map_table_schema.contains_key(&full_table_name) {
         return Err(MysqlError::new_server_error(
             1007,
@@ -484,7 +484,7 @@ pub fn schema_name_not_allow_exist(global_context: Arc<Mutex<GlobalContext>>, se
 pub fn mysql_error_unknown_table(global_context: Arc<Mutex<GlobalContext>>, session_context: &mut SessionContext, table_name: ObjectName) -> MysqlResult<()> {
     let full_table_name = meta_util::fill_up_table_name(session_context, table_name.clone()).unwrap();
 
-    let map_table_schema = initial_util::read_all_table(global_context.clone()).unwrap();
+    let map_table_schema = initial::read_all_table(global_context.clone()).unwrap();
     if !map_table_schema.contains_key(&full_table_name) {
         return Err(MysqlError::new_server_error(
             1051,
@@ -499,7 +499,7 @@ pub fn mysql_error_unknown_table(global_context: Arc<Mutex<GlobalContext>>, sess
 pub fn catalog_schema_table_name_must_exist(global_context: Arc<Mutex<GlobalContext>>, session_context: &mut SessionContext, table_name: ObjectName) -> MysqlResult<()> {
     let full_table_name = meta_util::fill_up_table_name(session_context, table_name.clone()).unwrap();
 
-    let map_table_schema = initial_util::read_all_table(global_context.clone()).unwrap();
+    let map_table_schema = initial::read_all_table(global_context.clone()).unwrap();
     if !map_table_schema.contains_key(&full_table_name) {
         return Err(MysqlError::new_server_error(
             1146,
@@ -734,7 +734,7 @@ pub fn get_table_column(table: TableDef, column_name: &str) -> Option<SparrowCol
 // }
 
 pub fn table_has_primary_key(global_context: Arc<Mutex<GlobalContext>>, full_table_name: ObjectName) -> bool {
-    let schema_table_constraints = initial_util::read_information_schema_statistics(global_context.clone()).unwrap();
+    let schema_table_constraints = initial::read_information_schema_statistics(global_context.clone()).unwrap();
     match schema_table_constraints.get(&full_table_name) {
         Some(vec_table_constraint) => {
             let a = &vec_table_constraint.to_vec().iter().any(|table_constraint| {
@@ -808,11 +808,11 @@ pub fn create_unique_index_name(columns: Vec<Ident>) -> String {
 }
 
 pub fn read_all_schema(global_context: Arc<Mutex<GlobalContext>>) -> MysqlResult<HashMap<ObjectName, SchemaDef>> {
-    initial_util::read_information_schema_schemata(global_context.clone())
+    initial::read_information_schema_schemata(global_context.clone())
 }
 
 pub fn cache_add_all_table(global_context: Arc<Mutex<GlobalContext>>) {
-    let all_table = initial_util::read_all_table(global_context.clone()).unwrap();
+    let all_table = initial::read_all_table(global_context.clone()).unwrap();
     global_context.lock().unwrap().meta_cache.add_all_table(all_table);
 }
 //

@@ -15,7 +15,7 @@ use crate::core::output::FinalCount;
 use crate::core::session_context::SessionContext;
 use crate::datafusion_impl::datasource::rocksdb::RocksdbTable;
 use crate::meta::def::information_schema;
-use crate::meta::initial::initial_util;
+use crate::meta::initial;
 use crate::meta::meta_util;
 use crate::mysql::error::{MysqlError, MysqlResult};
 use crate::physical_plan::insert::PhysicalPlanInsert;
@@ -41,7 +41,7 @@ impl DropDB {
         let db_name = self.schema_name.clone();
         let full_db_name = meta_util::fill_up_schema_name(session_context, db_name).unwrap();
 
-        initial_util::delete_db_form_information_schema(self.global_context.clone(), full_db_name);
+        initial::delete_db_form_information_schema(self.global_context.clone(), full_db_name);
 
         Ok(1)
     }
