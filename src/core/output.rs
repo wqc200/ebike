@@ -7,7 +7,7 @@ use arrow::record_batch::RecordBatch;
 use datafusion::error::DataFusionError;
 
 use crate::mysql::error::MysqlError;
-use crate::meta::def::TableDef;
+use crate::meta::meta_def::TableDef;
 use sqlparser::ast::ObjectName;
 
 pub struct FinalCount {

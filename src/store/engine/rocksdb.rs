@@ -23,7 +23,7 @@ use crate::store::reader::rocksdb::RocksdbReader;
 use crate::util;
 use crate::core::session_context::SessionContext;
 use crate::util::convert::{ToObjectName, ToIdent};
-use crate::meta::def::TableDef;
+use crate::meta::meta_def::TableDef;
 use crate::store::rocksdb::db::DB as RocksdbDB;
 
 pub struct TableEngineRocksdb {

@@ -40,7 +40,7 @@ use crate::test;
 use crate::util;
 use crate::store::rocksdb::db::Error;
 use crate::core::session_context::SessionContext;
-use crate::meta::def::TableDef;
+use crate::meta::meta_def::TableDef;
 
 pub struct Delete {
     global_context: Arc<Mutex<GlobalContext>>,

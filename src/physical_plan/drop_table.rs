@@ -14,7 +14,7 @@ use crate::core::output::CoreOutput;
 use crate::core::output::FinalCount;
 use crate::core::session_context::SessionContext;
 use crate::datafusion_impl::datasource::rocksdb::RocksdbTable;
-use crate::meta::initial::information_schema;
+use crate::meta::def::information_schema;
 use crate::meta::meta_util;
 use crate::mysql::error::{MysqlResult, MysqlError};
 use crate::physical_plan::insert::PhysicalPlanInsert;

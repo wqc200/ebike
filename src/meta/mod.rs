@@ -1,5 +1,6 @@
-pub mod cache;
 pub mod def;
+pub mod cache;
+pub mod meta_def;
 pub mod initial;
 pub mod meta_util;
 pub mod meta_const;

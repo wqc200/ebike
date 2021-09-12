@@ -41,7 +41,7 @@ use futures::Stream;
 use sqlparser::ast::ObjectName;
 
 use crate::core::global_context::GlobalContext;
-use crate::meta::{def, meta_util};
+use crate::meta::{meta_def, meta_util};
 use crate::store::reader::rocksdb::RocksdbReader;
 use crate::store::rocksdb::db::DB;
 use crate::store::rocksdb::option::{Options, ReadOptions};
@@ -51,7 +51,7 @@ use crate::util;
 #[derive(Debug, Clone)]
 pub struct SledExec {
     global_context: Arc<Mutex<GlobalContext>>,
-    table_def: def::TableDef,
+    table_def: meta_def::TableDef,
     projection: Option<Vec<usize>>,
     /// Schema after the projection has been applied
     projected_schema: SchemaRef,
@@ -63,7 +63,7 @@ impl SledExec {
     /// Create a new execution plan for reading a set of CSV files
     pub fn try_new(
         global_context: Arc<Mutex<GlobalContext>>,
-        table_def: def::TableDef,
+        table_def: meta_def::TableDef,
         projection: Option<Vec<usize>>,
         batch_size: usize,
         filters: &[Expr],

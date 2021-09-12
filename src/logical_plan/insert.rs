@@ -24,7 +24,7 @@ use crate::core::global_context::GlobalContext;
 use crate::core::output::CoreOutput;
 use crate::core::output::FinalCount;
 use crate::core::session_context::SessionContext;
-use crate::meta::def::{TableDef, IndexDef};
+use crate::meta::meta_def::{TableDef, IndexDef};
 use crate::meta::meta_util;
 use crate::mysql::error::{MysqlError, MysqlResult};
 use crate::store::engine::engine_util;

@@ -27,7 +27,7 @@ use crate::util::dbkey::CreateScanKey;
 use sqlparser::ast::ObjectName;
 use crate::mysql::error::MysqlError;
 use crate::util::convert::{ToObjectName, ToIdent};
-use crate::meta::def::TableDef;
+use crate::meta::meta_def::TableDef;
 
 pub struct SledReader {
     global_context: Arc<Mutex<GlobalContext>>,

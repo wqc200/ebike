@@ -9,7 +9,7 @@ use crate::mysql::error::{MysqlResult, MysqlError};
 use crate::meta::meta_const::MYSQL_ERROR_CODE_UNKNOWN_ERROR;
 use sqlparser::ast::{ObjectName, Ident};
 use crate::meta::meta_const;
-use crate::meta::def::{TableDef, TableIndexDef};
+use crate::meta::meta_def::{TableDef, TableIndexDef};
 use std::collections::HashMap;
 
 pub fn scan_column_name(schema_name: &str) -> Box<[u8]> {

@@ -1,5 +1,5 @@
-use std::convert::TryFrom;
 use std::collections::{HashMap, HashSet};
+use std::convert::TryFrom;
 use std::ops::{Deref, DerefMut};
 use std::sync::{Arc, Mutex};
 
@@ -12,20 +12,20 @@ use datafusion::scalar::ScalarValue;
 use sqlparser::ast::{ColumnDef as SQLColumnDef, Ident, ObjectName, SqlOption, TableConstraint, Value};
 
 use crate::core::core_util;
+use crate::core::core_util::register_all_table;
 use crate::core::global_context::GlobalContext;
 use crate::core::output::CoreOutput;
 use crate::core::output::FinalCount;
 use crate::core::session_context::SessionContext;
 use crate::datafusion_impl::datasource::rocksdb::RocksdbTable;
 use crate::meta::{meta_const, meta_util};
-use crate::meta::def::{TableDef, SparrowColumnDef, TableOptionDef};
-use crate::meta::initial::{information_schema, initial_util};
+use crate::meta::def::information_schema;
+use crate::meta::initial::initial_util;
+use crate::meta::meta_def::{SparrowColumnDef, TableDef, TableOptionDef};
+use crate::meta::meta_util::load_all_table;
 use crate::mysql::error::{MysqlError, MysqlResult};
 use crate::physical_plan::insert::PhysicalPlanInsert;
-
 use crate::util;
-use crate::meta::meta_util::load_all_table;
-use crate::core::core_util::register_all_table;
 
 pub struct CreateTable {
     global_context: Arc<Mutex<GlobalContext>>,

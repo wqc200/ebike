@@ -36,8 +36,8 @@ use tempdir::TempDir;
 use uuid::Uuid;
 
 use crate::core::global_context::GlobalContext;
-use crate::meta::{def, meta_const, meta_util};
-use crate::meta::def::{TableColumnDef, TableDef, TableOptionDef};
+use crate::meta::{meta_def, meta_const, meta_util};
+use crate::meta::meta_def::{TableColumnDef, TableDef, TableOptionDef};
 use crate::meta::initial::initial_util::create_table;
 use crate::mysql::error::MysqlResult;
 use crate::mysql::metadata::MysqlType::MYSQL_TYPE_BIT;
@@ -49,7 +49,7 @@ use crate::store::rocksdb::db::DB;
 use crate::store::rocksdb::option::Options;
 use crate::util::convert::{ToIdent, ToObjectName};
 
-pub fn users(global_context: Arc<Mutex<GlobalContext>>) -> def::TableDef {
+pub fn users(global_context: Arc<Mutex<GlobalContext>>) -> meta_def::TableDef {
     let sql_column_list = vec![
         meta_util::create_sql_column("Host", SQLDataType::Varchar(Some(512)), ColumnOption::NotNull),
         meta_util::create_sql_column("User", SQLDataType::Varchar(Some(512)), ColumnOption::NotNull),

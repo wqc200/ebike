@@ -1,12 +1,12 @@
 use crate::store::engine::engine_util::TableEngineFactory;
 use std::sync::{Arc, Mutex};
 use crate::core::global_context::GlobalContext;
-use crate::meta::initial::information_schema;
+use crate::meta::def::information_schema;
 use sqlparser::ast::{Assignment, BinaryOperator, ColumnDef as SQLColumnDef, ColumnOption, ColumnOptionDef, DataType as SQLDataType, Expr as SQLExpr, Ident, ObjectName, SqlOption, TableConstraint, Value};
 use crate::meta::{meta_const, meta_util};
 use std::collections::HashMap;
 use arrow::array::{as_primitive_array, as_string_array, Int32Array, StringArray};
-use crate::meta::def::{SparrowColumnDef, StatisticsColumn};
+use crate::meta::meta_def::{SparrowColumnDef, StatisticsColumn};
 use crate::mysql::error::{MysqlError, MysqlResult};
 use datafusion::catalog::TableReference;
 use datafusion::logical_plan::Expr as DatafusionExpr;

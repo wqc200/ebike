@@ -10,9 +10,10 @@ use futures::StreamExt;
 use sqlparser::ast::{ColumnDef as SQLColumnDef, ColumnDef, ColumnOption, Ident, ObjectName, SqlOption, TableConstraint, Value};
 
 use crate::core::global_context::GlobalContext;
-use crate::meta::{initial, meta_const, meta_util};
-use crate::meta::def::{SchemaDef, SchemaOptionDef, SparrowColumnDef, StatisticsColumn, TableColumnDef, TableDef, TableOptionDef};
-use crate::meta::initial::{information_schema, mysql, performance_schema};
+use crate::meta::{def, initial, meta_const, meta_util};
+use crate::meta::def::{information_schema, mysql};
+use crate::meta::def::performance_schema;
+use crate::meta::meta_def::{SchemaDef, SchemaOptionDef, SparrowColumnDef, StatisticsColumn, TableColumnDef, TableDef, TableOptionDef};
 use crate::meta::read::get_all_full_table_names;
 use crate::mysql::error::{MysqlError, MysqlResult};
 use crate::physical_plan;
@@ -49,7 +50,7 @@ pub fn create_table(global_context: Arc<Mutex<GlobalContext>>, schema_name: &str
 
 pub fn create_schema(global_context: Arc<Mutex<GlobalContext>>, full_schema_name: ObjectName) -> MysqlResult<u64> {
     let mut column_name_list = vec![];
-    for sql_column in initial::information_schema::schemata(global_context.clone()).column.sql_column_list {
+    for sql_column in def::information_schema::schemata(global_context.clone()).column.sql_column_list {
         column_name_list.push(sql_column.name.to_string());
     }
 
@@ -66,7 +67,7 @@ pub fn create_schema(global_context: Arc<Mutex<GlobalContext>>, full_schema_name
     column_value_map.insert("DEFAULT_ENCRYPTION".to_ident(), ScalarValue::Utf8(Some("NO".to_string())));
     column_value_map_list.push(column_value_map);
 
-    let table_def = initial::information_schema::schemata(global_context.clone());
+    let table_def = def::information_schema::schemata(global_context.clone());
     let insert = physical_plan::insert::PhysicalPlanInsert::new(
         global_context.clone(),
         table_def,
@@ -111,7 +112,7 @@ impl SaveTableConstraints {
     }
 
     pub fn save(&mut self) -> MysqlResult<u64> {
-        let table_def = initial::information_schema::table_constraints(self.global_context.clone());
+        let table_def = def::information_schema::table_constraints(self.global_context.clone());
 
         let mut column_name_list = vec![];
         for column_def in table_def.get_columns() {
@@ -169,7 +170,7 @@ impl SaveKeyColumnUsage {
     }
 
     pub fn save(&mut self) -> MysqlResult<u64> {
-        let table_def = initial::information_schema::key_column_usage(self.global_context.clone());
+        let table_def = def::information_schema::key_column_usage(self.global_context.clone());
 
         let mut column_name_list = vec![];
         for column_def in table_def.get_columns() {
@@ -221,10 +222,10 @@ impl SaveStatistics {
     }
 
     pub fn save(&mut self) -> MysqlResult<u64> {
-        let table_def = initial::information_schema::statistics(self.global_context.clone());
+        let table_def = def::information_schema::statistics(self.global_context.clone());
 
         let mut column_name_list = vec![];
-        for column_def in initial::information_schema::statistics(self.global_context.clone()).get_columns() {
+        for column_def in def::information_schema::statistics(self.global_context.clone()).get_columns() {
             column_name_list.push(column_def.sql_column.name.to_string());
         }
 
@@ -296,7 +297,7 @@ pub fn delete_db_form_information_schema(global_context: Arc<Mutex<GlobalContext
 }
 
 pub fn add_information_schema_tables(global_context: Arc<Mutex<GlobalContext>>, table_option: TableOptionDef) -> MysqlResult<u64> {
-    let table_of_def_information_schema_tables = initial::information_schema::tables(global_context.clone());
+    let table_of_def_information_schema_tables = def::information_schema::tables(global_context.clone());
 
     let mut column_name_list = vec![];
     for sql_column in table_of_def_information_schema_tables.column.sql_column_list.clone() {
@@ -336,7 +337,7 @@ pub fn add_information_schema_tables(global_context: Arc<Mutex<GlobalContext>>, 
 }
 
 pub fn add_information_schema_columns(global_context: Arc<Mutex<GlobalContext>>, table_option: TableOptionDef, sparrow_column_list: Vec<SparrowColumnDef>) -> MysqlResult<u64> {
-    let meta_table = initial::information_schema::columns(global_context.clone());
+    let meta_table = def::information_schema::columns(global_context.clone());
 
     let mut column_name_list = vec![];
     for sql_column in &meta_table.column.sql_column_list {

@@ -15,7 +15,7 @@ use log4rs;
 use sqlparser::ast::{DataType as SQLDataType, Ident, ObjectName};
 use tokio::net::TcpListener;
 
-use crate::meta::def::TableDef;
+use crate::meta::meta_def::TableDef;
 use crate::meta::initial::initial_util;
 use crate::mysql::error::MysqlError;
 use crate::core::global_context::GlobalContext;

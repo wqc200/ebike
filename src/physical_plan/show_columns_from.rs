@@ -19,7 +19,7 @@ use crate::core::output::FinalCount;
 use crate::core::core_util;
 use crate::core::session_context::SessionContext;
 use crate::datafusion_impl::datasource::rocksdb::RocksdbTable;
-use crate::meta::initial::information_schema;
+use crate::meta::def::information_schema;
 use crate::meta::{meta_util, scalar_value};
 use crate::mysql::error::{MysqlResult, MysqlError};
 use crate::mysql::metadata;

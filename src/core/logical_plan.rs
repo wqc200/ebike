@@ -8,10 +8,10 @@ use datafusion::execution::context::ExecutionContext;
 use datafusion::logical_plan::{Expr, LogicalPlan, LogicalPlanBuilder};
 use sqlparser::ast::{AlterTableOperation, Assignment, ColumnDef, Ident, ObjectName, SetVariableValue, SqlOption, TableConstraint};
 
-use crate::meta::{def, meta_util};
+use crate::meta::{meta_def, meta_util};
 use std::collections::HashMap;
 use datafusion::scalar::ScalarValue;
-use crate::meta::def::{TableDef, IndexDef};
+use crate::meta::meta_def::{TableDef, IndexDef};
 
 #[derive(Clone)]
 pub struct CoreSelectFrom {

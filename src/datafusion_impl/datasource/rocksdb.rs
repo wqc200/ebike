@@ -17,16 +17,16 @@ use sqlparser::ast::ObjectName;
 
 use crate::core::global_context::GlobalContext;
 use crate::datafusion_impl::physical_plan::rocksdb::RocksdbExec;
-use crate::meta::{def, meta_util};
+use crate::meta::{meta_def, meta_util};
 
 pub struct RocksdbTable {
     core_context: Arc<Mutex<GlobalContext>>,
-    table: def::TableDef,
+    table: meta_def::TableDef,
 }
 
 impl RocksdbTable {
     #[allow(missing_docs)]
-    pub fn new(core_context: Arc<Mutex<GlobalContext>>, table: def::TableDef) -> Self {
+    pub fn new(core_context: Arc<Mutex<GlobalContext>>, table: meta_def::TableDef) -> Self {
         Self {
             core_context,
             table,

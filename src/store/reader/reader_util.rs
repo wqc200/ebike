@@ -10,9 +10,9 @@ use sqlparser::ast::{ObjectName, TableConstraint};
 
 use crate::core::core_util;
 use crate::core::global_context::GlobalContext;
-use crate::meta::def::SparrowColumnDef;
+use crate::meta::meta_def::SparrowColumnDef;
 use crate::meta::meta_util;
-use crate::meta::def::TableDef;
+use crate::meta::meta_def::TableDef;
 use crate::mysql::error::{MysqlError, MysqlResult};
 use crate::store::engine::engine_util;
 use crate::util::convert::{ToIdent, ToObjectName};

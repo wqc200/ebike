@@ -18,7 +18,7 @@ use sqlparser::ast::ObjectName;
 
 use crate::datafusion_impl::physical_plan::sled::SledExec;
 use crate::core::global_context::GlobalContext;
-use crate::meta::def::TableDef;
+use crate::meta::meta_def::TableDef;
 
 pub struct SledTable {
     global_context: Arc<Mutex<GlobalContext>>,

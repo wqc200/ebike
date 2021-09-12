@@ -10,25 +10,25 @@ use parquet::data_type::AsBytes;
 use sled::Db as sledDb;
 use sqlparser::ast::{Assignment, ColumnDef, ColumnOption, ColumnOptionDef, DataType as SQLDataType, Ident, ObjectName, SqlOption, TableConstraint, Value};
 
-use crate::meta::{def, meta_util};
+use crate::meta::{meta_def, meta_util};
 use crate::mysql::error::{MysqlError, MysqlResult};
 use crate::store::rocksdb::db::DB as rocksdbDB;
 use crate::test;
 use crate::util;
-use crate::meta::def::TableDef;
+use crate::meta::meta_def::TableDef;
 
 #[derive(Debug, Clone)]
 pub struct MetaCache {
-    schema_map: HashMap<ObjectName, def::SchemaDef>,
-    table_map: HashMap<ObjectName, def::TableDef>,
+    schema_map: HashMap<ObjectName, meta_def::SchemaDef>,
+    table_map: HashMap<ObjectName, meta_def::TableDef>,
     /// Map the column name to an serial number
     serial_number_map: HashMap<ObjectName, HashMap<Ident, usize>>,
 }
 
 impl MetaCache {
     pub fn new() -> Self {
-        let schema_map: HashMap<ObjectName, def::SchemaDef> = HashMap::new();
-        let table_map: HashMap<ObjectName, def::TableDef> = HashMap::new();
+        let schema_map: HashMap<ObjectName, meta_def::SchemaDef> = HashMap::new();
+        let table_map: HashMap<ObjectName, meta_def::TableDef> = HashMap::new();
         let serial_number_map: HashMap<ObjectName, HashMap<Ident, usize>> = HashMap::new();
 
         Self {
@@ -38,24 +38,24 @@ impl MetaCache {
         }
     }
 
-    pub fn add_all_table(&mut self, table_def_map: HashMap<ObjectName, def::TableDef>) {
+    pub fn add_all_table(&mut self, table_def_map: HashMap<ObjectName, meta_def::TableDef>) {
         for (schema_name, table_def) in table_def_map.iter() {
             self.add_table(schema_name.clone(), table_def.clone());
         }
     }
 
-    pub fn add_all_schema(&mut self, schema_map: HashMap<ObjectName, def::SchemaDef>) {
+    pub fn add_all_schema(&mut self, schema_map: HashMap<ObjectName, meta_def::SchemaDef>) {
         for (schema_name, schema_def) in schema_map.iter() {
             self.add_schema(schema_name.clone(), schema_def.clone());
         }
     }
 
-    pub fn add_table(&mut self, full_table_name: ObjectName, table: def::TableDef) {
+    pub fn add_table(&mut self, full_table_name: ObjectName, table: meta_def::TableDef) {
         let t = self.table_map.entry(full_table_name.clone()).or_insert(table.clone());
         *t = table;
     }
 
-    pub fn add_schema(&mut self, full_schema_name: ObjectName, schema_def: def::SchemaDef) {
+    pub fn add_schema(&mut self, full_schema_name: ObjectName, schema_def: meta_def::SchemaDef) {
         self.schema_map.entry(full_schema_name.clone()).or_insert(schema_def.clone());
         ()
     }
@@ -98,11 +98,11 @@ impl MetaCache {
         self.table_map.remove(&schema_name).unwrap();
     }
 
-    pub fn get_schema_map(&self) -> HashMap<ObjectName, def::SchemaDef> {
+    pub fn get_schema_map(&self) -> HashMap<ObjectName, meta_def::SchemaDef> {
         self.schema_map.clone()
     }
 
-    pub fn get_table_map(&self) -> HashMap<ObjectName, def::TableDef> {
+    pub fn get_table_map(&self) -> HashMap<ObjectName, meta_def::TableDef> {
         self.table_map.clone()
     }
 

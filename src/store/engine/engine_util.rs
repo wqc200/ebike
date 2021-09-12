@@ -18,7 +18,7 @@ use crate::mysql::error::{MysqlError, MysqlResult};
 
 use super::rocksdb;
 use super::sled;
-use crate::meta::def::TableDef;
+use crate::meta::meta_def::TableDef;
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum ADD_ENTRY_TYPE {

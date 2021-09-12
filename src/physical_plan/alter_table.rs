@@ -9,22 +9,22 @@ use datafusion::logical_plan::{Expr, LogicalPlan};
 use datafusion::scalar::ScalarValue;
 use sqlparser::ast::{AlterTableOperation, ColumnDef, Ident, ObjectName, SqlOption, TableConstraint, Value};
 
+use crate::core::core_util::register_all_table;
 use crate::core::global_context::GlobalContext;
 use crate::core::output::CoreOutput;
 use crate::core::output::FinalCount;
 use crate::core::session_context::SessionContext;
 use crate::datafusion_impl::datasource::rocksdb::RocksdbTable;
-use crate::meta::initial::{information_schema, initial_util};
+use crate::meta::def::information_schema;
+use crate::meta::initial::initial_util;
+use crate::meta::meta_def::{SparrowColumnDef, TableDef};
 use crate::meta::meta_util;
+use crate::meta::meta_util::load_all_table;
 use crate::mysql::error::{MysqlError, MysqlResult};
 use crate::physical_plan::insert::PhysicalPlanInsert;
 use crate::store::engine::engine_util;
-
-use crate::util;
-use crate::meta::def::{SparrowColumnDef, TableDef};
-use crate::meta::meta_util::load_all_table;
 use crate::store::engine::engine_util::TableEngineFactory;
-use crate::core::core_util::register_all_table;
+use crate::util;
 
 pub struct AlterTable {
     global_context: Arc<Mutex<GlobalContext>>,

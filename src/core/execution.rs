@@ -82,7 +82,7 @@ use std::process::id;
 use crate::meta::read::get_all_full_table_names;
 use crate::physical_plan::insert::PhysicalPlanInsert;
 use crate::store::engine::engine_util::TableEngineFactory;
-use crate::meta::def::TableDef;
+use crate::meta::meta_def::TableDef;
 
 /// Execution context for registering data sources and executing queries
 pub struct Execution {

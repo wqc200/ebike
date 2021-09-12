@@ -41,7 +41,7 @@ use crate::meta::meta_util;
 use crate::util::convert::ToObjectName;
 use crate::store::engine::engine_util::StoreEngineFactory;
 use crate::util::dbkey::create_column_key;
-use crate::meta::def::TableDef;
+use crate::meta::meta_def::TableDef;
 
 pub struct Update {
     global_context: Arc<Mutex<GlobalContext>>,

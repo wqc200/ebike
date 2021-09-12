@@ -22,7 +22,7 @@ use super::response::ResponsePayload;
 use crate::mysql::metadata::MysqlType::MYSQL_TYPE_STRING;
 use num::traits::AsPrimitive;
 use crate::mysql::mysql_util;
-use crate::meta::def::SparrowColumnDef;
+use crate::meta::meta_def::SparrowColumnDef;
 use crate::meta::{meta_util, meta_const};
 use sqlparser::ast::{ColumnOption, ObjectName};
 

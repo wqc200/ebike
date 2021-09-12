@@ -19,7 +19,7 @@ use crate::core::output::FinalCount;
 use crate::core::core_util;
 use crate::core::session_context::SessionContext;
 use crate::datafusion_impl::datasource::rocksdb::RocksdbTable;
-use crate::meta::initial::information_schema;
+use crate::meta::def::information_schema;
 use crate::meta::{meta_util, scalar_value};
 use crate::mysql::error::{MysqlResult, MysqlError};
 use crate::mysql::metadata;
@@ -28,7 +28,7 @@ use crate::physical_plan::insert::PhysicalPlanInsert;
 use crate::util;
 use crate::mysql::metadata::ArrayCell;
 use arrow::compute::not;
-use crate::meta::def::TableDef;
+use crate::meta::meta_def::TableDef;
 
 pub struct ComFieldList {
     global_context: Arc<Mutex<GlobalContext>>,

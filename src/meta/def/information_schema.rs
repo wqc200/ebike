@@ -34,13 +34,13 @@ use tempdir::TempDir;
 use uuid::Uuid;
 
 use crate::core::global_context::GlobalContext;
-use crate::meta::{def, meta_const, meta_util};
+use crate::meta::{meta_def, meta_const, meta_util};
 use crate::physical_plan::create_table::CreateTable;
 use crate::store::reader::rocksdb::RocksdbReader;
 use crate::store::rocksdb::db::DB;
 use crate::store::rocksdb::option::Options;
 use crate::util::convert::ToObjectName;
-use crate::meta::def::{TableDef, TableColumnDef, TableOptionDef};
+use crate::meta::meta_def::{TableDef, TableColumnDef, TableOptionDef};
 use crate::meta::initial::initial_util::create_table;
 
 pub fn columns(global_context: Arc<Mutex<GlobalContext>>) -> TableDef {

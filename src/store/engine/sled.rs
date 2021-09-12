@@ -20,7 +20,7 @@ use super::engine_util::TableEngine;
 use crate::core::session_context::SessionContext;
 use sqlparser::ast::ObjectName;
 use datafusion::scalar::ScalarValue;
-use crate::meta::def::TableDef;
+use crate::meta::meta_def::TableDef;
 use crate::store::reader::sled::SledReader;
 use crate::store::engine::engine_util::StoreEngine;
 
