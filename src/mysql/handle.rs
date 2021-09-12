@@ -28,6 +28,8 @@ use datafusion::scalar::ScalarValue;
 use futures::{SinkExt, Future};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::io::{AsyncWriteExt, AsyncReadExt};
+use tokio_stream::StreamExt;
+use tokio_util::codec::{FramedRead, BytesCodec, Decoder};
 
 use crate::core::global_context::GlobalContext;
 use crate::core::execution::Execution;
@@ -148,7 +150,7 @@ impl Handle {
     }
 
     pub async fn exec_command(&mut self) {
-        let mut buf = [0; 102400];
+        let mut buf = [0; 10240];
 
         loop {
             let n = match self.socket.read(&mut buf).await {

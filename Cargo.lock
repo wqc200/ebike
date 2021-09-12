@@ -1743,6 +1743,8 @@ dependencies = [
  "sqlparser",
  "tempdir",
  "tokio",
+ "tokio-stream",
+ "tokio-util",
  "toml",
  "uuid",
 ]
@@ -1928,6 +1930,22 @@ checksum = "7b2f3f698253f03119ac0102beaa64f67a67e08074d03a22d18784104543727f"
 dependencies = [
  "futures-core",
  "pin-project-lite",
+ "tokio",
+]
+
+[[package]]
+name = "tokio-util"
+version = "0.6.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "08d3725d3efa29485e87311c5b699de63cde14b00ed4d256b8318aa30ca452cd"
+dependencies = [
+ "bytes 1.0.1",
+ "futures-core",
+ "futures-io",
+ "futures-sink",
+ "log 0.4.14",
+ "pin-project-lite",
+ "slab",
  "tokio",
 ]
 

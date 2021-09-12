@@ -36,6 +36,9 @@ lexical = "5.2"
 log = "0.4.8"
 log4rs = "0.10.0"
 tokio = { version = "1.11.0", features = ["full"] }
+tokio-util = { version = "0.6", features = ["full"] }
+tokio-stream = { version = "0.1" }
+
 futures = "0.3"
 env_logger = "0.3"
 byteorder = "1.2.7"
@@ -50,7 +53,7 @@ datafusion = { path = "components/arrow-datafusion/datafusion" }
 arrow = { version = "5.1", features = ["prettyprint"] }
 parquet = { version = "5.1", features = ["arrow"] }
 libc = "0.2"
-librocksdb-sys = { path = "components/rust-rocksdb/librocksdb-sys"}
+librocksdb-sys = { path = "components/rust-rocksdb/librocksdb-sys" }
 packed_simd = { version = "0.3.1", optional = true }
 hex = "0.4"
 num = "0.2"
