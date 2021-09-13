@@ -443,7 +443,6 @@ pub fn add_information_schema_columns(global_context: Arc<Mutex<GlobalContext>>,
     total
 }
 
-
 pub fn read_all_table(global_context: Arc<Mutex<GlobalContext>>) -> MysqlResult<HashMap<ObjectName, TableDef>> {
     let schema_table_sql_options = read_information_schema_tables(global_context.clone()).unwrap();
     let schema_table_columns = read_information_schema_columns(global_context.clone()).unwrap();
@@ -753,64 +752,6 @@ pub fn read_performance_schema_global_variables(global_context: Arc<Mutex<Global
 
     Ok(variable_map.clone())
 }
-//
-// pub fn read_column_index(global_context: Arc<Mutex<GlobalContext>>) -> MysqlResult<HashMap<ObjectName, HashMap<Ident, usize>>> {
-//     let full_table_name = meta_const::FULL_TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_COLUMNS.to_object_name();
-//
-//     let engine = engine_util::TableEngineFactory::try_new_with_table_name(global_context.clone(), full_table_name.clone()).unwrap();
-//     let mut iterator = engine.table_iterator(None, &[]);
-//
-//     let projection_schema = information_schema::table_columns().to_schema();
-//
-//     let column_index_of_db_name = projection_schema.index_of(meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_COLUMNS_TABLE_SCHEMA).unwrap();
-//     let column_index_of_table_name = projection_schema.index_of(meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_COLUMNS_TABLE_NAME).unwrap();
-//     let column_index_of_column_name = projection_schema.index_of(meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_COLUMNS_COLUMN_NAME).unwrap();
-//
-//     let mut schema_column_index: HashMap<ObjectName, HashMap<Ident, usize>> = HashMap::new();
-//     loop {
-//         match iterator.next() {
-//             Some(item) => {
-//                 match item {
-//                     Ok(record_batch) => {
-//                         let column_of_db_name: &StringArray = as_string_array(record_batch.column(column_index_of_db_name));
-//                         let column_of_table_name: &StringArray = as_string_array(record_batch.column(column_index_of_table_name));
-//                         let column_of_column_name: &StringArray = as_string_array(record_batch.column(column_index_of_column_name));
-//
-//                         for row_index in 0..record_batch.num_rows() {
-//                             let db_name = column_of_db_name.value(row_index).to_string();
-//                             let table_name = column_of_table_name.value(row_index).to_string();
-//                             let column_name = column_of_column_name.value(row_index).to_string();
-//
-//                             let full_table_name = meta_util::create_full_table_name(meta_const::CATALOG_NAME, db_name.as_str(), table_name.as_str());
-//                             let column_name = column_name.to_ident();
-//
-//                             let column_index = meta_util::store_get_column_id(global_context.clone(), full_table_name.clone(), column_name.clone());
-//                             match column_index {
-//                                 Ok(column_index) => {
-//                                     match column_index {
-//                                         Some(column_index) => {
-//                                             schema_column_index
-//                                                 .entry(full_table_name.clone()).or_insert(HashMap::new())
-//                                                 .entry(column_name.clone()).or_insert(column_index);
-//                                         }
-//                                         _ => {}
-//                                     }
-//                                 }
-//                                 Err(mysql_error) => {
-//                                     return Err(mysql_error);
-//                                 }
-//                             }
-//                         }
-//                     }
-//                     Err(arrow_error) => return Err(MysqlError::from(arrow_error)),
-//                 }
-//             }
-//             None => break,
-//         }
-//     }
-//
-//     Ok(schema_column_index.clone())
-// }
 
 pub fn add_def_mysql_users(global_context: Arc<Mutex<GlobalContext>>) -> MysqlResult<u64> {
     let table_of_def_mysql_users = mysql::users(global_context.clone());

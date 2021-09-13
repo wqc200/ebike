@@ -62,10 +62,6 @@ use crate::util::convert::{ToIdent, ToObjectName};
 
 use super::super::util;
 
-// pub const INFORMATION_SCHEMA_NUMBER_SCHEMATA: &str = "information_schema.number_schemata";
-// pub const INFORMATION_SCHEMA_NUMBER_TABLE: &str = "information_schema.number_table";
-// pub const INFORMATION_SCHEMA_NUMBER_COLUMN: &str = "information_schema.number_column";
-
 pub fn get_table(global_context: Arc<Mutex<GlobalContext>>, full_table_name: ObjectName) -> MysqlResult<TableDef> {
     let gc = global_context.lock().unwrap();
     let result = gc.meta_cache.get_table(full_table_name.clone());
@@ -268,14 +264,6 @@ pub fn fill_up_column_name(session_context: &mut SessionContext, mut original_co
     Ok(full_column_name)
 }
 
-// pub fn convert_to_table_reference<'a>(full_table_name: &'a ObjectName) -> TableReference<'a> {
-//     let catalog = full_table_name.0[0].value.clone();
-//     let schema = full_table_name.0[1].value.clone();
-//     let table = full_table_name.0[2].value.clone();
-//     let tables_reference = TableReference::Full { catalog: catalog.as_str(), schema: schema.as_str(), table: table.as_str() };
-//     tables_reference
-// }
-
 pub fn convert_to_object_name(schema_name: &str) -> ObjectName {
     let mut object_names: Vec<&str> = schema_name.split(".").collect();
 
@@ -437,33 +425,6 @@ pub fn store_add_column_serial_number(global_context: Arc<Mutex<GlobalContext>>,
     store_engine.put_key(key, value.as_bytes());
     Ok(())
 }
-//
-// pub fn cache_add_column_serial_number(global_context: Arc<Mutex<GlobalContext>>, full_table_name: ObjectName, columns: Vec<SQLColumnDef>) {
-//     for column_def in columns {
-//         let column_name = column_def.name;
-//
-//         let result = store_get_column_id(global_context.clone(), full_table_name.clone(), column_name.clone());
-//         let orm_id = match result {
-//             Ok(result) => {
-//                 match result {
-//                     None => {
-//                         let message = format!("table column store serial_number not found, table: {}, column: {}", full_table_name, column_name);
-//                         log::error!("{}", message);
-//                         panic!(message)
-//                     }
-//                     Some(value) => {
-//                         value
-//                     }
-//                 }
-//             }
-//             Err(e) => {
-//                 log::error!("{}", e);
-//                 panic!(e)
-//             }
-//         };
-//         global_context.lock().unwrap().meta_cache.add_serial_number(full_table_name.clone(), column_name.clone(), orm_id);
-//     }
-// }
 
 pub fn schema_name_not_allow_exist(global_context: Arc<Mutex<GlobalContext>>, session_context: &mut SessionContext, table_name: ObjectName) -> MysqlResult<()> {
     let full_table_name = meta_util::fill_up_table_name(session_context, table_name.clone()).unwrap();
@@ -489,21 +450,6 @@ pub fn mysql_error_unknown_table(global_context: Arc<Mutex<GlobalContext>>, sess
             1051,
             "42S02",
             format!("Unknown table '{}'", table_name.to_string()).as_str(),
-        ));
-    }
-
-    Ok(())
-}
-
-pub fn catalog_schema_table_name_must_exist(global_context: Arc<Mutex<GlobalContext>>, session_context: &mut SessionContext, table_name: ObjectName) -> MysqlResult<()> {
-    let full_table_name = meta_util::fill_up_table_name(session_context, table_name.clone()).unwrap();
-
-    let map_table_schema = initial::read_all_table(global_context.clone()).unwrap();
-    if !map_table_schema.contains_key(&full_table_name) {
-        return Err(MysqlError::new_server_error(
-            1146,
-            "42S02",
-            format!("Table '{}' doesn't exist", table_name.to_string()).as_str(),
         ));
     }
 
@@ -549,81 +495,9 @@ pub fn text_to_sql_data_type(text: &str) -> Result<SQLDataType> {
     }
 }
 
-pub fn sql_data_type_to_expr(sql_type: &SQLDataType) -> Result<(Expr, Expr, Expr, Expr, Expr)> {
-    match sql_type {
-        SQLDataType::SmallInt => Ok((
-            Expr::Literal(ScalarValue::Utf8(Some(meta_const::MYSQL_DATA_TYPE_SMALLINT.to_string()))),
-            Expr::Literal(ScalarValue::UInt64(None)),
-            Expr::Literal(ScalarValue::UInt64(None)),
-            Expr::Literal(ScalarValue::UInt64(Some(5))),
-            Expr::Literal(ScalarValue::UInt64(Some(0))),
-        )),
-        SQLDataType::Int => Ok((
-            Expr::Literal(ScalarValue::Utf8(Some(meta_const::MYSQL_DATA_TYPE_INT.to_string()))),
-            Expr::Literal(ScalarValue::UInt64(None)),
-            Expr::Literal(ScalarValue::UInt64(None)),
-            Expr::Literal(ScalarValue::UInt64(Some(10))),
-            Expr::Literal(ScalarValue::UInt64(Some(0))),
-        )),
-        SQLDataType::BigInt => Ok((
-            Expr::Literal(ScalarValue::Utf8(Some(meta_const::MYSQL_DATA_TYPE_BIGINT.to_string()))),
-            Expr::Literal(ScalarValue::UInt64(None)),
-            Expr::Literal(ScalarValue::UInt64(None)),
-            Expr::Literal(ScalarValue::UInt64(Some(19))),
-            Expr::Literal(ScalarValue::UInt64(Some(0))),
-        )),
-        SQLDataType::Decimal(percision, numeric_scale) => Ok((
-            Expr::Literal(ScalarValue::Utf8(Some(meta_const::MYSQL_DATA_TYPE_DECIMAL.to_string()))),
-            Expr::Literal(ScalarValue::UInt64(None)),
-            Expr::Literal(ScalarValue::UInt64(None)),
-            Expr::Literal(ScalarValue::UInt64(percision.clone())),
-            Expr::Literal(ScalarValue::UInt64(numeric_scale.clone())),
-        )),
-        SQLDataType::Char(character_maximum_length) => {
-            let character_octet_length = match character_maximum_length.clone() {
-                Some(length) => Some(length * 4),
-                None => None,
-            };
-
-            Ok((
-                Expr::Literal(ScalarValue::Utf8(Some(meta_const::MYSQL_DATA_TYPE_CHAR.to_string()))),
-                Expr::Literal(ScalarValue::UInt64(character_maximum_length.clone())),
-                Expr::Literal(ScalarValue::UInt64(character_octet_length)),
-                Expr::Literal(ScalarValue::UInt64(None)),
-                Expr::Literal(ScalarValue::UInt64(None)),
-            ))
-        }
-        SQLDataType::Varchar(character_maximum_length) => {
-            let character_octet_length = match character_maximum_length.clone() {
-                Some(length) => Some(length * 4),
-                None => None,
-            };
-
-            Ok((
-                Expr::Literal(ScalarValue::Utf8(Some(meta_const::MYSQL_DATA_TYPE_CHAR.to_string()))),
-                Expr::Literal(ScalarValue::UInt64(character_maximum_length.clone())),
-                Expr::Literal(ScalarValue::UInt64(character_octet_length)),
-                Expr::Literal(ScalarValue::UInt64(None)),
-                Expr::Literal(ScalarValue::UInt64(None)),
-            ))
-        }
-        _ => Err(DataFusionError::Execution(format!(
-            "Unsupported data type: {:?}.",
-            sql_type
-        ))),
-    }
-}
-
 /// if the scalar value is number, add 0 before the number, until the number lenth is 19
 pub fn convert_scalar_value_to_index_string(scalar_value: ScalarValue) -> MysqlResult<Option<String>> {
     match scalar_value {
-        // ScalarValue::Binary(limit) => {
-        //     if let Some(value) = limit {
-        //         Ok(Some(value.as_bytes().to_hex()))
-        //     } else {
-        //         Ok(None)
-        //     }
-        // }
         ScalarValue::Int32(limit) => {
             if let Some(value) = limit {
                 let new_value = (value as u64) ^ meta_const::SIGN_MASK;
@@ -698,39 +572,6 @@ pub fn convert_sql_data_type_to_arrow_data_type(sql_type: &SQLDataType) -> Mysql
         )),
     }
 }
-
-pub fn get_table_column(table: TableDef, column_name: &str) -> Option<SparrowColumnDef> {
-    let first = None;
-
-    let column = table.get_columns().to_vec()
-        .iter()
-        .fold(first, |current, item| {
-            if item.sql_column.name.value.eq(column_name) {
-                Some(item.clone())
-            } else {
-                current
-            }
-        });
-    column
-}
-
-// pub fn get_table_max_ordinal_position(global_context: Arc<Mutex<GlobalContext>>, full_table_name: ObjectName) -> MysqlResult<i32> {
-//     let first = 0;
-//
-//     let table = get_table(global_context.clone(), full_table_name).unwrap();
-//     let ordinal_position = table.column.sparrow_column_list.to_vec()
-//         .iter()
-//         .fold(first, |current, b| {
-//             let cmp = b.ordinal_position.partial_cmp(&current).unwrap();
-//             let max = if let std::cmp::Ordering::Greater = cmp {
-//                 b.ordinal_position
-//             } else {
-//                 current
-//             };
-//             max
-//         });
-//     Ok(ordinal_position)
-// }
 
 pub fn table_has_primary_key(global_context: Arc<Mutex<GlobalContext>>, full_table_name: ObjectName) -> bool {
     let schema_table_constraints = initial::read_information_schema_statistics(global_context.clone()).unwrap();
@@ -814,59 +655,6 @@ pub fn cache_add_all_table(global_context: Arc<Mutex<GlobalContext>>) {
     let all_table = initial::read_all_table(global_context.clone()).unwrap();
     global_context.lock().unwrap().meta_cache.add_all_table(all_table);
 }
-//
-// pub fn read_information_schema_tables_record(global_context: Arc<Mutex<GlobalContext>>) -> MysqlResult<Vec<RecordBatch>> {
-//     let mut reader = RocksdbReader::new(
-//         global_context.clone(),
-//         initial::information_schema::table_tables(),
-//         meta_const::FULL_TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_TABLES.to_object_name(),
-//         1024,
-//         None,
-//         &[],
-//     );
-//
-//     let mut partition: Vec<RecordBatch> = vec![];
-//
-//     loop {
-//         match reader.next() {
-//             Some(item) => {
-//                 match item {
-//                     Ok(record_batch) => {
-//                         partition.push(record_batch);
-//                     }
-//                     Err(arrow_error) => return Err(MysqlError::from(arrow_error)),
-//                 }
-//             }
-//             None => break,
-//         }
-//     }
-//
-//     Ok(partition)
-// }
-//
-// pub fn store_get_column_id(global_context: Arc<Mutex<GlobalContext>>, full_table_name: ObjectName, column_name: Ident) -> MysqlResult<Option<usize>> {
-//     let store_engine = StoreEngineFactory::try_new_schema_engine(global_context.clone()).unwrap();
-//
-//     let key = util::dbkey::create_column_id(full_table_name, column_name.clone());
-//     match store_engine.get_key(key) {
-//         Ok(result) => {
-//             match result {
-//                 Some(value) => match std::str::from_utf8(&value) {
-//                     Ok(v) => Ok(Some(v.to_string().parse::<usize>().unwrap())),
-//                     Err(_) => Err(MysqlError::new_global_error(
-//                         meta_const::MYSQL_ERROR_CODE_UNKNOWN_ERROR,
-//                         "did not read valid utf-8 out of the db",
-//                     )),
-//                 },
-//                 None => Ok(None),
-//             }
-//         }
-//         Err(_) => Err(MysqlError::new_global_error(
-//             meta_const::MYSQL_ERROR_CODE_UNKNOWN_ERROR,
-//             "rocksdb get error",
-//         )),
-//     }
-// }
 
 #[cfg(test)]
 mod tests {
