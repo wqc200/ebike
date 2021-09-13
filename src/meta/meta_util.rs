@@ -47,7 +47,7 @@ use crate::core::session_context::SessionContext;
 use crate::meta::{def, initial, meta_const, meta_util};
 use crate::meta;
 use crate::meta::def::information_schema::{key_column_usage, table_constraints};
-use crate::meta::initial::{SaveKeyColumnUsage, SaveStatistics, SaveTableConstraints};
+use crate::meta::initial::{SaveKeyColumnUsage, SaveStatistics, SaveTableConstraints, get_all_full_table_names};
 use crate::meta::meta_def::{SchemaDef, SparrowColumnDef, StatisticsColumn, TableDef, TableIndexDef, TableOptionDef};
 use crate::mysql::error::{MysqlError, MysqlResult};
 use crate::physical_plan::create_table::CreateTable;
@@ -308,7 +308,8 @@ pub async fn init_meta(global_context: Arc<Mutex<GlobalContext>>) -> MysqlResult
     init_tables.push(def::mysql::users(global_context.clone()));
     init_tables.push(def::performance_schema::global_variables(global_context.clone()));
 
-    if !meta_has_create() {
+    let full_table_names = get_all_full_table_names(global_context.clone()).unwrap();
+    if full_table_names.len() < 1 {
         for table in init_tables.iter() {
             initial::add_information_schema_tables(global_context.clone(), table.option.clone());
             initial::add_information_schema_columns(global_context.clone(), table.option.clone(), table.column.sparrow_column_list.clone());
@@ -326,103 +327,8 @@ pub async fn init_meta(global_context: Arc<Mutex<GlobalContext>>) -> MysqlResult
         if let Err(e) = result {
             return Err(e);
         }
-
-        meta_create_lock();
     }
 
-    Ok(())
-}
-
-pub fn meta_create_lock() {
-    let lock_file = format!("{}/LOCK", "/tmp/rocksdb");
-    let result = File::create(lock_file.as_str());
-}
-
-pub fn meta_has_create() -> bool {
-    let lock_file = format!("{}/LOCK", "/tmp/rocksdb");
-    let result = File::open(lock_file.as_str());
-    match result {
-        Ok(_) => {
-            true
-        }
-        _ => {
-            false
-        }
-    }
-}
-
-pub fn cache_delete_table(global_context: Arc<Mutex<GlobalContext>>, full_table_name: ObjectName) {
-    global_context.lock().unwrap().meta_cache.delete_table(full_table_name.clone());
-}
-
-pub fn store_delete_current_serial_number(global_context: Arc<Mutex<GlobalContext>>, full_table_name: ObjectName) {
-    let store_engine = StoreEngineFactory::try_new_schema_engine(global_context.clone()).unwrap();
-
-    let key = util::dbkey::create_current_serial_number(full_table_name.clone());
-    store_engine.delete_key(key);
-}
-
-pub fn store_delete_column_serial_number(global_context: Arc<Mutex<GlobalContext>>, full_table_name: ObjectName, columns: Vec<Ident>) {
-    let store_engine = StoreEngineFactory::try_new_schema_engine(global_context.clone()).unwrap();
-
-    for column_name in columns {
-        let key = util::dbkey::create_column_id(full_table_name.clone(), column_name.clone());
-        let result = store_engine.delete_key(key);
-    }
-}
-
-pub fn cache_delete_column_serial_number(global_context: Arc<Mutex<GlobalContext>>, full_table_name: ObjectName, columns: Vec<Ident>) {
-    for column_name in columns {
-        global_context.lock().unwrap().meta_cache.delete_serial_number(full_table_name.clone(), column_name.clone());
-    }
-}
-
-pub fn get_current_serial_number(global_context: Arc<Mutex<GlobalContext>>, full_table_name: ObjectName) -> MysqlResult<usize> {
-    let store_engine = StoreEngineFactory::try_new_schema_engine(global_context.clone()).unwrap();
-
-    let first = 0 as usize;
-
-    let key = util::dbkey::create_current_serial_number(full_table_name);
-    let result = store_engine.get_key(key);
-    match result {
-        Ok(result) => {
-            match result {
-                Some(value) => match std::str::from_utf8(&value) {
-                    Ok(v) => Ok(v.to_string().parse::<usize>().unwrap()),
-                    Err(error) => return Err(MysqlError::new_global_error(meta_const::MYSQL_ERROR_CODE_UNKNOWN_ERROR, format!("did not read valid utf-8 out of the db, error: {:?}", error).as_str())),
-                },
-                None => Ok(first),
-            }
-        }
-        Err(error) => return Err(MysqlError::new_global_error(meta_const::MYSQL_ERROR_CODE_UNKNOWN_ERROR, format!("rocksdb get error, error: {:?}", error).as_str())),
-    }
-}
-
-pub fn store_add_column_serial_number(global_context: Arc<Mutex<GlobalContext>>, full_table_name: ObjectName, columns: Vec<SQLColumnDef>) -> MysqlResult<()> {
-    let store_engine = StoreEngineFactory::try_new_schema_engine(global_context.clone()).unwrap();
-
-    let result = get_current_serial_number(global_context.clone(), full_table_name.clone());
-    if let Err(e) = result {
-        return Err(e);
-    }
-
-    let mut orm_id = 0;
-    if let Ok(index) = result {
-        orm_id = index;
-    };
-
-    for column_def in columns {
-        orm_id += 1;
-
-        let column_name = column_def.name;
-
-        let key = util::dbkey::create_column_id(full_table_name.clone(), column_name.clone());
-        let value = orm_id.to_string();
-        let result = store_engine.put_key(key, value.as_bytes());
-    }
-    let key = util::dbkey::create_current_serial_number(full_table_name.clone());
-    let value = orm_id.to_string();
-    store_engine.put_key(key, value.as_bytes());
     Ok(())
 }
 
