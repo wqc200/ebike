@@ -21,37 +21,29 @@ use crate::physical_plan::insert::PhysicalPlanInsert;
 use crate::store::engine::engine_util;
 
 use crate::util;
+use crate::meta::meta_def::TableDef;
 
-pub struct DropTable {
+pub struct PhysicalPlanDropTable {
     global_context: Arc<Mutex<GlobalContext>>,
-    input_table_name: ObjectName,
+    table: TableDef,
 }
 
-impl DropTable {
+impl PhysicalPlanDropTable {
     pub fn new(
         global_context: Arc<Mutex<GlobalContext>>,
-        input_table_name: ObjectName,
+        table: TableDef,
     ) -> Self {
         Self {
             global_context,
-            input_table_name,
+            table,
         }
     }
 
     pub fn execute(&self, datafusion_context: &mut ExecutionContext, session_context: &mut SessionContext) -> MysqlResult<u64> {
-        let full_table_name = meta_util::fill_up_table_name(session_context, self.input_table_name.clone()).unwrap();
+        let mut gc = self.global_context.lock().unwrap();
 
-        let table_def = self.global_context.lock().unwrap().meta_cache.get_table(full_table_name.clone()).unwrap().clone();
-        let columns = table_def.get_columns().to_vec();
-
-        let column_names = columns.iter().map(|column|column.sql_column.name.clone()).collect::<Vec<_>>();
-
-        meta_util::store_delete_column_serial_number(self.global_context.clone(), full_table_name.clone(), column_names.clone());
-        meta_util::cache_delete_column_serial_number(self.global_context.clone(), full_table_name.clone(), column_names.clone());
-        meta_util::store_delete_current_serial_number(self.global_context.clone(), full_table_name.clone());
-        meta_util::cache_delete_table(self.global_context.clone(), full_table_name.clone());
-
-        // delete rocksdb data dir
+        let full_table_name = self.table.option.full_table_name.clone();
+        gc.meta_cache.delete_table(full_table_name.clone());
 
         datafusion_context.deregister_table(full_table_name.to_string().as_str());
 

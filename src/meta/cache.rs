@@ -60,20 +60,6 @@ impl MetaCache {
         ()
     }
 
-    pub fn get_serial_number_map(&mut self, full_table_name: ObjectName) -> Option<HashMap<Ident, usize>> {
-        let result = self.serial_number_map.get(&full_table_name);
-        match result {
-            None => None,
-            Some(map) => Some(map.clone()),
-        }
-    }
-
-    pub fn add_serial_number(&mut self, full_table_name: ObjectName, column_name: Ident, serial_number: usize) {
-        self.serial_number_map
-            .entry(full_table_name.clone()).or_insert(HashMap::new())
-            .entry(column_name.clone()).or_insert(serial_number);
-    }
-
     pub fn delete_serial_number(&mut self, full_table_name: ObjectName, column_name: Ident) {
         self.serial_number_map.entry(full_table_name.clone()).or_insert(HashMap::new()).remove(&column_name);
     }
@@ -94,10 +80,6 @@ impl MetaCache {
         }
     }
 
-    pub fn delete_table(&mut self, schema_name: ObjectName) {
-        self.table_map.remove(&schema_name).unwrap();
-    }
-
     pub fn get_schema_map(&self) -> HashMap<ObjectName, meta_def::SchemaDef> {
         self.schema_map.clone()
     }
@@ -107,7 +89,10 @@ impl MetaCache {
     }
 
     pub fn get_table(&self, full_table_name: ObjectName) -> Option<&TableDef> {
-        let table_schema = self.table_map.get(&full_table_name);
-        table_schema
+        self.table_map.get(&full_table_name)
+    }
+
+    pub fn delete_table(&mut self, schema_name: ObjectName) {
+        self.table_map.remove(&schema_name).unwrap();
     }
 }

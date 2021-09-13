@@ -42,13 +42,13 @@ use crate::store::rocksdb::db::Error;
 use crate::core::session_context::SessionContext;
 use crate::meta::meta_def::TableDef;
 
-pub struct Delete {
+pub struct PhysicalPlanDelete {
     global_context: Arc<Mutex<GlobalContext>>,
     table: TableDef,
     execution_plan: Arc<dyn ExecutionPlan>,
 }
 
-impl Delete {
+impl PhysicalPlanDelete {
     pub fn new(
         global_context: Arc<Mutex<GlobalContext>>,
         table: TableDef,

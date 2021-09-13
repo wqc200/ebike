@@ -16,9 +16,9 @@ use crate::physical_plan::alter_table::AlterTable;
 use crate::physical_plan::com_field_list::ComFieldList;
 use crate::physical_plan::create_db::CreateDb;
 use crate::physical_plan::create_table::CreateTable;
-use crate::physical_plan::delete::Delete;
+use crate::physical_plan::delete::PhysicalPlanDelete;
 use crate::physical_plan::drop_db::DropDB;
-use crate::physical_plan::drop_table::DropTable;
+use crate::physical_plan::drop_table::PhysicalPlanDropTable;
 use crate::physical_plan::insert::PhysicalPlanInsert;
 use crate::physical_plan::select::Select;
 use crate::physical_plan::set_default_schema::SetDefaultSchema;
@@ -38,13 +38,13 @@ use crate::util::convert::ToIdent;
 
 pub enum CorePhysicalPlan {
     AlterTableAddColumn(AlterTable),
-    AlterTableDropColumn(AlterTable, Delete, Update),
+    AlterTableDropColumn(AlterTable, PhysicalPlanDelete, Update),
     CreateDb(CreateDb),
     CreateTable(CreateTable),
     SetDefaultSchema(SetDefaultSchema),
-    DropTable(DropTable, Delete, Delete, Delete),
+    DropTable(PhysicalPlanDropTable, PhysicalPlanDelete, PhysicalPlanDelete, PhysicalPlanDelete),
     DropDB(DropDB),
-    Delete(Delete),
+    Delete(PhysicalPlanDelete),
     Insert(PhysicalPlanInsert),
     Select(Select),
     Update(Update),

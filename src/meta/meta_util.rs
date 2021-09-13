@@ -51,7 +51,7 @@ use crate::meta::initial::{SaveKeyColumnUsage, SaveStatistics, SaveTableConstrai
 use crate::meta::meta_def::{SchemaDef, SparrowColumnDef, StatisticsColumn, TableDef, TableIndexDef, TableOptionDef};
 use crate::mysql::error::{MysqlError, MysqlResult};
 use crate::physical_plan::create_table::CreateTable;
-use crate::physical_plan::delete::Delete;
+use crate::physical_plan::delete::PhysicalPlanDelete;
 use crate::physical_plan::insert::PhysicalPlanInsert;
 use crate::store::engine::engine_util;
 use crate::store::engine::engine_util::{StoreEngine, StoreEngineFactory, TableEngine, TableEngineFactory};
@@ -67,11 +67,10 @@ use super::super::util;
 // pub const INFORMATION_SCHEMA_NUMBER_COLUMN: &str = "information_schema.number_column";
 
 pub fn get_table(global_context: Arc<Mutex<GlobalContext>>, full_table_name: ObjectName) -> MysqlResult<TableDef> {
-    let table_map = global_context.lock().unwrap().meta_cache.get_table_map();
-    match table_map.get(&full_table_name) {
-        Some(table) => {
-            Ok((table.clone()))
-        }
+    let gc = global_context.lock().unwrap();
+    let result = gc.meta_cache.get_table(full_table_name.clone());
+    match result {
+        Some(table) => Ok((table.clone())),
         None => {
             let message = format!("Table '{}' doesn't exist", full_table_name.to_string());
             log::error!("{}", message);

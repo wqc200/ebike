@@ -36,7 +36,7 @@ use crate::core::logical_plan::CoreLogicalPlan;
 use datafusion::sql::planner::{SqlToRel, ContextProvider};
 use crate::store::engine::engine_util::StoreEngineFactory;
 
-pub struct Insert {
+pub struct LogicalPlanInsert {
     global_context: Arc<Mutex<GlobalContext>>,
     table_name: ObjectName,
     columns: Vec<Ident>,
@@ -44,7 +44,7 @@ pub struct Insert {
     source: Box<Query>,
 }
 
-impl Insert {
+impl LogicalPlanInsert {
     pub fn new(global_context: Arc<Mutex<GlobalContext>>, table_name: ObjectName, columns: Vec<Ident>, overwrite: bool, source: Box<Query>) -> Self {
         Self {
             global_context,
@@ -55,7 +55,7 @@ impl Insert {
         }
     }
 
-    pub fn execute<S: ContextProvider>(&self, datafusion_context: &mut ExecutionContext, session_context: &mut SessionContext, query_planner: &SqlToRel<S>) -> MysqlResult<CoreLogicalPlan> {
+    pub fn create_logical_plan<S: ContextProvider>(&self, datafusion_context: &mut ExecutionContext, session_context: &mut SessionContext, query_planner: &SqlToRel<S>) -> MysqlResult<CoreLogicalPlan> {
         let full_table_name = meta_util::fill_up_table_name(session_context, self.table_name.clone()).unwrap();
 
         let store_engine = StoreEngineFactory::try_new_with_table_name(self.global_context.clone(), full_table_name.clone()).unwrap();
@@ -158,8 +158,6 @@ impl Insert {
         let table_name = table.option.table_name.clone();
 
         let table_index_list = meta_util::get_table_index_list(self.global_context.clone(), full_table_name.clone()).unwrap();
-
-        let serial_number_map = self.global_context.lock().unwrap().meta_cache.get_serial_number_map(full_table_name.clone()).unwrap();
 
         let mut index_keys_list = vec![];
         for row_number in 0..column_value_map_list.len() {
