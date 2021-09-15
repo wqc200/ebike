@@ -19,7 +19,7 @@ use crate::core::output::FinalCount;
 use crate::core::session_context::SessionContext;
 use crate::datafusion_impl::datasource::rocksdb::RocksdbTable;
 use crate::meta::def::information_schema;
-use crate::meta::{meta_util, scalar_value};
+use crate::meta::{meta_util, scalar_value, def, meta_const};
 use crate::mysql::error::{MysqlResult, MysqlError};
 use crate::mysql::metadata;
 use crate::physical_plan::insert::PhysicalPlanInsert;
@@ -28,31 +28,33 @@ use crate::util;
 use crate::mysql::metadata::ArrayCell;
 use arrow::compute::not;
 use crate::core::core_util;
+use crate::meta::meta_def::TableDef;
 
 pub struct ShowCreateTable {
     global_context: Arc<Mutex<GlobalContext>>,
-    table_name: String,
+    table: TableDef,
 }
 
 impl ShowCreateTable {
     pub fn new(
-        core_context: Arc<Mutex<GlobalContext>>,
-        table_name: &str,
+        global_context: Arc<Mutex<GlobalContext>>,
+        table: TableDef,
     ) -> Self {
         Self {
-            global_context: core_context,
-            table_name: table_name.to_string(),
+            global_context,
+            table,
         }
     }
 
     pub fn execute(&self, columns_record: Vec<RecordBatch>, statistics_record: Vec<RecordBatch>, tables_record: Vec<RecordBatch>) -> MysqlResult<(SchemaRef, Vec<RecordBatch>)> {
-        let table_name = self.table_name.clone();
+        let table_name = self.table.option.table_name.clone();
+
+        let schema_of_columns = def::information_schema::columns(self.global_context.clone()).to_schema_ref();
 
         let record_batch = columns_record.get(0).unwrap();
-        let schema = record_batch.schema();
-        let column_index_of_column_name = schema.index_of("COLUMN_NAME").unwrap();
-        let column_index_of_data_type = schema.index_of("DATA_TYPE").unwrap();
-        let column_index_of_is_nullable = schema.index_of("IS_NULLABLE").unwrap();
+        let column_index_of_column_name = schema_of_columns.index_of(meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_COLUMNS_COLUMN_NAME).unwrap();
+        let column_index_of_data_type = schema_of_columns.index_of(meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_COLUMNS_DATA_TYPE).unwrap();
+        let column_index_of_is_nullable = schema_of_columns.index_of(meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_COLUMNS_IS_NULLABLE).unwrap();
         let columns_rows = core_util::convert_record_to_scalar_value(record_batch.clone());
         let mut columns = vec![];
         for row_index in 0..record_batch.num_rows() {

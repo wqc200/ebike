@@ -745,7 +745,7 @@ impl Execution {
                             delete_columns: logical_plan_of_delete_columns,
                             delete_statistics: logical_plan_of_statistics,
                             delete_tables: logical_plan_of_tables,
-                            table
+                            table,
                         })
                     }
                     ObjectType::Schema => {
@@ -845,12 +845,15 @@ impl Execution {
                             return Err(mysql_error);
                         }
 
-                        let tables_reference = TableReference::try_from(&full_table_name).unwrap();
+                        let result = meta_util::get_table(self.global_context.clone(), full_table_name.clone());
+                        let table = match result {
+                            Ok(table) => table.clone(),
+                            Err(mysql_error) => return Err(mysql_error)
+                        };
 
-                        let resolved_table_reference = tables_reference.resolve(meta_const::CATALOG_NAME, meta_const::SCHEMA_NAME_OF_DEF_INFORMATION_SCHEMA);
-                        let catalog_name = resolved_table_reference.catalog.to_string();
-                        let schema_name = resolved_table_reference.schema.to_string();
-                        let table_name = resolved_table_reference.table.to_string();
+                        let catalog_name = table.option.catalog_name.to_string();
+                        let schema_name = table.option.schema_name.to_string();
+                        let table_name = table.option.table_name.to_string();
 
                         let selection = core_util::build_find_table_sqlwhere(catalog_name.as_str(), schema_name.as_str(), table_name.as_str());
 
@@ -866,7 +869,7 @@ impl Execution {
                         let logical_plan = query_planner.select_to_plan(&select, &mut Default::default())?;
                         let select_from_tables = CoreSelectFrom::new(meta_const::FULL_TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_TABLES, logical_plan);
 
-                        return Ok(CoreLogicalPlan::ShowCreateTable { table_name, select_columns: select_from_columns, select_statistics: select_from_statistics, select_tables: select_from_tables });
+                        return Ok(CoreLogicalPlan::ShowCreateTable { select_columns: select_from_columns, select_statistics: select_from_statistics, select_tables: select_from_tables, table });
                     }
                 } else if first_variable.to_string().to_uppercase() == meta_const::SHOW_VARIABLE_GRANTS.to_uppercase() {
                     let user = variable.get(2).unwrap();
@@ -1265,7 +1268,7 @@ impl Execution {
                 let set_default_db = physical_plan::set_default_schema::SetDefaultSchema::new(object_name.clone());
                 Ok(CorePhysicalPlan::SetDefaultSchema(set_default_db))
             }
-            CoreLogicalPlan::DropTable { delete_columns: logical_plan_of_columns, delete_statistics: logical_plan_of_statistics, delete_tables: logical_plan_of_tables, table} => {
+            CoreLogicalPlan::DropTable { delete_columns: logical_plan_of_columns, delete_statistics: logical_plan_of_statistics, delete_tables: logical_plan_of_tables, table } => {
                 let physical_plan_drop_table = PhysicalPlanDropTable::new(self.global_context.clone(), table.clone());
 
                 let full_table_name = meta_util::create_full_table_name(
@@ -1310,7 +1313,7 @@ impl Execution {
                 Ok(CorePhysicalPlan::CreateTable(create_table))
             }
             CoreLogicalPlan::Insert { table, column_name_list, index_keys_list, column_value_map_list } => {
-                let cd = PhysicalPlanInsert::new(self.global_context.clone(),  table.clone(), column_name_list.clone(), index_keys_list.clone(), column_value_map_list.clone());
+                let cd = PhysicalPlanInsert::new(self.global_context.clone(), table.clone(), column_name_list.clone(), index_keys_list.clone(), column_value_map_list.clone());
                 Ok(CorePhysicalPlan::Insert(cd))
             }
             CoreLogicalPlan::Update { logical_plan, table, assignments } => {
@@ -1327,16 +1330,16 @@ impl Execution {
                 let set_variable = physical_plan::set_variable::SetVariable::new(variable.clone(), value.clone());
                 Ok(CorePhysicalPlan::SetVariable(set_variable))
             }
-            CoreLogicalPlan::ShowCreateTable { table_name, select_columns: select_from_columns, select_statistics: select_from_statistics, select_tables: select_from_tables } => {
-                let show_create_table = physical_plan::show_create_table::ShowCreateTable::new(self.global_context.clone(), table_name.as_str());
+            CoreLogicalPlan::ShowCreateTable { select_columns, select_statistics, select_tables, table} => {
+                let show_create_table = physical_plan::show_create_table::ShowCreateTable::new(self.global_context.clone(), table.clone());
 
-                let execution_plan = self.datafusion_context.create_physical_plan(select_from_columns.logical_plan()).unwrap();
+                let execution_plan = self.datafusion_context.create_physical_plan(select_columns.logical_plan()).unwrap();
                 let select_columns = physical_plan::select::Select::new(self.global_context.clone(), execution_plan);
 
-                let execution_plan = self.datafusion_context.create_physical_plan(select_from_statistics.logical_plan()).unwrap();
+                let execution_plan = self.datafusion_context.create_physical_plan(select_statistics.logical_plan()).unwrap();
                 let select_statistics = physical_plan::select::Select::new(self.global_context.clone(), execution_plan);
 
-                let execution_plan = self.datafusion_context.create_physical_plan(select_from_tables.logical_plan()).unwrap();
+                let execution_plan = self.datafusion_context.create_physical_plan(select_tables.logical_plan()).unwrap();
                 let select_tables = physical_plan::select::Select::new(self.global_context.clone(), execution_plan);
 
                 Ok(CorePhysicalPlan::ShowCreateTable(show_create_table, select_columns, select_statistics, select_tables))
