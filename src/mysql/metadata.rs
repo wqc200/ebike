@@ -59,7 +59,7 @@ impl Column {
     pub fn new(schema_name: ObjectName, table_name: ObjectName, column_def: &SparrowColumnDef) -> Column {
         //let schema_name = schema_name.to_string();
         //let table_name = table_name.to_string();
-        let column_name = &column_def.sql_column.name.value.clone();
+        let column_name = column_def.sql_column.name.value.clone();
 
         let arrow_data_type = meta_util::convert_sql_data_type_to_arrow_data_type(&column_def.sql_column.data_type).unwrap();
         let mysql_type = mysql_util::convert_arrow_data_type_to_mysql_type(&arrow_data_type).unwrap();
@@ -91,6 +91,43 @@ impl Column {
     }
 }
 
+impl Column {
+    pub fn to_response_payload(&self, com_field_list: bool) -> ResponsePayload {
+        let mut payload = ResponsePayload::new(1024);
+        payload.dumpLengthEncodedString(meta_const::CATALOG_NAME.as_bytes());
+        payload.dumpLengthEncodedString(self.schema.as_ref());
+        payload.dumpLengthEncodedString(self.table.as_ref());
+        payload.dumpLengthEncodedString(self.org_table.as_ref());
+        payload.dumpLengthEncodedString(self.name.as_ref());
+        payload.dumpLengthEncodedString(self.org_name.as_ref());
+        payload.bytes.push(0x0c);
+        payload.dumpUint16(self.character_set as u16);
+        payload.dumpUint32(self.column_length as u32);
+        payload.bytes.push(dumpColumnType(self.column_type));
+        payload.dumpUint16(dumpFlag(self.column_type, self.flags.bits as u16));
+        payload.bytes.push(self.decimals);
+        payload.bytes.extend_from_slice(&[00, 00]);
+
+        /// https://dev.mysql.com/doc/internals/en/com-query-response.html#column-definition
+        /// if command was COM_FIELD_LIST
+        /// null is 0xfb
+        if (com_field_list) {
+            match self.default_value {
+                Some(ref p) => {
+                    payload.dumpUint64(p.len() as u64);
+                    payload.bytes.extend_from_slice(p.as_ref());
+                }
+                None => {
+                    payload.dumpUint64(1);
+                    payload.bytes.push(0xfb);
+                }
+            }
+        }
+
+        payload
+    }
+}
+
 impl From<&Field> for Column {
     fn from(field: &Field) -> Self {
         let column_name = field.name();
@@ -115,37 +152,6 @@ impl From<&Field> for Column {
             decimals: 8,
             default_value: None,
         }
-    }
-}
-
-impl Into<ResponsePayload> for Column {
-    fn into(self) -> ResponsePayload {
-        let mut payload = ResponsePayload::new(1024);
-        payload.dumpLengthEncodedString(meta_const::CATALOG_NAME.as_bytes());
-        payload.dumpLengthEncodedString(self.schema.as_ref());
-        payload.dumpLengthEncodedString(self.table.as_ref());
-        payload.dumpLengthEncodedString(self.org_table.as_ref());
-        payload.dumpLengthEncodedString(self.name.as_ref());
-        payload.dumpLengthEncodedString(self.org_name.as_ref());
-        payload.bytes.push(0x0c);
-        payload.dumpUint16(self.character_set as u16);
-        payload.dumpUint32(self.column_length as u32);
-        payload.bytes.push(dumpColumnType(self.column_type));
-        payload.dumpUint16(dumpFlag(self.column_type, self.flags.bits as u16));
-        payload.bytes.push(self.decimals);
-        payload.bytes.extend_from_slice(&[0, 0]);
-
-        /// https://dev.mysql.com/doc/internals/en/com-query-response.html#column-definition
-        /// if command was COM_FIELD_LIST
-        match self.default_value {
-            Some(ref p) => {
-                payload.dumpUint64(p.len() as u64);
-                payload.bytes.extend_from_slice(p.as_ref());
-            }
-            None => {}
-        }
-
-        return payload;
     }
 }
 

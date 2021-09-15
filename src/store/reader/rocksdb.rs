@@ -109,7 +109,7 @@ impl Iterator for RocksdbReader {
         while self.rocksdb_iter.valid() {
             let key = self.rocksdb_iter.key().unwrap();
             let key = String::from_utf8(key.to_vec()).expect("Found invalid UTF-8");
-            log::debug!("row key: {:?}", key);
+            // log::debug!("row key: {:?}", key);
 
             match self.start_scan_key.interval() {
                 Interval::Open => {
@@ -142,7 +142,7 @@ impl Iterator for RocksdbReader {
 
             let value = self.rocksdb_iter.value().unwrap();
             let value = String::from_utf8(value.to_vec()).expect("Found invalid UTF-8");
-            log::debug!("row value: {:?}", value);
+            // log::debug!("row value: {:?}", value);
 
             rowids.push(value);
 
@@ -153,7 +153,7 @@ impl Iterator for RocksdbReader {
             }
         }
 
-        log::debug!("rowids: {:?}", rowids);
+        // log::debug!("rowids: {:?}", rowids);
 
         if rowids.len() < 1 {
             return None;
@@ -179,7 +179,7 @@ impl Iterator for RocksdbReader {
 
                 for rowid in rowids.clone() {
                     let record_column_key = util::dbkey::create_column_key(full_table_name.clone(), sparrow_column.store_id, rowid.as_str());
-                    log::debug!("column name: {:?}, record_column_key: {:?}", column_name.clone(), record_column_key);
+                    // log::debug!("column name: {:?}, record_column_key: {:?}", column_name.clone(), record_column_key);
                     let db_value = rocksdb_db.get(record_column_key.clone());
 
                     match db_value {
@@ -190,7 +190,7 @@ impl Iterator for RocksdbReader {
                                         DataType::Utf8 => {
                                             match std::str::from_utf8(value.as_ref()) {
                                                 Ok(value) => {
-                                                    log::debug!("column value: {:?}", value);
+                                                    // log::debug!("column value: {:?}", value);
                                                     struct_builder.field_builder::<StringBuilder>(i).unwrap().append_value(value);
                                                 }
                                                 Err(error) => {
@@ -204,12 +204,12 @@ impl Iterator for RocksdbReader {
                                         }
                                         DataType::Int32 => {
                                             let value = lexical::parse::<i32, _>(value.as_bytes()).unwrap();
-                                            log::debug!("column value: {:?}", value);
+                                            // log::debug!("column value: {:?}", value);
                                             struct_builder.field_builder::<Int32Builder>(i).unwrap().append_value(value);
                                         }
                                         DataType::Int64 => {
                                             let value = lexical::parse::<i64, _>(value.as_bytes()).unwrap();
-                                            log::debug!("column value: {:?}", value);
+                                            // log::debug!("column value: {:?}", value);
                                             struct_builder.field_builder::<Int64Builder>(i).unwrap().append_value(value);
                                         }
                                         _ => {
@@ -221,7 +221,7 @@ impl Iterator for RocksdbReader {
                                     }
                                 }
                                 None => {
-                                    log::debug!("column value: None");
+                                    // log::debug!("column value: None");
                                     match field.data_type() {
                                         DataType::Utf8 => {
                                             struct_builder.field_builder::<StringBuilder>(i).unwrap().append_null();

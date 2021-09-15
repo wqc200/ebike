@@ -227,7 +227,9 @@ impl Handle {
                 let mut payload = message::column_count_message(schema_ref.fields().len());
                 self.write_packet(payload).await;
                 for field in schema_ref.fields() {
-                    self.write_packet(message::column_definition_message(field)).await;
+                    let column = Column::from(field);
+                    let payload = column.to_response_payload(true);
+                    self.write_packet(payload).await;
                 }
                 self.write_packet(message::eof_message(0, 0)).await;
 
@@ -244,7 +246,7 @@ impl Handle {
                 let columns = table_def.get_columns();
                 for column_def in columns {
                     let column = Column::new(schema_name.clone(), table_name.clone(), column_def);
-                    let payload = column.into();
+                    let payload = column.to_response_payload(true);
                     self.write_packet(payload).await;
                 }
                 self.write_packet(message::eof_message(0, 0)).await;
