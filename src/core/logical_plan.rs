@@ -117,10 +117,10 @@ pub enum CoreLogicalPlan {
         with_options: Vec<SqlOption>,
     },
     ShowCreateTable {
-        table_name: String,
-        select_from_columns: CoreSelectFrom,
-        select_from_statistics: CoreSelectFrom,
-        select_from_tables: CoreSelectFrom,
+        select_columns: CoreSelectFrom,
+        select_statistics: CoreSelectFrom,
+        select_tables: CoreSelectFrom,
+        table: TableDef,
     },
     ShowColumnsFrom {
         select_from_columns: CoreSelectFrom,

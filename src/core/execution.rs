@@ -866,7 +866,7 @@ impl Execution {
                         let logical_plan = query_planner.select_to_plan(&select, &mut Default::default())?;
                         let select_from_tables = CoreSelectFrom::new(meta_const::FULL_TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_TABLES, logical_plan);
 
-                        return Ok(CoreLogicalPlan::ShowCreateTable { table_name, select_from_columns, select_from_statistics, select_from_tables });
+                        return Ok(CoreLogicalPlan::ShowCreateTable { table_name, select_columns: select_from_columns, select_statistics: select_from_statistics, select_tables: select_from_tables });
                     }
                 } else if first_variable.to_string().to_uppercase() == meta_const::SHOW_VARIABLE_GRANTS.to_uppercase() {
                     let user = variable.get(2).unwrap();
@@ -1327,7 +1327,7 @@ impl Execution {
                 let set_variable = physical_plan::set_variable::SetVariable::new(variable.clone(), value.clone());
                 Ok(CorePhysicalPlan::SetVariable(set_variable))
             }
-            CoreLogicalPlan::ShowCreateTable { table_name, select_from_columns, select_from_statistics, select_from_tables } => {
+            CoreLogicalPlan::ShowCreateTable { table_name, select_columns: select_from_columns, select_statistics: select_from_statistics, select_tables: select_from_tables } => {
                 let show_create_table = physical_plan::show_create_table::ShowCreateTable::new(self.global_context.clone(), table_name.as_str());
 
                 let execution_plan = self.datafusion_context.create_physical_plan(select_from_columns.logical_plan()).unwrap();

@@ -32,11 +32,11 @@ pub fn column_count_message(count: usize) -> ResponsePayload {
     return payload;
 }
 
-pub fn column_definition_message(field: &Field) -> ResponsePayload {
-    let column = Column::from(field);
-    let mut payload = column.into();
-    return payload;
-}
+// pub fn column_definition_message(field: &Field) -> ResponsePayload {
+//     let column = Column::from(field);
+//     let mut payload = column.into();
+//     return payload;
+// }
 
 ///
 /// https://dev.mysql.com/doc/internals/en/packet-OK_Packet.html
