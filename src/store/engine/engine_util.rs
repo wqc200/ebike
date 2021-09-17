@@ -76,16 +76,10 @@ pub struct StoreEngineFactory;
 
 impl StoreEngineFactory {
     pub fn try_new_with_table_name(global_context: Arc<Mutex<GlobalContext>>, full_table_name: ObjectName) -> MysqlResult<Box<dyn StoreEngine>> {
-        let gc = global_context.lock().unwrap();
-        let result = gc.meta_cache.get_table(full_table_name.clone());
+        let result = meta_util::get_table(global_context.clone(), full_table_name.clone());
         let table = match result {
-            None => {
-                return Err(MysqlError::new_global_error(1105, format!(
-                    "Unknown error. The table def not found. table_name: {}",
-                    full_table_name,
-                ).as_str()))
-            },
-            Some(table) => table.clone(),
+            Err(mysql_error) => return Err(mysql_error),
+            Ok(table) => table.clone(),
         };
 
         let engine = table.get_engine();
