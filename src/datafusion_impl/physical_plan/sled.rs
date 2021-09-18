@@ -34,7 +34,7 @@ use async_trait::async_trait;
 use datafusion::error::{DataFusionError, Result};
 //use rocksdb::{Error, IteratorMode, Options, SliceTransform, Snapshot, WriteBatch, DB, DBRawIterator, ReadOptions};
 use datafusion::logical_plan::Expr;
-use datafusion::physical_plan::{Partitioning, RecordBatchStream, SendableRecordBatchStream};
+use datafusion::physical_plan::{Partitioning, RecordBatchStream, SendableRecordBatchStream, Statistics};
 use datafusion::physical_plan::common::SizedRecordBatchStream;
 use datafusion::physical_plan::ExecutionPlan;
 use futures::Stream;
@@ -130,6 +130,10 @@ impl ExecutionPlan for SledExec {
         );
 
         Ok(Box::pin(RocksdbStream { reader}))
+    }
+
+    fn statistics(&self) -> Statistics {
+        Statistics::default()
     }
 }
 

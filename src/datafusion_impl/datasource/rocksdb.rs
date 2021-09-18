@@ -8,7 +8,7 @@ use arrow::csv;
 use arrow::datatypes::{DataType, Field, Schema};
 use arrow::record_batch::RecordBatch;
 use bitflags::_core::any::Any;
-use datafusion::datasource::datasource::{Statistics, TableProviderFilterPushDown};
+use datafusion::datasource::datasource::{TableProviderFilterPushDown};
 use datafusion::datasource::TableProvider;
 use datafusion::error::Result;
 use datafusion::logical_plan::Expr;
@@ -58,11 +58,6 @@ impl TableProvider for RocksdbTable {
             filters.clone(),
         )?;
         Ok(Arc::new(exec))
-    }
-
-    fn statistics(&self) -> Statistics {
-        let statistics = Statistics::default();
-        statistics
     }
 
     fn supports_filter_pushdown(
