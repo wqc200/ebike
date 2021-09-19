@@ -917,7 +917,7 @@ pub fn add_def_performance_schmea_global_variables(global_context: Arc<Mutex<Glo
     Ok(total)
 }
 
-pub fn get_all_full_table_names(global_context: Arc<Mutex<GlobalContext>>) -> MysqlResult<Vec<ObjectName>> {
+pub fn get_full_table_name_list(global_context: Arc<Mutex<GlobalContext>>) -> MysqlResult<Vec<ObjectName>> {
     let meta_table = information_schema::tables(global_context.clone());
 
     let engine = TableEngineFactory::try_new_with_table(global_context.clone(), meta_table).unwrap();

@@ -79,7 +79,7 @@ use crate::util::convert::{convert_ident_to_lowercase, ToLowercase, ToObjectName
 use crate::variable::system::SystemVar;
 use crate::variable::user_defined::UserDefinedVar;
 use std::process::id;
-use crate::meta::initial::get_all_full_table_names;
+use crate::meta::initial::get_full_table_name_list;
 use crate::physical_plan::insert::PhysicalPlanInsert;
 use crate::store::engine::engine_util::TableEngineFactory;
 use crate::meta::meta_def::TableDef;
@@ -569,7 +569,7 @@ impl Execution {
         Ok(None)
     }
 
-    pub fn project_has_rowid(&self, statement: &SQLStatement) -> bool {
+    pub fn projection_has_rowid(&self, statement: &SQLStatement) -> bool {
         let mut has_rowid = false;
 
         match statement {
@@ -587,7 +587,7 @@ impl Execution {
         has_rowid
     }
 
-    pub fn check_table_name(&mut self, original_table_name: &ObjectName) -> MysqlResult<()> {
+    pub fn check_table_exists_with_name(&mut self, original_table_name: &ObjectName) -> MysqlResult<()> {
         let full_table_name = meta_util::fill_up_table_name(&mut self.session_context, original_table_name.clone()).unwrap();
         if full_table_name.0.len() < 3 {
             return Err(MysqlError::new_server_error(1046, "3D000", "No database selected"));
@@ -598,14 +598,14 @@ impl Execution {
 
         if schema_name.to_string().eq(meta_const::SCHEMA_NAME_OF_DEF_INFORMATION_SCHEMA) {
             let schema_provider = core_util::get_schema_provider(&mut self.datafusion_context, meta_const::CATALOG_NAME, meta_const::SCHEMA_NAME_OF_DEF_INFORMATION_SCHEMA);
-            let table_names = schema_provider.table_names();
-            if table_names.contains(&table_name.to_string()) {
+            let table_name_list = schema_provider.table_names();
+            if table_name_list.contains(&table_name.to_string()) {
                 return Ok(());
             }
         }
 
-        let full_table_names = get_all_full_table_names(self.global_context.clone()).unwrap();
-        if full_table_names.contains(&full_table_name) {
+        let full_table_name_list = get_full_table_name_list(self.global_context.clone()).unwrap();
+        if full_table_name_list.contains(&full_table_name) {
             return Ok(());
         }
 
@@ -618,7 +618,7 @@ impl Execution {
         ));
     }
 
-    pub fn check_table_exist(&mut self, statement: &SQLStatement) -> MysqlResult<()> {
+    pub fn check_table_exists_in_statement(&mut self, statement: &SQLStatement) -> MysqlResult<()> {
         match statement {
             SQLStatement::Query(query) => {
                 match &query.body {
@@ -626,7 +626,7 @@ impl Execution {
                         for from in &select.from {
                             match from.relation.clone() {
                                 TableFactor::Table { name, .. } => {
-                                    return self.check_table_name(&name);
+                                    return self.check_table_exists_with_name(&name);
                                 }
                                 _ => {}
                             }
@@ -634,7 +634,7 @@ impl Execution {
                             for i in 0..from.joins.clone().len() {
                                 match from.joins[i].relation.clone() {
                                     TableFactor::Table { name, .. } => {
-                                        return self.check_table_name(&name);
+                                        return self.check_table_exists_with_name(&name);
                                     }
                                     _ => {}
                                 }
@@ -916,7 +916,7 @@ impl Execution {
                 };
                 // logical plan
                 let mut logical_plan = query_planner.select_to_plan(&select, &mut Default::default())?;
-                logical_plan = core_util::project_remove_rowid(&logical_plan);
+                logical_plan = core_util::remove_rowid_from_projection(&logical_plan);
 
                 return Ok(CoreLogicalPlan::Select(logical_plan));
             }
@@ -1035,16 +1035,16 @@ impl Execution {
             SQLStatement::Explain { describe_alias, analyze, verbose, statement } => {
                 let mut logical_plan = query_planner.explain_statement_to_plan(verbose, analyze, &statement)?;
 
-                let has_rowid = self.project_has_rowid(&statement);
+                let has_rowid = self.projection_has_rowid(&statement);
                 if !has_rowid {
-                    logical_plan = core_util::project_remove_rowid(&logical_plan);
+                    logical_plan = core_util::remove_rowid_from_projection(&logical_plan);
                 }
                 //logical_plan = core_util::explain_reset_ified_plan(&logical_plan);
 
                 Ok(CoreLogicalPlan::Select(logical_plan))
             }
             SQLStatement::Query(ref query) => {
-                let result = self.check_table_exist(&statement);
+                let result = self.check_table_exists_in_statement(&statement);
                 if let Err(mysql_error) = result {
                     return Err(mysql_error);
                 }
@@ -1057,9 +1057,9 @@ impl Execution {
                     }
                 };
 
-                let has_rowid = self.project_has_rowid(&statement);
+                let has_rowid = self.projection_has_rowid(&statement);
                 if !has_rowid {
-                    logical_plan = core_util::project_remove_rowid(&logical_plan);
+                    logical_plan = core_util::remove_rowid_from_projection(&logical_plan);
                 }
 
                 Ok(CoreLogicalPlan::Select(logical_plan))

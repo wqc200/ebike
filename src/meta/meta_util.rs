@@ -47,7 +47,7 @@ use crate::core::session_context::SessionContext;
 use crate::meta::{def, initial, meta_const, meta_util};
 use crate::meta;
 use crate::meta::def::information_schema::{key_column_usage, table_constraints};
-use crate::meta::initial::{SaveKeyColumnUsage, SaveStatistics, SaveTableConstraints, get_all_full_table_names};
+use crate::meta::initial::{SaveKeyColumnUsage, SaveStatistics, SaveTableConstraints, get_full_table_name_list};
 use crate::meta::meta_def::{SchemaDef, SparrowColumnDef, StatisticsColumn, TableDef, TableIndexDef, TableOptionDef};
 use crate::mysql::error::{MysqlError, MysqlResult};
 use crate::physical_plan::create_table::CreateTable;
@@ -308,7 +308,7 @@ pub async fn init_meta(global_context: Arc<Mutex<GlobalContext>>) -> MysqlResult
     init_tables.push(def::mysql::users(global_context.clone()));
     init_tables.push(def::performance_schema::global_variables(global_context.clone()));
 
-    let full_table_names = get_all_full_table_names(global_context.clone()).unwrap();
+    let full_table_names = get_full_table_name_list(global_context.clone()).unwrap();
     if full_table_names.len() < 1 {
         for table in init_tables.iter() {
             initial::add_information_schema_tables(global_context.clone(), table.option.clone());

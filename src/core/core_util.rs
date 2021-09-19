@@ -268,7 +268,7 @@ pub fn projection_has_rowid(projection: Vec<SelectItem>) -> bool {
     has_rowid
 }
 
-pub fn project_remove_rowid(plan: &LogicalPlan) -> LogicalPlan {
+pub fn remove_rowid_from_projection(plan: &LogicalPlan) -> LogicalPlan {
     match plan.clone() {
         LogicalPlan::Projection { expr, input, schema } => {
             let mut projected_expr = vec![];
@@ -291,12 +291,12 @@ pub fn project_remove_rowid(plan: &LogicalPlan) -> LogicalPlan {
 
             LogicalPlan::Projection {
                 expr: projected_expr,
-                input: Arc::new(project_remove_rowid(&input)),
+                input: Arc::new(remove_rowid_from_projection(&input)),
                 schema: Arc::new(DFSchema::new(dffields).unwrap()),
             }
         }
         LogicalPlan::Explain { verbose, plan, stringified_plans, schema } => {
-            let plan = Arc::new(project_remove_rowid(&plan));
+            let plan = Arc::new(remove_rowid_from_projection(&plan));
             LogicalPlan::Explain {
                 verbose,
                 plan,
@@ -307,7 +307,7 @@ pub fn project_remove_rowid(plan: &LogicalPlan) -> LogicalPlan {
         LogicalPlan::Filter { predicate, input } => {
             LogicalPlan::Filter {
                 predicate,
-                input: Arc::new(project_remove_rowid(&input)),
+                input: Arc::new(remove_rowid_from_projection(&input)),
             }
         }
         LogicalPlan::TableScan {
@@ -338,7 +338,7 @@ pub fn project_remove_rowid(plan: &LogicalPlan) -> LogicalPlan {
         LogicalPlan::Limit { n, input } => {
             LogicalPlan::Limit {
                 n,
-                input: Arc::new(project_remove_rowid(&input)),
+                input: Arc::new(remove_rowid_from_projection(&input)),
             }
         }
         _ => {
