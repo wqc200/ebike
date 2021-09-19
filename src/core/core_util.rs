@@ -671,4 +671,3 @@ pub fn build_update_column_assignments() -> Vec<Assignment> {
     };
     vec![assignment]
 }
-

@@ -587,35 +587,19 @@ impl Execution {
         has_rowid
     }
 
-    pub fn check_table_exists_with_name(&mut self, original_table_name: &ObjectName) -> MysqlResult<()> {
-        let full_table_name = meta_util::fill_up_table_name(&mut self.session_context, original_table_name.clone()).unwrap();
-        if full_table_name.0.len() < 3 {
-            return Err(MysqlError::new_server_error(1046, "3D000", "No database selected"));
+    pub fn check_table_exists_with_name(&mut self, table_name: &ObjectName) -> MysqlResult<()> {
+        let result = meta_util::resolve_table_name(&mut self.session_context, table_name);
+        let full_table_name = match result {
+            Ok(full_table_name) => full_table_name,
+            Err(mysql_error) => return Err(mysql_error)
+        };
+
+        let result = meta_util::get_table(self.global_context.clone(), full_table_name.clone());
+        if let Err(mysql_error) = result {
+            return Err(mysql_error)
         }
 
-        let schema_name = meta_util::cut_out_schema_name(full_table_name.clone());
-        let table_name = meta_util::cut_out_table_name(full_table_name.clone());
-
-        if schema_name.to_string().eq(meta_const::SCHEMA_NAME_OF_DEF_INFORMATION_SCHEMA) {
-            let schema_provider = core_util::get_schema_provider(&mut self.datafusion_context, meta_const::CATALOG_NAME, meta_const::SCHEMA_NAME_OF_DEF_INFORMATION_SCHEMA);
-            let table_name_list = schema_provider.table_names();
-            if table_name_list.contains(&table_name.to_string()) {
-                return Ok(());
-            }
-        }
-
-        let full_table_name_list = get_full_table_name_list(self.global_context.clone()).unwrap();
-        if full_table_name_list.contains(&full_table_name) {
-            return Ok(());
-        }
-
-        let message = format!("Table '{}' doesn't exist", original_table_name.to_string());
-        log::error!("{}", message);
-        return Err(MysqlError::new_server_error(
-            1146,
-            "42S02",
-            message.as_str(),
-        ));
+        Ok(())
     }
 
     pub fn check_table_exists_in_statement(&mut self, statement: &SQLStatement) -> MysqlResult<()> {
@@ -658,24 +642,11 @@ impl Execution {
         let statement = self.fix_statement(statement);
         match statement {
             SQLStatement::AlterTable { name, operation } => {
-                let result = meta_util::mysql_error_unknown_table(self.global_context.clone(), &mut self.session_context, name.clone());
-                if let Err(mysql_error) = result {
-                    return Err(mysql_error);
-                }
-
                 let full_table_name = meta_util::fill_up_table_name(&mut self.session_context, name.clone()).unwrap();
 
                 let table_map = self.global_context.lock().unwrap().meta_cache.get_table_map();
                 let table = match table_map.get(&full_table_name) {
-                    None => {
-                        let message = format!("Table '{}' doesn't exist", name.to_string());
-                        log::error!("{}", message);
-                        return Err(MysqlError::new_server_error(
-                            1146,
-                            "42S02",
-                            message.as_str(),
-                        ));
-                    }
+                    None => return Err(meta_util::error_of_table_doesnt_exists(full_table_name.clone())),
                     Some(table) => table.clone()
                 };
 
@@ -770,19 +741,21 @@ impl Execution {
                 }
             }
             SQLStatement::ShowColumns { table_name, .. } => {
-                let result = meta_util::mysql_error_unknown_table(self.global_context.clone(), &mut self.session_context, table_name.clone());
-                if let Err(mysql_error) = result {
-                    return Err(mysql_error);
-                }
+                let result = meta_util::resolve_table_name(&mut self.session_context, &table_name);
+                let full_table_name = match result {
+                    Ok(full_table_name) => full_table_name,
+                    Err(mysql_error) => return Err(mysql_error)
+                };
 
-                let full_table_name = meta_util::fill_up_table_name(&mut self.session_context, table_name.clone()).unwrap();
+                let result = meta_util::get_table(self.global_context.clone(), full_table_name.clone());
+                let table = match result {
+                    Ok(table) => table.clone(),
+                    Err(mysql_error) => return Err(mysql_error)
+                };
 
-                let tables_reference = TableReference::try_from(&full_table_name).unwrap();
-                ;
-                let resolved_table_reference = tables_reference.resolve(meta_const::CATALOG_NAME, meta_const::SCHEMA_NAME_OF_DEF_INFORMATION_SCHEMA);
-                let catalog_name = resolved_table_reference.catalog.to_string();
-                let schema_name = resolved_table_reference.schema.to_string();
-                let table_name = resolved_table_reference.table.to_string();
+                let catalog_name = table.option.catalog_name.to_string();
+                let schema_name = table.option.schema_name.to_string();
+                let table_name = table.option.table_name.to_string();
 
                 let selection = core_util::build_find_table_sqlwhere(catalog_name.as_str(), schema_name.as_str(), table_name.as_str());
 
@@ -839,11 +812,6 @@ impl Execution {
                         let table_name = ObjectName(idents);
 
                         let full_table_name = meta_util::fill_up_table_name(&mut self.session_context, table_name.clone()).unwrap();
-
-                        let result = meta_util::mysql_error_unknown_table(self.global_context.clone(), &mut self.session_context, full_table_name.clone());
-                        if let Err(mysql_error) = result {
-                            return Err(mysql_error);
-                        }
 
                         let result = meta_util::get_table(self.global_context.clone(), full_table_name.clone());
                         let table = match result {
@@ -1330,7 +1298,7 @@ impl Execution {
                 let set_variable = physical_plan::set_variable::SetVariable::new(variable.clone(), value.clone());
                 Ok(CorePhysicalPlan::SetVariable(set_variable))
             }
-            CoreLogicalPlan::ShowCreateTable { select_columns, select_statistics, select_tables, table} => {
+            CoreLogicalPlan::ShowCreateTable { select_columns, select_statistics, select_tables, table } => {
                 let show_create_table = physical_plan::show_create_table::ShowCreateTable::new(self.global_context.clone(), table.clone());
 
                 let execution_plan = self.datafusion_context.create_physical_plan(select_columns.logical_plan()).unwrap();

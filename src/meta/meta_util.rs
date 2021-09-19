@@ -68,13 +68,7 @@ pub fn get_table(global_context: Arc<Mutex<GlobalContext>>, full_table_name: Obj
     match result {
         Some(table) => Ok((table.clone())),
         None => {
-            let message = format!("Table '{}' doesn't exist", full_table_name.to_string());
-            log::error!("{}", message);
-            Err(MysqlError::new_server_error(
-                1146,
-                "42S02",
-                message.as_str(),
-            ))
+            return Err(error_of_table_doesnt_exists(full_table_name.clone()));
         }
     }
 }
@@ -228,6 +222,15 @@ pub fn fill_up_schema_name(session_context: &mut SessionContext, mut db_name: Ob
     }
 
     Ok(db_name)
+}
+
+pub fn resolve_table_name(session_context: &mut SessionContext, table_name: &ObjectName) -> MysqlResult<ObjectName> {
+    let full_table_name = meta_util::fill_up_table_name(session_context, table_name.clone()).unwrap();
+    if full_table_name.0.len() < 3 {
+        return Err(MysqlError::new_server_error(1046, "3D000", "No database selected"));
+    }
+
+    Ok(full_table_name)
 }
 
 pub fn fill_up_table_name(session_context: &mut SessionContext, mut table_name: ObjectName) -> MysqlResult<ObjectName> {
@@ -560,6 +563,27 @@ pub fn read_all_schema(global_context: Arc<Mutex<GlobalContext>>) -> MysqlResult
 pub fn cache_add_all_table(global_context: Arc<Mutex<GlobalContext>>) {
     let all_table = initial::read_all_table(global_context.clone()).unwrap();
     global_context.lock().unwrap().meta_cache.add_all_table(all_table);
+}
+
+pub fn check_table_exists_with_full_name(global_context: Arc<Mutex<GlobalContext>>, full_table_name: ObjectName) -> MysqlResult<()> {
+    let gc = global_context.lock().unwrap();
+
+    let table_map = gc.meta_cache.get_table_map();
+    if table_map.get(&full_table_name).is_none() {
+        return Err(error_of_table_doesnt_exists(full_table_name.clone()));
+    }
+
+    Ok(())
+}
+
+pub fn error_of_table_doesnt_exists(full_table_name: ObjectName) -> MysqlError {
+    let message = format!("Table '{}' doesn't exist", full_table_name.to_string());
+    log::error!("{}", message);
+    MysqlError::new_server_error(
+        1146,
+        "42S02",
+        message.as_str(),
+    )
 }
 
 #[cfg(test)]
