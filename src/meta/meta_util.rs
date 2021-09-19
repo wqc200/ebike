@@ -372,9 +372,9 @@ pub fn text_to_null(is_nullable: &str) -> Result<ColumnOption> {
 
 pub fn text_to_sql_data_type(text: &str) -> Result<SQLDataType> {
     match text {
-        meta_const::MYSQL_DATA_TYPE_SMALLINT => Ok(SQLDataType::SmallInt),
-        meta_const::MYSQL_DATA_TYPE_INT => Ok(SQLDataType::Int),
-        meta_const::MYSQL_DATA_TYPE_BIGINT => Ok(SQLDataType::BigInt),
+        meta_const::MYSQL_DATA_TYPE_SMALLINT => Ok(SQLDataType::SmallInt(Some(11))),
+        meta_const::MYSQL_DATA_TYPE_INT => Ok(SQLDataType::Int(Some(11))),
+        meta_const::MYSQL_DATA_TYPE_BIGINT => Ok(SQLDataType::BigInt(Some(11))),
         meta_const::MYSQL_DATA_TYPE_DECIMAL => {
             let numeric_precision = Some(10);
             let numeric_scale = Some(2);
@@ -436,9 +436,9 @@ pub fn convert_scalar_value_to_index_string(scalar_value: ScalarValue) -> MysqlR
 
 pub fn convert_sql_data_type_to_text(sql_type: &SQLDataType) -> MysqlResult<String> {
     match sql_type {
-        SQLDataType::BigInt => Ok(meta_const::MYSQL_DATA_TYPE_BIGINT.to_string()),
-        SQLDataType::Int => Ok(meta_const::MYSQL_DATA_TYPE_INT.to_string()),
-        SQLDataType::SmallInt => {
+        SQLDataType::BigInt(_) => Ok(meta_const::MYSQL_DATA_TYPE_BIGINT.to_string()),
+        SQLDataType::Int(_) => Ok(meta_const::MYSQL_DATA_TYPE_INT.to_string()),
+        SQLDataType::SmallInt(_) => {
             Ok(meta_const::MYSQL_DATA_TYPE_SMALLINT.to_string())
         }
         SQLDataType::Char(_) => {
@@ -462,9 +462,9 @@ pub fn convert_sql_data_type_to_text(sql_type: &SQLDataType) -> MysqlResult<Stri
 
 pub fn convert_sql_data_type_to_arrow_data_type(sql_type: &SQLDataType) -> MysqlResult<DataType> {
     match sql_type {
-        SQLDataType::BigInt => Ok(DataType::Int64),
-        SQLDataType::Int => Ok(DataType::Int32),
-        SQLDataType::SmallInt => Ok(DataType::Int16),
+        SQLDataType::BigInt(_) => Ok(DataType::Int64),
+        SQLDataType::Int(_) => Ok(DataType::Int32),
+        SQLDataType::SmallInt(_) => Ok(DataType::Int16),
         SQLDataType::Char(_) | SQLDataType::Varchar(_) | SQLDataType::Text | SQLDataType::Custom(_) => {
             Ok(DataType::Utf8)
         }

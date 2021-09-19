@@ -1032,7 +1032,7 @@ impl Execution {
                 let logical_plan = query_planner.select_to_plan(&select, &mut Default::default())?;
                 return Ok(CoreLogicalPlan::Select(logical_plan));
             }
-            SQLStatement::Explain { analyze, verbose, statement } => {
+            SQLStatement::Explain { describe_alias, analyze, verbose, statement } => {
                 let mut logical_plan = query_planner.explain_statement_to_plan(verbose, analyze, &statement)?;
 
                 let has_rowid = self.project_has_rowid(&statement);
