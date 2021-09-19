@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 use arrow::compute::not;
-use datafusion::logical_plan::Expr;
+use datafusion::logical_plan::{Expr, Column};
 use datafusion::logical_plan::Operator;
 use datafusion::scalar::ScalarValue;
 use sqlparser::ast::{ObjectName, TableConstraint};
@@ -23,7 +23,7 @@ use crate::util::dbkey::CreateScanKey;
 pub struct TableIndex {
     index_name: String,
     level: usize,
-    column_indexes: Vec<ColumnIndex>,
+    column_range_list: Vec<ColumnRange>,
 }
 
 impl TableIndex {
@@ -35,38 +35,38 @@ impl TableIndex {
         self.level
     }
 
-    pub fn getColumns(&self) -> Vec<ColumnIndex> {
-        self.column_indexes.clone()
+    pub fn getColumnRangeList(&self) -> Vec<ColumnRange> {
+        self.column_range_list.clone()
     }
 
-    pub fn setColumns(&mut self, columns: Vec<ColumnIndex>) {
-        self.column_indexes = columns
+    pub fn setColumns(&mut self, columns: Vec<ColumnRange>) {
+        self.column_range_list = columns
     }
 }
 
 #[derive(Clone, Debug)]
-pub struct ColumnIndex {
+pub struct ColumnRange {
     column_name: String,
-    compare_value: CompareValue,
+    range_value: RangeValue,
 }
 
-impl ColumnIndex {
+impl ColumnRange {
     pub fn getColumnName(&self) -> String {
         self.column_name.clone()
     }
 
-    pub fn getCompareValue(&self) -> CompareValue {
-        self.compare_value.clone()
+    pub fn getCompareValue(&self) -> RangeValue {
+        self.range_value.clone()
     }
 }
 
 #[derive(Clone, Debug)]
-pub struct NotNullValue {
+pub struct RangeNotNullValue {
     start: Option<(String, Interval)>,
     end: Option<(String, Interval)>,
 }
 
-impl NotNullValue {
+impl RangeNotNullValue {
     pub fn getStart(&self) -> Option<(String, Interval)> {
         self.start.clone()
     }
@@ -96,13 +96,13 @@ pub enum CompareResult {
     All,
     Empty,
     Null,
-    NotNull(NotNullValue),
+    NotNull(RangeNotNullValue),
 }
 
 #[derive(Clone, Debug)]
-pub enum CompareValue {
+pub enum RangeValue {
     Null,
-    NotNull(NotNullValue),
+    NotNull(RangeNotNullValue),
 }
 
 #[derive(Clone, Debug)]
@@ -117,7 +117,7 @@ pub enum Interval {
     Closed,
 }
 
-pub fn compare_column(operators: Vec<Expr>) -> CompareResult {
+pub fn compare_column_filter(operators: Vec<Expr>) -> CompareResult {
     let result = match operators[0].clone() {
         Expr::BinaryExpr { op, right, .. } => {
             let input = match right.as_ref() {
@@ -138,35 +138,35 @@ pub fn compare_column(operators: Vec<Expr>) -> CompareResult {
 
             match op {
                 Operator::GtEq => {
-                    let compare_value = NotNullValue {
+                    let compare_value = RangeNotNullValue {
                         start: Some((input.clone(), Interval::Closed)),
                         end: None,
                     };
                     CompareResult::NotNull(compare_value)
                 }
                 Operator::Gt => {
-                    let compare_value = NotNullValue {
+                    let compare_value = RangeNotNullValue {
                         start: Some((input.clone(), Interval::Open)),
                         end: None,
                     };
                     CompareResult::NotNull(compare_value)
                 }
                 Operator::Eq => {
-                    let compare_value = NotNullValue {
+                    let compare_value = RangeNotNullValue {
                         start: Some((input.clone(), Interval::Closed)),
                         end: Some((input.clone(), Interval::Closed)),
                     };
                     CompareResult::NotNull(compare_value)
                 }
                 Operator::Lt => {
-                    let compare_value = NotNullValue {
+                    let compare_value = RangeNotNullValue {
                         start: None,
                         end: Some((input.clone(), Interval::Open)),
                     };
                     CompareResult::NotNull(compare_value)
                 }
                 Operator::LtEq => {
-                    let compare_value = NotNullValue {
+                    let compare_value = RangeNotNullValue {
                         start: None,
                         end: Some((input.clone(), Interval::Closed)),
                     };
@@ -176,7 +176,7 @@ pub fn compare_column(operators: Vec<Expr>) -> CompareResult {
             }
         }
         Expr::IsNotNull(_) => {
-            let compare_value = NotNullValue {
+            let compare_value = RangeNotNullValue {
                 start: None,
                 end: None,
             };
@@ -497,12 +497,12 @@ pub fn get_seek_prefix(global_context: Arc<Mutex<GlobalContext>>, full_table_nam
         return Ok(get_seek_prefix_default(full_table_name));
     }
 
-    let column_filter_map = build_filter(filters).unwrap();
+    let column_filter_map = create_column_filter(filters).unwrap();
 
-    let mut column_index_map = HashMap::new();
-    for (column_name, exprs) in column_filter_map {
-        let compare = compare_column(exprs);
-        match compare {
+    let mut column_range_map = HashMap::new();
+    for (column_name, expr_list) in column_filter_map {
+        let compare_result = compare_column_filter(expr_list);
+        match compare_result {
             CompareResult::All => {
                 break;
             }
@@ -510,20 +510,20 @@ pub fn get_seek_prefix(global_context: Arc<Mutex<GlobalContext>>, full_table_nam
                 return Ok(SeekType::NoRecord);
             }
             CompareResult::Null => {
-                let compare_value = CompareValue::Null;
-                let start_end = ColumnIndex {
+                let compare_value = RangeValue::Null;
+                let column_range = ColumnRange {
                     column_name: column_name.clone(),
-                    compare_value,
+                    range_value: compare_value,
                 };
-                column_index_map.insert(column_name.clone(), start_end);
+                column_range_map.insert(column_name.clone(), column_range);
             }
             CompareResult::NotNull(not_null_value) => {
-                let compare_value = CompareValue::NotNull(not_null_value.clone());
-                let start_end = ColumnIndex {
+                let compare_value = RangeValue::NotNull(not_null_value.clone());
+                let start_end = ColumnRange {
                     column_name: column_name.clone(),
-                    compare_value,
+                    range_value: compare_value,
                 };
-                column_index_map.insert(column_name.clone(), start_end);
+                column_range_map.insert(column_name.clone(), start_end);
 
                 /// interval scanning
                 if not_null_value.clone().getStart().is_none() || not_null_value.clone().getEnd().is_none() {
@@ -532,16 +532,16 @@ pub fn get_seek_prefix(global_context: Arc<Mutex<GlobalContext>>, full_table_nam
             }
         }
     }
-    if column_index_map.is_empty() {
+    if column_range_map.is_empty() {
         return Ok(get_seek_prefix_default(full_table_name));
     }
 
-    let table_indexes = get_table_indexes(table_def, column_index_map);
-    if table_indexes.is_empty() {
+    let table_index_list = get_table_indexes(table_def, column_range_map);
+    if table_index_list.is_empty() {
         return Ok(get_seek_prefix_default(full_table_name));
     }
 
-    let result = get_seek_prefix_with_index(global_context, full_table_name, table_indexes);
+    let result = get_seek_prefix_with_index(global_context, full_table_name, table_index_list);
     match result {
         Ok(seek_type) => Ok(seek_type),
         Err(mysql_error) => Err(mysql_error)
@@ -554,8 +554,8 @@ pub fn get_seek_prefix_default(full_table_name: ObjectName) -> SeekType {
     SeekType::FullTableScan { start, end }
 }
 
-pub fn build_filter(filters: &[Expr]) -> MysqlResult<HashMap<String, Vec<Expr>>> {
-    let mut filter_keys: HashMap<String, Vec<Expr>> = HashMap::new();
+pub fn create_column_filter(filters: &[Expr]) -> MysqlResult<HashMap<String, Vec<Expr>>> {
+    let mut column_filter_map: HashMap<String, Vec<Expr>> = HashMap::new();
     for expr in filters {
         let column_name;
         match expr {
@@ -586,32 +586,32 @@ pub fn build_filter(filters: &[Expr]) -> MysqlResult<HashMap<String, Vec<Expr>>>
             _ => break
         }
 
-        filter_keys.entry(column_name.to_string()).or_insert(vec![]).push(expr.clone());
+        column_filter_map.entry(column_name.to_string()).or_insert(vec![]).push(expr.clone());
     }
 
-    Ok(filter_keys)
+    Ok(column_filter_map)
 }
 
-pub fn get_table_indexes(table_def: TableDef, column_start_end: HashMap<String, ColumnIndex>) -> Vec<TableIndex> {
-    let mut table_indexes: Vec<TableIndex> = vec![];
+pub fn get_table_indexes(table_def: TableDef, column_range_map: HashMap<String, ColumnRange>) -> Vec<TableIndex> {
+    let mut table_index_list: Vec<TableIndex> = vec![];
     for table_constraint in table_def.get_constraints() {
         match table_constraint {
             TableConstraint::Unique { name, columns, is_primary } => {
                 let index_name = name.clone().unwrap().value.to_string();
 
-                let mut column_names = vec![];
+                let mut column_range_list = vec![];
                 for column in columns {
                     let column_name = column.to_string();
 
-                    if !column_start_end.contains_key(column_name.as_str()) {
+                    if !column_range_map.contains_key(column_name.as_str()) {
                         break;
                     }
-                    let column_start_end = column_start_end.get(column_name.as_str()).unwrap();
+                    let column_range = column_range_map.get(column_name.as_str()).unwrap();
 
-                    column_names.push(column_start_end.clone());
+                    column_range_list.push(column_range.clone());
                 }
 
-                if column_names.is_empty() {
+                if column_range_list.is_empty() {
                     continue;
                 }
 
@@ -625,34 +625,30 @@ pub fn get_table_indexes(table_def: TableDef, column_start_end: HashMap<String, 
                 let table_index = TableIndex {
                     index_name,
                     level,
-                    column_indexes: column_names,
+                    column_range_list,
                 };
-                table_indexes.push(table_index);
+                table_index_list.push(table_index);
             }
             _ => {}
         }
     }
-    table_indexes
+    table_index_list
 }
 
-pub fn get_seek_prefix_with_index(global_context: Arc<Mutex<GlobalContext>>, full_table_name: ObjectName, table_indexes: Vec<TableIndex>) -> MysqlResult<SeekType> {
-    let catalog_name = meta_util::cut_out_catalog_name(full_table_name.clone());
-    let schema_name = meta_util::cut_out_schema_name(full_table_name.clone());
-    let table_name = meta_util::cut_out_table_name(full_table_name.clone());
-
+pub fn get_seek_prefix_with_index(global_context: Arc<Mutex<GlobalContext>>, full_table_name: ObjectName, table_index_list: Vec<TableIndex>) -> MysqlResult<SeekType> {
     /// Find the index with the most matching fields
-    let table_index = table_indexes.iter().fold(table_indexes[0].clone(), |accumulator, item| {
-        if item.getColumns().len() > accumulator.getColumns().len() {
+    let table_index = table_index_list.iter().fold(table_index_list[0].clone(), |accumulator, item| {
+        if item.getColumnRangeList().len() > accumulator.getColumnRangeList().len() {
             item.clone()
-        } else if item.getColumns().len() == accumulator.getColumns().len() && item.getLevel() > accumulator.getLevel() {
+        } else if item.getColumnRangeList().len() == accumulator.getColumnRangeList().len() && item.getLevel() > accumulator.getLevel() {
             item.clone()
         } else {
             accumulator
         }
     });
 
-    let mut column_indexes: Vec<(usize, CompareValue)> = vec![];
-    for column_index in table_index.getColumns() {
+    let mut column_indexes: Vec<(usize, RangeValue)> = vec![];
+    for column_index in table_index.getColumnRangeList() {
         let column_name = column_index.getColumnName().to_ident();
         let serial_number = global_context.lock().unwrap().meta_data.get_serial_number(full_table_name.clone(), column_name.clone()).unwrap();
 

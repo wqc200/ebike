@@ -594,6 +594,17 @@ impl Execution {
             Err(mysql_error) => return Err(mysql_error)
         };
 
+        let schema_name = meta_util::cut_out_schema_name(full_table_name.clone());
+        let table_name = meta_util::cut_out_table_name(full_table_name.clone());
+
+        if schema_name.to_string().eq(meta_const::SCHEMA_NAME_OF_DEF_INFORMATION_SCHEMA) {
+            let schema_provider = core_util::get_schema_provider(&mut self.datafusion_context, meta_const::CATALOG_NAME, meta_const::SCHEMA_NAME_OF_DEF_INFORMATION_SCHEMA);
+            let table_names = schema_provider.table_names();
+            if table_names.contains(&table_name.to_string()) {
+                return Ok(());
+            }
+        }
+
         let result = meta_util::get_table(self.global_context.clone(), full_table_name.clone());
         if let Err(mysql_error) = result {
             return Err(mysql_error)

@@ -3,7 +3,7 @@ use datafusion::logical_plan::{Expr};
 
 use crate::core::core_util;
 use crate::meta_util;
-use crate::store::reader::reader_util::{CompareValue, ScanOrder, Interval};
+use crate::store::reader::reader_util::{RangeValue, ScanOrder, Interval};
 use datafusion::scalar::ScalarValue;
 use crate::mysql::error::{MysqlResult, MysqlError};
 use crate::meta::meta_const::MYSQL_ERROR_CODE_UNKNOWN_ERROR;
@@ -212,7 +212,7 @@ impl CreateScanKey {
     }
 }
 
-pub fn create_scan_index(full_table_name: ObjectName, index_name: &str, column_index_values: Vec<(usize, CompareValue)>) -> (CreateScanKey, CreateScanKey) {
+pub fn create_scan_index(full_table_name: ObjectName, index_name: &str, column_index_values: Vec<(usize, RangeValue)>) -> (CreateScanKey, CreateScanKey) {
     let mut start = CreateScanKey::new("/Table/index/key/");
     let mut end = CreateScanKey::new("/Table/index/key/");
     start.add_key(full_table_name.to_string().as_str());
@@ -226,11 +226,11 @@ pub fn create_scan_index(full_table_name: ObjectName, index_name: &str, column_i
         end.add_key(column_index.to_string().as_str());
 
         match compare_value {
-            CompareValue::Null => {
+            RangeValue::Null => {
                 start.add_key("0");
                 end.add_key("0");
             }
-            CompareValue::NotNull(not_null_value) => {
+            RangeValue::NotNull(not_null_value) => {
                 if let Some((value, interval)) = not_null_value.getStart() {
                     start.add_key("1");
                     start.add_key(value.as_str());
@@ -249,7 +249,7 @@ pub fn create_scan_index(full_table_name: ObjectName, index_name: &str, column_i
 }
 
 
-pub fn scan_index(schema_name: &str, index_name: &str, column_index_values: Vec<(usize, CompareValue)>) -> (String, String) {
+pub fn scan_index(schema_name: &str, index_name: &str, column_index_values: Vec<(usize, RangeValue)>) -> (String, String) {
     let mut start = String::from("/Table/index/key/");
     start.push_str(schema_name);
     start.push_str("/");
@@ -264,13 +264,13 @@ pub fn scan_index(schema_name: &str, index_name: &str, column_index_values: Vec<
         end.push_str("/");
 
         match compare_value {
-            CompareValue::Null => {
+            RangeValue::Null => {
                 start.push_str("0");
                 start.push_str("/");
                 end.push_str("0");
                 end.push_str("/");
             }
-            CompareValue::NotNull(not_null_value) => {
+            RangeValue::NotNull(not_null_value) => {
                 if let Some((value, interval)) = not_null_value.getStart() {
                     start.push_str("1/");
                     start.push_str(value.as_str());

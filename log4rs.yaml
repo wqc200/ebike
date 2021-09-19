@@ -17,7 +17,7 @@ appenders:
       pattern: "{d} {l} [{T}] [{M}] [{t} {L}] {m} {n}"
 # 对全局 log 进行配置
 root:
-  level: debug
+  level: info
   appenders:
     - stdout
     - file
