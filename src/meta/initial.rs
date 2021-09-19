@@ -244,7 +244,7 @@ pub fn delete_db_form_information_schema(global_context: Arc<Mutex<GlobalContext
     let full_table_name = meta_const::FULL_TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_SCHEMATA.to_object_name();
     let gc = global_context.lock().unwrap();
 
-    let table_def = gc.meta_cache.get_table(full_table_name.clone()).unwrap();
+    let table_def = gc.meta_data.get_table(full_table_name.clone()).unwrap();
     let schema_ref = table_def.to_schema_ref();
 
     let rowid_index = schema_ref.index_of(meta_const::COLUMN_ROWID).unwrap();

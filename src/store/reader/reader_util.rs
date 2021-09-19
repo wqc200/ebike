@@ -654,7 +654,7 @@ pub fn get_seek_prefix_with_index(global_context: Arc<Mutex<GlobalContext>>, ful
     let mut column_indexes: Vec<(usize, CompareValue)> = vec![];
     for column_index in table_index.getColumns() {
         let column_name = column_index.getColumnName().to_ident();
-        let serial_number = global_context.lock().unwrap().meta_cache.get_serial_number(full_table_name.clone(), column_name.clone()).unwrap();
+        let serial_number = global_context.lock().unwrap().meta_data.get_serial_number(full_table_name.clone(), column_name.clone()).unwrap();
 
         column_indexes.push((serial_number, column_index.getCompareValue()));
     }

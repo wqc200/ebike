@@ -68,7 +68,7 @@ async fn main() {
     let result = meta_util::read_all_schema(global_context.clone());
     match result {
         Ok(schema_map) => {
-            global_context.lock().unwrap().meta_cache.add_all_schema(schema_map);
+            global_context.lock().unwrap().meta_data.add_all_schema(schema_map);
         }
         Err(e) => {
             log::error!("init meta schema error: {}", e);
@@ -80,7 +80,7 @@ async fn main() {
     let result = initial::read_all_table(global_context.clone());
     match result {
         Ok(table_def_map) => {
-            global_context.lock().unwrap().meta_cache.add_all_table(table_def_map);
+            global_context.lock().unwrap().meta_data.add_all_table(table_def_map);
         }
         Err(e) => {
             log::error!("init meta table error: {}", e);

@@ -42,7 +42,7 @@ pub struct TableEngineFactory;
 impl TableEngineFactory {
     pub fn try_new_with_table_name(global_context: Arc<Mutex<GlobalContext>>, full_table_name: ObjectName) -> MysqlResult<Box<dyn TableEngine>> {
         let gc = global_context.lock().unwrap();
-        let result = gc.meta_cache.get_table(full_table_name.clone());
+        let result = gc.meta_data.get_table(full_table_name.clone());
         let table = match result {
             None => {
                 return Err(MysqlError::new_global_error(1105, format!(

@@ -644,7 +644,7 @@ impl Execution {
             SQLStatement::AlterTable { name, operation } => {
                 let full_table_name = meta_util::fill_up_table_name(&mut self.session_context, name.clone()).unwrap();
 
-                let table_map = self.global_context.lock().unwrap().meta_cache.get_table_map();
+                let table_map = self.global_context.lock().unwrap().meta_data.get_table_map();
                 let table = match table_map.get(&full_table_name) {
                     None => return Err(meta_util::error_of_table_doesnt_exists(full_table_name.clone())),
                     Some(table) => table.clone()
@@ -1079,7 +1079,7 @@ impl Execution {
                 let gc = self.global_context.lock().unwrap();
                 let full_table_name = meta_util::fill_up_table_name(&mut self.session_context, table_name.clone()).unwrap();
 
-                let result = gc.meta_cache.get_table(full_table_name.clone());
+                let result = gc.meta_data.get_table(full_table_name.clone());
                 let table = match result {
                     None => {
                         let message = format!("Table '{}' doesn't exist", table_name.to_string());
@@ -1100,7 +1100,7 @@ impl Execution {
             SQLStatement::Delete { table_name, selection } => {
                 let full_table_name = meta_util::fill_up_table_name(&mut self.session_context, table_name.clone()).unwrap();
 
-                let table_map = self.global_context.lock().unwrap().meta_cache.get_table_map();
+                let table_map = self.global_context.lock().unwrap().meta_data.get_table_map();
                 let table = match table_map.get(&full_table_name) {
                     None => {
                         let message = format!("Table '{}' doesn't exist", table_name.to_string());

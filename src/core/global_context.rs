@@ -9,7 +9,7 @@ use sled::Db as SledDb;
 
 use crate::config::util::get_config_path;
 use crate::config::util::read_config;
-use crate::meta::cache::MetaCache;
+use crate::meta::data::MetaData;
 use crate::store::rocksdb::db::DB as RocksdbDB;
 use crate::test;
 use crate::util;
@@ -26,7 +26,7 @@ pub struct Engine {
 #[derive(Clone, Debug)]
 pub struct GlobalContext {
     pub my_config: MyConfig,
-    pub meta_cache: MetaCache,
+    pub meta_data: MetaData,
     pub variable: Variable,
     pub engine: Engine,
 }
@@ -38,7 +38,7 @@ impl GlobalContext {
 
         let my_config = read_config(config_path.as_str());
 
-        let meta_cache = MetaCache::new();
+        let meta_cache = MetaData::new();
         let variable = Variable::new();
 
         let mut sled_db = None;
@@ -62,7 +62,7 @@ impl GlobalContext {
 
         let global_context = Self {
             my_config,
-            meta_cache,
+            meta_data: meta_cache,
             variable,
             engine,
         };

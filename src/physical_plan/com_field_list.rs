@@ -52,7 +52,7 @@ impl ComFieldList {
         let schema_name = meta_util::cut_out_schema_name(full_table_name.clone());
         let table_name = meta_util::cut_out_table_name(full_table_name.clone());
 
-        let table_def = self.global_context.lock().unwrap().meta_cache.get_table(full_table_name.clone()).unwrap().clone();
+        let table_def = self.global_context.lock().unwrap().meta_data.get_table(full_table_name.clone()).unwrap().clone();
         Ok((schema_name, table_name, table_def))
     }
 }

@@ -64,7 +64,7 @@ use super::super::util;
 
 pub fn get_table(global_context: Arc<Mutex<GlobalContext>>, full_table_name: ObjectName) -> MysqlResult<TableDef> {
     let gc = global_context.lock().unwrap();
-    let result = gc.meta_cache.get_table(full_table_name.clone());
+    let result = gc.meta_data.get_table(full_table_name.clone());
     match result {
         Some(table) => Ok((table.clone())),
         None => {
@@ -290,7 +290,7 @@ pub fn load_all_table(global_context: Arc<Mutex<GlobalContext>>) -> MysqlResult<
     let result = initial::read_all_table(global_context.clone());
     match result {
         Ok(table_map) => {
-            global_context.lock().unwrap().meta_cache.add_all_table(table_map);
+            global_context.lock().unwrap().meta_data.add_all_table(table_map);
             Ok(())
         }
         Err(mysql_error) => {
@@ -562,13 +562,13 @@ pub fn read_all_schema(global_context: Arc<Mutex<GlobalContext>>) -> MysqlResult
 
 pub fn cache_add_all_table(global_context: Arc<Mutex<GlobalContext>>) {
     let all_table = initial::read_all_table(global_context.clone()).unwrap();
-    global_context.lock().unwrap().meta_cache.add_all_table(all_table);
+    global_context.lock().unwrap().meta_data.add_all_table(all_table);
 }
 
 pub fn check_table_exists_with_full_name(global_context: Arc<Mutex<GlobalContext>>, full_table_name: ObjectName) -> MysqlResult<()> {
     let gc = global_context.lock().unwrap();
 
-    let table_map = gc.meta_cache.get_table_map();
+    let table_map = gc.meta_data.get_table_map();
     if table_map.get(&full_table_name).is_none() {
         return Err(error_of_table_doesnt_exists(full_table_name.clone()));
     }

@@ -18,14 +18,14 @@ use crate::util;
 use crate::meta::meta_def::TableDef;
 
 #[derive(Debug, Clone)]
-pub struct MetaCache {
+pub struct MetaData {
     schema_map: HashMap<ObjectName, meta_def::SchemaDef>,
     table_map: HashMap<ObjectName, meta_def::TableDef>,
     /// Map the column name to an serial number
     serial_number_map: HashMap<ObjectName, HashMap<Ident, usize>>,
 }
 
-impl MetaCache {
+impl MetaData {
     pub fn new() -> Self {
         let schema_map: HashMap<ObjectName, meta_def::SchemaDef> = HashMap::new();
         let table_map: HashMap<ObjectName, meta_def::TableDef> = HashMap::new();

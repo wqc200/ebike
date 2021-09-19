@@ -9,7 +9,7 @@ use datafusion::error::{Result};
 use sled::Db as sledDb;
 
 // use crate::core::udf::UdfContext;
-use crate::meta::cache::MetaCache;
+use crate::meta::data::MetaData;
 use crate::meta::variable::Variable;
 use crate::store::rocksdb::db::DB as rocksdbDB;
 use crate::test;

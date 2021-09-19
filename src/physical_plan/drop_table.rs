@@ -43,7 +43,7 @@ impl PhysicalPlanDropTable {
         let mut gc = self.global_context.lock().unwrap();
 
         let full_table_name = self.table.option.full_table_name.clone();
-        gc.meta_cache.delete_table(full_table_name.clone());
+        gc.meta_data.delete_table(full_table_name.clone());
 
         datafusion_context.deregister_table(full_table_name.to_string().as_str());
 
