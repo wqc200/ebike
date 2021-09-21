@@ -405,7 +405,7 @@ pub fn text_to_sql_data_type(text: &str) -> Result<SQLDataType> {
 }
 
 /// if the scalar value is number, add 0 before the number, until the number lenth is 19
-pub fn convert_scalar_value_to_index_string(scalar_value: ScalarValue) -> MysqlResult<Option<String>> {
+pub fn convert_scalar_value_to_string(scalar_value: ScalarValue) -> MysqlResult<Option<String>> {
     match scalar_value {
         ScalarValue::Int32(limit) => {
             if let Some(value) = limit {
@@ -590,7 +590,7 @@ pub fn error_of_table_doesnt_exists(full_table_name: ObjectName) -> MysqlError {
 mod tests {
     use datafusion::scalar::ScalarValue;
 
-    use crate::meta::meta_util::convert_scalar_value_to_index_string;
+    use crate::meta::meta_util::convert_scalar_value_to_string;
 
     #[test]
     fn check_valid() {
@@ -599,7 +599,7 @@ mod tests {
         // let b = 0x00;
         // let a = ScalarValue::Binary(Some(b.encode_fixed_vec()));
 
-        let b = convert_scalar_value_to_index_string(a).unwrap();
+        let b = convert_scalar_value_to_string(a).unwrap();
         println!("b: {:?}", b);
     }
 

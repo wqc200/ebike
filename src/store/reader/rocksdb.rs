@@ -69,8 +69,11 @@ impl RocksdbReader {
             SeekType::NoRecord => {},
             SeekType::FullTableScan { start, end} => {
                 rocksdb_iter.seek(start.clone());
-                start_scan_key = CreateScanKey::new(start.clone().as_str());
-                end_scan_key = CreateScanKey::new(end.clone().as_str());
+                Seek {
+                    iter,
+                    start,
+                    end,
+                }
             }
             SeekType::UsingTheIndex { index_name, order, start, end} => {
                 rocksdb_iter.seek(start.key().clone());
@@ -111,7 +114,7 @@ impl Iterator for RocksdbReader {
             let key = String::from_utf8(key.to_vec()).expect("Found invalid UTF-8");
             // log::debug!("row key: {:?}", key);
 
-            match self.start_scan_key.interval() {
+            match self.start_scan_key.point_type() {
                 PointType::Open => {
                     if key.starts_with(self.start_scan_key.key().as_str()) {
                         continue;
@@ -119,7 +122,7 @@ impl Iterator for RocksdbReader {
                 }
                 PointType::Closed => {}
             }
-            match self.end_scan_key.interval() {
+            match self.end_scan_key.point_type() {
                 PointType::Open => {
                     if key.starts_with(self.end_scan_key.key().as_str()) {
                         break;
