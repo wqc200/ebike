@@ -19,45 +19,20 @@ use crate::util::convert::{ToIdent, ToObjectName};
 use crate::util::dbkey;
 use crate::util::dbkey::CreateScanKey;
 
+const INDEX_LEVEL_PRIMARY: i32 = 0;
+const INDEX_LEVEL_UNIQUE: i32 = 1;
+
 #[derive(Clone, Debug)]
 pub struct TableIndex {
-    index_name: String,
-    level: usize,
-    column_range_list: Vec<ColumnRange>,
-}
-
-impl TableIndex {
-    pub fn getIndexName(&self) -> String {
-        self.index_name.clone()
-    }
-
-    pub fn getLevel(&self) -> usize {
-        self.level
-    }
-
-    pub fn getColumnRangeList(&self) -> Vec<ColumnRange> {
-        self.column_range_list.clone()
-    }
-
-    pub fn setColumns(&mut self, columns: Vec<ColumnRange>) {
-        self.column_range_list = columns
-    }
+    pub index_name: String,
+    pub level: i32,
+    pub column_range_list: Vec<ColumnRange>,
 }
 
 #[derive(Clone, Debug)]
 pub struct ColumnRange {
-    column_name: String,
-    range_value: RangeValue,
-}
-
-impl ColumnRange {
-    pub fn getColumnName(&self) -> String {
-        self.column_name.clone()
-    }
-
-    pub fn getCompareValue(&self) -> RangeValue {
-        self.range_value.clone()
-    }
+    pub column_name: String,
+    pub range_value: RangeValue,
 }
 
 #[derive(Clone, Debug)]
@@ -492,11 +467,7 @@ pub fn compare_column_filter(operators: Vec<Expr>) -> CompareResult {
     result
 }
 
-pub fn get_seek_prefix(global_context: Arc<Mutex<GlobalContext>>, full_table_name: ObjectName, table_def: TableDef, filters: &[Expr]) -> MysqlResult<SeekType> {
-    if filters.len() < 1 {
-        return Ok(get_seek_prefix_default(full_table_name));
-    }
-
+pub fn get_seek_prefix(global_context: Arc<Mutex<GlobalContext>>, full_table_name: ObjectName, table: TableDef, filters: &[Expr]) -> MysqlResult<SeekType> {
     let column_filter_map = create_column_filter(filters).unwrap();
 
     let mut column_range_map = HashMap::new();
@@ -532,16 +503,10 @@ pub fn get_seek_prefix(global_context: Arc<Mutex<GlobalContext>>, full_table_nam
             }
         }
     }
-    if column_range_map.is_empty() {
-        return Ok(get_seek_prefix_default(full_table_name));
-    }
 
-    let table_index_list = get_table_indexes(table_def, column_range_map);
-    if table_index_list.is_empty() {
-        return Ok(get_seek_prefix_default(full_table_name));
-    }
+    let table_index_list = get_table_index_list(table.clone(), column_range_map);
 
-    let result = get_seek_prefix_with_index(global_context, full_table_name, table_index_list);
+    let result = get_seek_prefix_with_index(global_context, table.clone(), table_index_list);
     match result {
         Ok(seek_type) => Ok(seek_type),
         Err(mysql_error) => Err(mysql_error)
@@ -592,7 +557,7 @@ pub fn create_column_filter(filters: &[Expr]) -> MysqlResult<HashMap<String, Vec
     Ok(column_filter_map)
 }
 
-pub fn get_table_indexes(table_def: TableDef, column_range_map: HashMap<String, ColumnRange>) -> Vec<TableIndex> {
+pub fn get_table_index_list(table_def: TableDef, column_range_map: HashMap<String, ColumnRange>) -> Vec<TableIndex> {
     let mut table_index_list: Vec<TableIndex> = vec![];
     for table_constraint in table_def.get_constraints() {
         match table_constraint {
@@ -615,11 +580,11 @@ pub fn get_table_indexes(table_def: TableDef, column_range_map: HashMap<String, 
                     continue;
                 }
 
-                let mut level: usize = 0;
+                let mut level = 0;
                 if is_primary.clone() {
-                    level = 1;
+                    level = INDEX_LEVEL_PRIMARY;
                 } else {
-                    level = 2;
+                    level = INDEX_LEVEL_UNIQUE;
                 }
 
                 let table_index = TableIndex {
@@ -635,27 +600,23 @@ pub fn get_table_indexes(table_def: TableDef, column_range_map: HashMap<String, 
     table_index_list
 }
 
-pub fn get_seek_prefix_with_index(global_context: Arc<Mutex<GlobalContext>>, full_table_name: ObjectName, table_index_list: Vec<TableIndex>) -> MysqlResult<SeekType> {
+pub fn get_seek_prefix_with_index(global_context: Arc<Mutex<GlobalContext>>, table: TableDef, table_index_list: Vec<TableIndex>) -> MysqlResult<SeekType> {
+    if table_index_list.is_empty() {
+        return Ok(get_seek_prefix_default(table.option.full_table_name));
+    }
+
     /// Find the index with the most matching fields
     let table_index = table_index_list.iter().fold(table_index_list[0].clone(), |accumulator, item| {
-        if item.getColumnRangeList().len() > accumulator.getColumnRangeList().len() {
+        if item.column_range_list.len() > accumulator.column_range_list.len() {
             item.clone()
-        } else if item.getColumnRangeList().len() == accumulator.getColumnRangeList().len() && item.getLevel() > accumulator.getLevel() {
+        } else if item.column_range_list.len() == accumulator.column_range_list.len() && item.level > accumulator.level {
             item.clone()
         } else {
             accumulator
         }
     });
 
-    let mut column_indexes: Vec<(usize, RangeValue)> = vec![];
-    for column_index in table_index.getColumnRangeList() {
-        let column_name = column_index.getColumnName().to_ident();
-        let serial_number = global_context.lock().unwrap().meta_data.get_serial_number(full_table_name.clone(), column_name.clone()).unwrap();
-
-        column_indexes.push((serial_number, column_index.getCompareValue()));
-    }
-
-    let (start, end) = dbkey::create_scan_index(full_table_name.clone(), table_index.getIndexName().as_str(), column_indexes);
+    let (start, end) = dbkey::create_scan_index(table.clone(), table_index.clone());
     let order = match start.key().as_str().partial_cmp(end.key().as_str()) {
         None => ScanOrder::Asc,
         Some(order) => {
@@ -668,7 +629,7 @@ pub fn get_seek_prefix_with_index(global_context: Arc<Mutex<GlobalContext>>, ful
     };
 
     Ok(SeekType::UsingTheIndex {
-        index_name: table_index.getIndexName(),
+        index_name: table_index.index_name,
         order,
         start,
         end,

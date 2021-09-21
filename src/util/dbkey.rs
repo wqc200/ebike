@@ -3,7 +3,7 @@ use datafusion::logical_plan::{Expr};
 
 use crate::core::core_util;
 use crate::meta_util;
-use crate::store::reader::reader_util::{RangeValue, ScanOrder, Interval};
+use crate::store::reader::reader_util::{RangeValue, ScanOrder, Interval, TableIndex};
 use datafusion::scalar::ScalarValue;
 use crate::mysql::error::{MysqlResult, MysqlError};
 use crate::meta::meta_const::MYSQL_ERROR_CODE_UNKNOWN_ERROR;
@@ -11,6 +11,7 @@ use sqlparser::ast::{ObjectName, Ident};
 use crate::meta::meta_const;
 use crate::meta::meta_def::{TableDef, TableIndexDef};
 use std::collections::HashMap;
+use crate::util::convert::ToIdent;
 
 pub fn scan_column_name(schema_name: &str) -> Box<[u8]> {
     let mut k = String::from("/Schema/ColumnName/ToIndex");
@@ -212,20 +213,28 @@ impl CreateScanKey {
     }
 }
 
-pub fn create_scan_index(full_table_name: ObjectName, index_name: &str, column_index_values: Vec<(usize, RangeValue)>) -> (CreateScanKey, CreateScanKey) {
+pub fn create_scan_index(table: TableDef, table_index: TableIndex) -> (CreateScanKey, CreateScanKey) {
+    let full_table_name = table.option.full_table_name;
+    let index_name = table_index.index_name;
+    let column_range_list = table_index.column_range_list;
+
     let mut start = CreateScanKey::new("/Table/index/key/");
     let mut end = CreateScanKey::new("/Table/index/key/");
     start.add_key(full_table_name.to_string().as_str());
     end.add_key(full_table_name.to_string().as_str());
 
-    start.add_key(index_name);
-    end.add_key(index_name);
+    start.add_key(index_name.as_str());
+    end.add_key(index_name.as_str());
 
-    for (column_index, compare_value) in column_index_values {
-        start.add_key(column_index.to_string().as_str());
-        end.add_key(column_index.to_string().as_str());
+    for column_range in column_range_list {
+        let column_name = column_range.column_name;
+        let sparrow_column = table.column.get_sparrow_column(column_name.to_ident()).unwrap();
+        let column_store_id = sparrow_column.store_id;
 
-        match compare_value {
+        start.add_key(column_store_id.to_string().as_str());
+        end.add_key(column_store_id.to_string().as_str());
+
+        match column_range.range_value {
             RangeValue::Null => {
                 start.add_key("0");
                 end.add_key("0");
