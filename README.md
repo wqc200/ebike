@@ -1,11 +1,11 @@
-# <center>Sparrow</center>
+# Sparrow
 Sparrow is an OLAP open source database, written is Rust, that uses Apache Datafusion as its query execution framework.
 
 ## Why sparrow
 1. High Performance 
    - Leveraging Rust and Arrow's memory model, Sparrow achieves very high performance
 2. Easy to Use
-   - MySQL protocol support
+   - MySQL protocol support, The ecosystem around mysql is rich.
 3. Simple
    - Rust Sled engine, can run on a single machine
 
