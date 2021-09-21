@@ -3,7 +3,7 @@ use datafusion::logical_plan::{Expr};
 
 use crate::core::core_util;
 use crate::meta_util;
-use crate::store::reader::reader_util::{RangeValue, ScanOrder, Interval, TableIndex};
+use crate::store::reader::reader_util::{RangeValue, ScanOrder, PointType, TableIndex};
 use datafusion::scalar::ScalarValue;
 use crate::mysql::error::{MysqlResult, MysqlError};
 use crate::meta::meta_const::MYSQL_ERROR_CODE_UNKNOWN_ERROR;
@@ -183,7 +183,7 @@ pub fn create_table_index_key(table: TableDef, table_index: TableIndexDef, colum
 
 pub struct CreateScanKey {
     key: String,
-    interval: Interval,
+    interval: PointType,
 }
 
 impl CreateScanKey {
@@ -191,7 +191,7 @@ impl CreateScanKey {
         let key = String::from(prefix);
         Self {
             key,
-            interval: Interval::Closed,
+            interval: PointType::Closed,
         }
     }
 
@@ -200,7 +200,7 @@ impl CreateScanKey {
         self.key.push_str("/");
     }
 
-    pub fn change_interval(&mut self, interval: Interval) {
+    pub fn change_interval(&mut self, interval: PointType) {
         self.interval = interval
     }
 
@@ -208,7 +208,7 @@ impl CreateScanKey {
         self.key.clone()
     }
 
-    pub fn interval(&self) -> Interval {
+    pub fn interval(&self) -> PointType {
         self.interval.clone()
     }
 }

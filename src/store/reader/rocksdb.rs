@@ -19,7 +19,7 @@ use crate::store::rocksdb::option::{Options, ReadOptions};
 use crate::store::rocksdb::slice_transform::SliceTransform;
 use crate::util;
 use crate::util::dbkey;
-use crate::store::reader::reader_util::{SeekType, ScanOrder, Interval};
+use crate::store::reader::reader_util::{SeekType, ScanOrder, PointType};
 use std::cmp::Ordering;
 use crate::util::dbkey::CreateScanKey;
 use sqlparser::ast::ObjectName;
@@ -112,20 +112,20 @@ impl Iterator for RocksdbReader {
             // log::debug!("row key: {:?}", key);
 
             match self.start_scan_key.interval() {
-                Interval::Open => {
+                PointType::Open => {
                     if key.starts_with(self.start_scan_key.key().as_str()) {
                         continue;
                     }
                 }
-                Interval::Closed => {}
+                PointType::Closed => {}
             }
             match self.end_scan_key.interval() {
-                Interval::Open => {
+                PointType::Open => {
                     if key.starts_with(self.end_scan_key.key().as_str()) {
                         break;
                     }
                 }
-                Interval::Closed => {}
+                PointType::Closed => {}
             }
             if !key.starts_with(self.end_scan_key.key().as_str()) {
                 match key.as_str().partial_cmp(self.end_scan_key.key().as_str()) {

@@ -37,16 +37,16 @@ pub struct ColumnRange {
 
 #[derive(Clone, Debug)]
 pub struct RangeNotNullValue {
-    start: Option<(String, Interval)>,
-    end: Option<(String, Interval)>,
+    start: Option<(String, PointType)>,
+    end: Option<(String, PointType)>,
 }
 
 impl RangeNotNullValue {
-    pub fn getStart(&self) -> Option<(String, Interval)> {
+    pub fn getStart(&self) -> Option<(String, PointType)> {
         self.start.clone()
     }
 
-    pub fn getEnd(&self) -> Option<(String, Interval)> {
+    pub fn getEnd(&self) -> Option<(String, PointType)> {
         self.end.clone()
     }
 }
@@ -87,81 +87,215 @@ pub enum ScanOrder {
 }
 
 #[derive(Clone, Debug)]
-pub enum Interval {
+pub struct Range {
+    pub start: Option<RangePoint>,
+    pub end: Option<RangePoint>,
+}
+
+#[derive(Clone, Debug)]
+pub enum RangePoint {
+    Null,
+    NotNull,
+    NotNullValue(ScalarValue, PointType),
+}
+
+#[derive(Clone, Debug)]
+pub enum PointType {
     Open,
     Closed,
 }
 
 pub fn compare_column_filter(operators: Vec<Expr>) -> CompareResult {
-    let result = match operators[0].clone() {
-        Expr::BinaryExpr { op, right, .. } => {
-            let input = match right.as_ref() {
-                Expr::Literal(scalar_value) => {
-                    let value = meta_util::convert_scalar_value_to_index_string(scalar_value.clone());
-                    match value {
-                        Ok(value) => {
-                            match value {
-                                None => return CompareResult::All,
-                                Some(value) => value
+    let mut range_list = vec![];
+    for operator in operators {
+        let range = match operator {
+            Expr::BinaryExpr { op, right, .. } => {
+                let scalar_value = match right.as_ref() {
+                    Expr::Literal(scalar_value) => {
+                        scalar_value.clone()
+                    }
+                    _ => continue,
+                };
+
+                match op {
+                    Operator::GtEq => {
+                        let range_point = RangePoint::NotNullValue(scalar_value, PointType::Closed);
+                        Range {
+                            start: Some(range_point.clone()),
+                            end: None,
+                        }
+                    }
+                    Operator::Gt => {
+                        let range_point = RangePoint::NotNullValue(scalar_value, PointType::Open);
+                        Range {
+                            start: Some(range_point.clone()),
+                            end: None,
+                        }
+                    }
+                    Operator::Eq => {
+                        let range_point = RangePoint::NotNullValue(scalar_value, PointType::Closed);
+                        Range {
+                            start: Some(range_point.clone()),
+                            end: Some(range_point.clone()),
+                        }
+                    }
+                    Operator::Lt => {
+                        let range_point = RangePoint::NotNullValue(scalar_value, PointType::Open);
+                        Range {
+                            start: None,
+                            end: Some(range_point.clone()),
+                        }
+                    }
+                    Operator::LtEq => {
+                        let range_point = RangePoint::NotNullValue(scalar_value, PointType::Closed);
+                        Range {
+                            start: None,
+                            end: Some(range_point.clone()),
+                        }
+                    }
+                    _ => continue,
+                }
+            }
+            Expr::IsNotNull(_) => {
+                let range_point = RangePoint::NotNull;
+                Range {
+                    start: Some(range_point.clone()),
+                    end: Some(range_point.clone()),
+                }
+            }
+            Expr::IsNull(_) => {
+                let range_point = RangePoint::Null;
+                Range {
+                    start: Some(range_point.clone()),
+                    end: Some(range_point.clone()),
+                }
+            }
+            _ => continue,
+        };
+
+        range_list.push(range);
+    };
+
+    let mut accumulator_range = Range {
+        start: None,
+        end: None,
+    };
+    for range in range_list {
+        match range.start {
+            None => {}
+            Some(range_point) => {
+                match range_point {
+                    RangePoint::Null => {
+                        match accumulator_range.start.clone() {
+                            None => accumulator_range.start = range.start.clone(),
+                            Some(_) => {}
+                        }
+                    }
+                    RangePoint::NotNull => {
+                        match accumulator_range.start.clone() {
+                            None => accumulator_range.start = range.start.clone(),
+                            Some(accumulator_range_point) => {
+                                match accumulator_range_point {
+                                    RangePoint::Null => accumulator_range.start = range.start.clone(),
+                                    RangePoint::NotNull => {}
+                                    RangePoint::NotNullValue(_, _) => {}
+                                }
                             }
                         }
-                        Err(_) => return CompareResult::All,
+                    }
+                    RangePoint::NotNullValue(scalar_value, point_type) => {
+                        match accumulator_range.start.clone() {
+                            None => accumulator_range.start = range.start.clone(),
+                            Some(accumulator_range_point) => {
+                                match accumulator_range_point {
+                                    RangePoint::Null => accumulator_range.start = range.start.clone(),
+                                    RangePoint::NotNull => accumulator_range.start = range.start.clone(),
+                                    RangePoint::NotNullValue(accumulator_scalar_value, _) => {
+                                        match accumulator_scalar_value.partial_cmp(&scalar_value) {
+                                            None => {},
+                                            Some(ordering) => {
+                                                match ordering {
+                                                    Ordering::Greater => {}
+                                                    Ordering::Equal => {
+                                                        match point_type {
+                                                            PointType::Open => accumulator_range.start = range.start.clone(),
+                                                            PointType::Closed => {}
+                                                        }
+                                                    }
+                                                    Ordering::Less => accumulator_range.start = range.start.clone(),
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
-                _ => return CompareResult::All,
-            };
-
-            match op {
-                Operator::GtEq => {
-                    let compare_value = RangeNotNullValue {
-                        start: Some((input.clone(), Interval::Closed)),
-                        end: None,
-                    };
-                    CompareResult::NotNull(compare_value)
-                }
-                Operator::Gt => {
-                    let compare_value = RangeNotNullValue {
-                        start: Some((input.clone(), Interval::Open)),
-                        end: None,
-                    };
-                    CompareResult::NotNull(compare_value)
-                }
-                Operator::Eq => {
-                    let compare_value = RangeNotNullValue {
-                        start: Some((input.clone(), Interval::Closed)),
-                        end: Some((input.clone(), Interval::Closed)),
-                    };
-                    CompareResult::NotNull(compare_value)
-                }
-                Operator::Lt => {
-                    let compare_value = RangeNotNullValue {
-                        start: None,
-                        end: Some((input.clone(), Interval::Open)),
-                    };
-                    CompareResult::NotNull(compare_value)
-                }
-                Operator::LtEq => {
-                    let compare_value = RangeNotNullValue {
-                        start: None,
-                        end: Some((input.clone(), Interval::Closed)),
-                    };
-                    CompareResult::NotNull(compare_value)
-                }
-                _ => return CompareResult::All,
             }
         }
-        Expr::IsNotNull(_) => {
-            let compare_value = RangeNotNullValue {
-                start: None,
-                end: None,
-            };
-            CompareResult::NotNull(compare_value)
+
+        match range.end {
+            None => {}
+            Some(range_point) => {
+                match range_point {
+                    RangePoint::Null => {
+                        match accumulator_range.end.clone() {
+                            None => accumulator_range.end = range.end.clone(),
+                            Some(accumulator_range_point) => {
+                                match accumulator_range_point {
+                                    RangePoint::Null => {},
+                                    RangePoint::NotNull => accumulator_range.end = range.end.clone(),
+                                    RangePoint::NotNullValue(_, _) => accumulator_range.end = range.end.clone(),
+                                }
+                            }
+                        }
+                    }
+                    RangePoint::NotNull => {
+                        match accumulator_range.end.clone() {
+                            None => accumulator_range.end = range.end.clone(),
+                            Some(accumulator_range_point) => {
+                                match accumulator_range_point {
+                                    RangePoint::Null => {},
+                                    RangePoint::NotNull => {}
+                                    RangePoint::NotNullValue(_, _) => accumulator_range.end = range.end.clone(),
+                                }
+                            }
+                        }
+                    }
+                    RangePoint::NotNullValue(scalar_value, point_type) => {
+                        match accumulator_range.end.clone() {
+                            None => accumulator_range.end = range.end.clone(),
+                            Some(accumulator_range_point) => {
+                                match accumulator_range_point {
+                                    RangePoint::Null => {},
+                                    RangePoint::NotNull => {},
+                                    RangePoint::NotNullValue(accumulator_scalar_value, _) => {
+                                        match accumulator_scalar_value.partial_cmp(&scalar_value) {
+                                            None => {},
+                                            Some(ordering) => {
+                                                match ordering {
+                                                    Ordering::Greater => accumulator_range.end = range.end.clone(),
+                                                    Ordering::Equal => {
+                                                        match point_type {
+                                                            PointType::Open => accumulator_range.end = range.end.clone(),
+                                                            PointType::Closed => {}
+                                                        }
+                                                    }
+                                                    Ordering::Less => {},
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         }
-        Expr::IsNull(_) => {
-            CompareResult::Null
-        }
-        _ => return CompareResult::All,
-    };
+    }
+
 
     let new_operators: Vec<_> = operators.clone().drain(1..).collect();
 
@@ -191,7 +325,7 @@ pub fn compare_column_filter(operators: Vec<Expr>) -> CompareResult {
                             CompareResult::NotNull(mut compare_value) => {
                                 match compare_value.start.clone() {
                                     None => {
-                                        compare_value.start = Some((input.clone(), Interval::Closed));
+                                        compare_value.start = Some((input.clone(), PointType::Closed));
                                     }
                                     Some((start_value, interval)) => {
                                         match input.as_str().partial_cmp(start_value.as_str()) {
@@ -199,12 +333,12 @@ pub fn compare_column_filter(operators: Vec<Expr>) -> CompareResult {
                                             Some(order) => {
                                                 match order {
                                                     Ordering::Greater => {
-                                                        compare_value.start = Some((input.clone(), Interval::Closed));
+                                                        compare_value.start = Some((input.clone(), PointType::Closed));
                                                     }
                                                     Ordering::Equal => {
                                                         match interval {
-                                                            Interval::Open => {}
-                                                            Interval::Closed => {}
+                                                            PointType::Open => {}
+                                                            PointType::Closed => {}
                                                         }
                                                     }
                                                     Ordering::Less => return CompareResult::Empty,
@@ -224,8 +358,8 @@ pub fn compare_column_filter(operators: Vec<Expr>) -> CompareResult {
                                                     Ordering::Greater => return CompareResult::Empty,
                                                     Ordering::Equal => {
                                                         match interval {
-                                                            Interval::Open => return CompareResult::Empty,
-                                                            Interval::Closed => {}
+                                                            PointType::Open => return CompareResult::Empty,
+                                                            PointType::Closed => {}
                                                         }
                                                     }
                                                     Ordering::Less => {}
@@ -244,7 +378,7 @@ pub fn compare_column_filter(operators: Vec<Expr>) -> CompareResult {
                             CompareResult::NotNull(mut compare_value) => {
                                 match compare_value.start.clone() {
                                     None => {
-                                        compare_value.start = Some((input.clone(), Interval::Open));
+                                        compare_value.start = Some((input.clone(), PointType::Open));
                                     }
                                     Some((start_value, interval)) => {
                                         match input.as_str().partial_cmp(start_value.as_str()) {
@@ -252,13 +386,13 @@ pub fn compare_column_filter(operators: Vec<Expr>) -> CompareResult {
                                             Some(order) => {
                                                 match order {
                                                     Ordering::Greater => {
-                                                        compare_value.start = Some((input.clone(), Interval::Open));
+                                                        compare_value.start = Some((input.clone(), PointType::Open));
                                                     }
                                                     Ordering::Equal => {
                                                         match interval {
-                                                            Interval::Open => {}
-                                                            Interval::Closed => {
-                                                                compare_value.start = Some((input.clone(), Interval::Open));
+                                                            PointType::Open => {}
+                                                            PointType::Closed => {
+                                                                compare_value.start = Some((input.clone(), PointType::Open));
                                                             }
                                                         }
                                                     }
@@ -294,7 +428,7 @@ pub fn compare_column_filter(operators: Vec<Expr>) -> CompareResult {
                             CompareResult::NotNull(mut compare_value) => {
                                 match compare_value.start.clone() {
                                     None => {
-                                        compare_value.start = Some((input.clone(), Interval::Closed));
+                                        compare_value.start = Some((input.clone(), PointType::Closed));
                                     }
                                     Some((start_value, interval)) => {
                                         match input.as_str().partial_cmp(start_value.as_str()) {
@@ -302,12 +436,12 @@ pub fn compare_column_filter(operators: Vec<Expr>) -> CompareResult {
                                             Some(order) => {
                                                 match order {
                                                     Ordering::Greater => {
-                                                        compare_value.start = Some((input.clone(), Interval::Closed));
+                                                        compare_value.start = Some((input.clone(), PointType::Closed));
                                                     }
                                                     Ordering::Equal => {
                                                         match interval {
-                                                            Interval::Open => return CompareResult::Empty,
-                                                            Interval::Closed => {}
+                                                            PointType::Open => return CompareResult::Empty,
+                                                            PointType::Closed => {}
                                                         }
                                                     }
                                                     Ordering::Less => return CompareResult::Empty,
@@ -319,7 +453,7 @@ pub fn compare_column_filter(operators: Vec<Expr>) -> CompareResult {
 
                                 match compare_value.end.clone() {
                                     None => {
-                                        compare_value.end = Some((input.clone(), Interval::Closed));
+                                        compare_value.end = Some((input.clone(), PointType::Closed));
                                     }
                                     Some((end_value, interval)) => {
                                         match input.as_str().partial_cmp(end_value.as_str()) {
@@ -329,12 +463,12 @@ pub fn compare_column_filter(operators: Vec<Expr>) -> CompareResult {
                                                     Ordering::Greater => return CompareResult::Empty,
                                                     Ordering::Equal => {
                                                         match interval {
-                                                            Interval::Open => return CompareResult::Empty,
-                                                            Interval::Closed => {}
+                                                            PointType::Open => return CompareResult::Empty,
+                                                            PointType::Closed => {}
                                                         }
                                                     }
                                                     Ordering::Less => {
-                                                        compare_value.end = Some((input.clone(), Interval::Closed));
+                                                        compare_value.end = Some((input.clone(), PointType::Closed));
                                                     }
                                                 }
                                             }
@@ -367,7 +501,7 @@ pub fn compare_column_filter(operators: Vec<Expr>) -> CompareResult {
 
                                 match compare_value.end.clone() {
                                     None => {
-                                        compare_value.end = Some((input.clone(), Interval::Open));
+                                        compare_value.end = Some((input.clone(), PointType::Open));
                                     }
                                     Some((end_value, interval)) => {
                                         match input.as_str().partial_cmp(end_value.as_str()) {
@@ -377,14 +511,14 @@ pub fn compare_column_filter(operators: Vec<Expr>) -> CompareResult {
                                                     Ordering::Greater => return CompareResult::Empty,
                                                     Ordering::Equal => {
                                                         match interval {
-                                                            Interval::Open => {}
-                                                            Interval::Closed => {
-                                                                compare_value.end = Some((input.clone(), Interval::Open));
+                                                            PointType::Open => {}
+                                                            PointType::Closed => {
+                                                                compare_value.end = Some((input.clone(), PointType::Open));
                                                             }
                                                         }
                                                     }
                                                     Ordering::Less => {
-                                                        compare_value.end = Some((input.clone(), Interval::Open));
+                                                        compare_value.end = Some((input.clone(), PointType::Open));
                                                     }
                                                 }
                                             }
@@ -409,8 +543,8 @@ pub fn compare_column_filter(operators: Vec<Expr>) -> CompareResult {
                                                     Ordering::Greater => {}
                                                     Ordering::Equal => {
                                                         match interval {
-                                                            Interval::Open => return CompareResult::Empty,
-                                                            Interval::Closed => {}
+                                                            PointType::Open => return CompareResult::Empty,
+                                                            PointType::Closed => {}
                                                         }
                                                     }
                                                     Ordering::Less => return CompareResult::Empty,
@@ -422,7 +556,7 @@ pub fn compare_column_filter(operators: Vec<Expr>) -> CompareResult {
 
                                 match compare_value.end.clone() {
                                     None => {
-                                        compare_value.end = Some((input.clone(), Interval::Closed));
+                                        compare_value.end = Some((input.clone(), PointType::Closed));
                                     }
                                     Some((end_value, interval)) => {
                                         match input.as_str().partial_cmp(end_value.as_str()) {
@@ -432,7 +566,7 @@ pub fn compare_column_filter(operators: Vec<Expr>) -> CompareResult {
                                                     Ordering::Greater => return CompareResult::Empty,
                                                     Ordering::Equal => {}
                                                     Ordering::Less => {
-                                                        compare_value.end = Some((input.clone(), Interval::Closed));
+                                                        compare_value.end = Some((input.clone(), PointType::Closed));
                                                     }
                                                 }
                                             }
