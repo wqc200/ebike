@@ -55,9 +55,6 @@ use crate::physical_plan::delete::PhysicalPlanDelete;
 use crate::physical_plan::insert::PhysicalPlanInsert;
 use crate::store::engine::engine_util;
 use crate::store::engine::engine_util::{StoreEngine, StoreEngineFactory, TableEngine, TableEngineFactory};
-use crate::store::reader::rocksdb::RocksdbReader;
-use crate::store::rocksdb::db::DB;
-use crate::store::rocksdb::option::Options;
 use crate::util::convert::{ToIdent, ToObjectName};
 
 use super::super::util;

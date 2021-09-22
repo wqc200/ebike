@@ -62,7 +62,6 @@ use crate::core::output::{OutputError, Result};
 use crate::core::session_context::SessionContext;
 use crate::core::udf;
 use crate::datafusion_impl::catalog::information_schema::CatalogWithInformationSchemaProvider;
-use crate::datafusion_impl::datasource::rocksdb::RocksdbTable;
 use crate::meta::{meta_const, meta_util};
 use crate::meta::initial;
 use crate::mysql::error::{MysqlError, MysqlResult};
@@ -73,7 +72,6 @@ use crate::physical_plan::create_db::CreateDb;
 use crate::physical_plan::util::CorePhysicalPlan;
 use crate::store::engine::engine_util;
 
-use crate::store::rocksdb::db::DB;
 use crate::test;
 use crate::util::convert::{convert_ident_to_lowercase, ToLowercase, ToObjectName, convert_object_name_to_lowercase};
 use crate::variable::system::SystemVar;

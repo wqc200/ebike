@@ -52,14 +52,12 @@ impl ::std::default::Default for ConfigSchema {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ConfigEngine {
     pub sled: EngineSled,
-    pub rocksdb: EngineRocksdb,
 }
 
 impl ::std::default::Default for ConfigEngine {
     fn default() -> Self {
         Self {
             sled: EngineSled::default(),
-            rocksdb: EngineRocksdb::default(),
         }
     }
 }
@@ -73,19 +71,6 @@ impl ::std::default::Default for EngineSled {
     fn default() -> Self {
         Self {
             data_path: "./data/sled".into(),
-        }
-    }
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct EngineRocksdb {
-    pub data_path: String,
-}
-
-impl ::std::default::Default for EngineRocksdb {
-    fn default() -> Self {
-        Self {
-            data_path: "./data/rocksdb".into(),
         }
     }
 }

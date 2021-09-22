@@ -181,6 +181,7 @@ pub fn create_table_index_key(table: TableDef, table_index: TableIndexDef, colum
     Ok(k)
 }
 
+#[derive(Debug, Clone)]
 pub struct CreateScanKey {
     pub key: String,
     pub point_type: PointType,
@@ -267,7 +268,7 @@ pub fn create_scan_index(table: TableDef, table_index: TableIndex) -> (CreateSca
             RangePoint::NotNull => {
                 end.add_key("1");
             }
-            RangePoint::NotNullValue(scalar_value, _) => {
+            RangePoint::NotNullValue(scalar_value, point_type) => {
                 end.add_key("1");
                 let value = scalar_value.to_string();
                 end.add_key(value.as_str());

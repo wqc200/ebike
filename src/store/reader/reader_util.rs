@@ -174,7 +174,7 @@ pub fn create_column_range(operators: Vec<Expr>) -> Range {
         end: RangePoint::Infinity,
     };
     for range in range_list {
-        match range.start {
+        match range.start.clone() {
             RangePoint::Infinity => {}
             RangePoint::Null => {
                 match accumulator_range.start.clone() {
@@ -204,7 +204,7 @@ pub fn create_column_range(operators: Vec<Expr>) -> Range {
                                 match ordering {
                                     Ordering::Greater => {}
                                     Ordering::Equal => {
-                                        match point_type {
+                                        match point_type.clone() {
                                             PointType::Open => accumulator_range.start = range.start.clone(),
                                             PointType::Closed => {}
                                         }
@@ -218,7 +218,7 @@ pub fn create_column_range(operators: Vec<Expr>) -> Range {
             }
         }
 
-        match range.end {
+        match range.end.clone() {
             RangePoint::Infinity => {}
             RangePoint::Null => {
                 match accumulator_range.end.clone() {
@@ -248,7 +248,7 @@ pub fn create_column_range(operators: Vec<Expr>) -> Range {
                                 match ordering {
                                     Ordering::Greater => accumulator_range.end = range.end.clone(),
                                     Ordering::Equal => {
-                                        match point_type {
+                                        match point_type.clone() {
                                             PointType::Open => accumulator_range.end = range.end.clone(),
                                             PointType::Closed => {}
                                         }

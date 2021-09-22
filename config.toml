@@ -2,13 +2,10 @@
 [server]
 log_file = "./log4rs.yaml"
 bind_host = "0.0.0.0:3307"
-engines = ["sled", "rocksdb"]
+engines = ["sled"]
 
 [schema]
-engine = "rocksdb"
+engine = "sled"
 
 [engine.sled]
 data_path = "./data/sparrow/sled"
-
-[engine.rocksdb]
-data_path = "./data/sparrow/rocksdb"

@@ -14,11 +14,6 @@ use sled::Iter as SledIter;
 
 use crate::core::global_context::GlobalContext;
 use crate::meta::{meta_util as MetaUtil, meta_const, meta_util};
-use crate::store::reader::reader_util;
-use crate::store::rocksdb::db::DB;
-use crate::store::rocksdb::iterator::DBRawIterator;
-use crate::store::rocksdb::option::{Options, ReadOptions};
-use crate::store::rocksdb::slice_transform::SliceTransform;
 use crate::util;
 use crate::util::dbkey;
 use crate::store::reader::reader_util::{SeekType, ScanOrder, PointType};
@@ -28,6 +23,7 @@ use sqlparser::ast::ObjectName;
 use crate::mysql::error::MysqlError;
 use crate::util::convert::{ToObjectName, ToIdent};
 use crate::meta::meta_def::TableDef;
+use crate::store::reader::reader_util;
 
 pub struct Seek {
     iter: SledIter,

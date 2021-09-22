@@ -42,11 +42,8 @@ use sqlparser::ast::ObjectName;
 
 use crate::core::global_context::GlobalContext;
 use crate::meta::{meta_def, meta_util};
-use crate::store::reader::rocksdb::RocksdbReader;
-use crate::store::rocksdb::db::DB;
-use crate::store::rocksdb::option::{Options, ReadOptions};
-use crate::store::rocksdb::slice_transform::SliceTransform;
 use crate::util;
+use crate::store::reader::sled::SledReader;
 
 #[derive(Debug, Clone)]
 pub struct SledExec {
@@ -121,7 +118,7 @@ impl ExecutionPlan for SledExec {
     }
 
     async fn execute(&self, partition: usize) -> Result<SendableRecordBatchStream> {
-        let reader = RocksdbReader::new(
+        let reader = SledReader::new(
             self.global_context.clone(),
             self.table_def.clone(),
             self.batch_size,
@@ -138,7 +135,7 @@ impl ExecutionPlan for SledExec {
 }
 
 struct RocksdbStream {
-    reader: RocksdbReader,
+    reader: SledReader,
 }
 
 impl Stream for RocksdbStream {

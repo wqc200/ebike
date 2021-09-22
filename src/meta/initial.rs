@@ -19,7 +19,6 @@ use crate::physical_plan;
 use crate::physical_plan::insert::PhysicalPlanInsert;
 use crate::store::engine::engine_util;
 use crate::store::engine::engine_util::{ADD_ENTRY_TYPE, TableEngine, TableEngineFactory};
-use crate::store::reader::rocksdb::RocksdbReader;
 use crate::util::convert::{ToIdent, ToObjectName};
 
 pub fn create_table(global_context: Arc<Mutex<GlobalContext>>, schema_name: &str, table_name: &str, sql_column_list: Vec<SQLColumnDef>, constraints: Vec<TableConstraint>) -> TableDef {

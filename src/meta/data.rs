@@ -12,7 +12,6 @@ use sqlparser::ast::{Assignment, ColumnDef, ColumnOption, ColumnOptionDef, DataT
 
 use crate::meta::{meta_def, meta_util};
 use crate::mysql::error::{MysqlError, MysqlResult};
-use crate::store::rocksdb::db::DB as rocksdbDB;
 use crate::test;
 use crate::util;
 use crate::meta::meta_def::TableDef;

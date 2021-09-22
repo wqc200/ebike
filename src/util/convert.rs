@@ -99,42 +99,42 @@ impl ToIdent for String {
         Ident::new(self)
     }
 }
-
-pub trait ScalarValueToString {
-    fn to_string(&self) -> String;
-}
-
-impl ScalarValueToString for ScalarValue {
-    fn to_string(&self) -> MysqlResult<Option<String>> {
-        match self {
-            ScalarValue::Int32(limit) => {
-                if let Some(value) = limit {
-                    let new_value = (value as u64) ^ meta_const::SIGN_MASK;
-                    Ok(Some(new_value.to_string()))
-                } else {
-                    Ok(None)
-                }
-            }
-            ScalarValue::Int64(limit) => {
-                if let Some(value) = limit {
-                    let new_value = (value as u64) ^ meta_const::SIGN_MASK;
-                    Ok(Some(new_value.to_string()))
-                } else {
-                    Ok(None)
-                }
-            }
-            ScalarValue::Utf8(limit) => {
-                if let Some(value) = limit {
-                    Ok(Some(value.to_string()))
-                } else {
-                    Ok(None)
-                }
-            }
-            _ => Err(MysqlError::new_global_error(
-                meta_const::MYSQL_ERROR_CODE_UNKNOWN_ERROR,
-                format!("Unsupported convert scalar value to string: {:?}", scalar_value).as_str(),
-            )),
-        }
-    }
-}
+//
+// pub trait ScalarValueToString {
+//     fn to_string(&self) -> MysqlResult<Option<String>>;
+// }
+//
+// impl ScalarValueToString for ScalarValue {
+//     fn to_string(&self) -> MysqlResult<Option<String>> {
+//         match self {
+//             ScalarValue::Int32(limit) => {
+//                 if let Some(value) = limit {
+//                     let new_value = (value as u64) ^ meta_const::SIGN_MASK;
+//                     Ok(Some(new_value.to_string()))
+//                 } else {
+//                     Ok(None)
+//                 }
+//             }
+//             ScalarValue::Int64(limit) => {
+//                 if let Some(value) = limit {
+//                     let new_value = (value as u64) ^ meta_const::SIGN_MASK;
+//                     Ok(Some(new_value.to_string()))
+//                 } else {
+//                     Ok(None)
+//                 }
+//             }
+//             ScalarValue::Utf8(limit) => {
+//                 if let Some(value) = limit {
+//                     Ok(Some(value.to_string()))
+//                 } else {
+//                     Ok(None)
+//                 }
+//             }
+//             _ => Err(MysqlError::new_global_error(
+//                 meta_const::MYSQL_ERROR_CODE_UNKNOWN_ERROR,
+//                 format!("Unsupported convert scalar value to string: {:?}", self).as_str(),
+//             )),
+//         }
+//     }
+// }
 

@@ -54,7 +54,6 @@ use crate::core::global_context::GlobalContext;
 use std::sync::Mutex;
 use crate::store::engine::engine_util;
 use crate::util::convert::ToObjectName;
-use crate::store::reader::rocksdb::RocksdbReader;
 use crate::meta::def::information_schema::key_column_usage;
 
 /// Wraps another [`CatalogProvider`] and adds a "information_schema"

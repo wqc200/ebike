@@ -12,11 +12,9 @@ use sqlparser::ast::{ObjectName, Ident};
 
 use crate::core::global_context::GlobalContext;
 use crate::core::session_context::SessionContext;
-use crate::datafusion_impl::datasource::rocksdb::RocksdbTable;
 use crate::meta::{meta_const, meta_util};
 use crate::mysql::error::{MysqlError, MysqlResult};
 
-use super::rocksdb;
 use super::sled;
 use crate::meta::meta_def::TableDef;
 
@@ -59,7 +57,6 @@ impl TableEngineFactory {
     pub fn try_new_with_table(global_context: Arc<Mutex<GlobalContext>>, table: TableDef) -> MysqlResult<Box<dyn TableEngine>> {
         let engine = table.clone().get_engine();
         match engine.as_str() {
-            meta_const::VALUE_OF_TABLE_OPTION_ENGINE_ROCKSDB => Ok(Box::new(rocksdb::TableEngineRocksdb::new(global_context, table))),
             meta_const::VALUE_OF_TABLE_OPTION_ENGINE_SLED => Ok(Box::new(sled::TableEngineSled::new(global_context, table))),
             _ => {
                 Err(MysqlError::new_global_error(1105, format!(
@@ -100,10 +97,6 @@ impl StoreEngineFactory {
         let gc = global_context.lock().unwrap();
 
         match engine {
-            meta_const::VALUE_OF_TABLE_OPTION_ENGINE_ROCKSDB => {
-                let rocksdb_db = gc.engine.rocksdb_db.as_ref().unwrap();
-                Ok(Box::new(rocksdb::StoreEngineRocksdb::new(rocksdb_db.clone())))
-            },
             meta_const::VALUE_OF_TABLE_OPTION_ENGINE_SLED => {
                 let sled_db = gc.engine.sled_db.as_ref().unwrap();
                 Ok(Box::new(sled::StoreEngineSled::new(sled_db.clone())))

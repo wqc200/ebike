@@ -9,7 +9,6 @@ use sled::Db as sledDb;
 use sqlparser::ast::{Assignment, ColumnDef, ColumnOption, ColumnOptionDef, DataType as SQLDataType, Ident, ObjectName, SqlOption, TableConstraint, Value};
 
 use crate::mysql::error::{MysqlError, MysqlResult};
-use crate::store::rocksdb::db::DB as rocksdbDB;
 use crate::test;
 use crate::util;
 
