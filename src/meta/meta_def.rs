@@ -137,7 +137,7 @@ impl Default for TableColumnDef {
 }
 
 impl TableColumnDef {
-    pub fn use_sparrow_column_list(&mut self, mut sparrow_column_list: Vec<SparrowColumnDef>) {
+    pub fn load_sparrow_column_list(&mut self, mut sparrow_column_list: Vec<SparrowColumnDef>) {
         sparrow_column_list.sort_by(|a, b| a.ordinal_position.cmp(&b.ordinal_position));
 
         let mut sparrow_column_map = HashMap::new();
@@ -156,7 +156,7 @@ impl TableColumnDef {
         self.with_sql_column_list(sql_column_list.clone());
     }
 
-    pub fn use_sql_column_list(&mut self, sql_column_list: Vec<SQLColumnDef>) {
+    pub fn load_sql_column_list(&mut self, sql_column_list: Vec<SQLColumnDef>) {
         let mut sparrow_column_map = HashMap::new();
         let mut sparrow_column_list = vec![];
 
@@ -284,7 +284,7 @@ impl TableOptionDef {
         table_options
     }
 
-    pub fn use_table_options(&mut self, table_options: Vec<SqlOption>) {
+    pub fn load_table_options(&mut self, table_options: Vec<SqlOption>) {
         for sql_option in table_options {
             if sql_option.name.to_string().to_uppercase() == meta_const::NAME_OF_TABLE_OPTION_ENGINE.to_uppercase() {
                 match sql_option.value {
@@ -341,7 +341,7 @@ impl TableDef {
 
     pub fn new_with_sqlcolumn(full_table_name: ObjectName, sql_column_list: Vec<SQLColumnDef>, constraints: Vec<TableConstraint>, with_option: Vec<SqlOption>) -> Self {
         let mut table_column = TableColumnDef::default();
-        table_column.use_sql_column_list(sql_column_list);
+        table_column.load_sql_column_list(sql_column_list);
 
         let mut table = TableDef::new();
         table.with_column(table_column.clone());

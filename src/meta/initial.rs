@@ -25,7 +25,7 @@ pub fn create_table(global_context: Arc<Mutex<GlobalContext>>, schema_name: &str
     let gc = global_context.lock().unwrap();
 
     let mut table_column = TableColumnDef::default();
-    table_column.use_sql_column_list(sql_column_list);
+    table_column.load_sql_column_list(sql_column_list);
 
     let column_max_store_id = table_column.get_max_store_id();
 
@@ -455,7 +455,7 @@ pub fn read_all_table(global_context: Arc<Mutex<GlobalContext>>) -> MysqlResult<
         match schema_table_columns.get(&full_table_name.clone()) {
             None => {}
             Some(tc) => {
-                table_column.use_sparrow_column_list(tc.clone());
+                table_column.load_sparrow_column_list(tc.clone());
             }
         }
 
