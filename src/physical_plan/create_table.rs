@@ -76,7 +76,7 @@ impl CreateTable {
         table_option.with_column_max_store_id(column_store_id);
         if table_option.engine.is_empty() {
             let mutex_guard_global_context = self.global_context.lock().unwrap();
-            table_option.with_engine(mutex_guard_global_context.my_config.server.engines.first().unwrap())
+            table_option.with_engine(mutex_guard_global_context.my_config.server.engine_list.first().unwrap())
         }
 
         initial::add_information_schema_tables(self.global_context.clone(), table_option.clone());

@@ -39,7 +39,7 @@ impl GlobalContext {
         let variable = Variable::new();
 
         let mut sled_db = None;
-        for engine in &my_config.server.engines {
+        for engine in &my_config.server.engine_list {
             if engine.eq("sled") {
                 let config = sled::Config::new().temporary(false).path(my_config.engine.sled.data_path.clone());
                 let db = config.open().unwrap();

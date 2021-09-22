@@ -22,7 +22,7 @@ impl ::std::default::Default for MyConfig {
 pub struct ConfigServer {
     pub log_file: String,
     pub bind_host: String,
-    pub engines: Vec<String>,
+    pub engine_list: Vec<String>,
 }
 
 /// `ConfigServer` implements `Default`
@@ -31,7 +31,7 @@ impl ::std::default::Default for ConfigServer {
         Self {
             log_file: "./log4rs.yaml".into(),
             bind_host: "0.0.0.0:3307".into(),
-            engines: vec![],
+            engine_list: vec![],
         }
     }
 }
