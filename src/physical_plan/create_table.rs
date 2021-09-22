@@ -74,6 +74,9 @@ impl CreateTable {
         table_option.use_table_options(self.table_options.clone());
         table_option.with_table_type(meta_const::VALUE_OF_TABLE_OPTION_TABLE_TYPE_BASE_TABLE);
         table_option.with_column_max_store_id(column_store_id);
+        if table_option.engine.is_empty() {
+            table_option.with_engine(self.global_context.lock().unwrap().my_config.server.engines.first().unwrap())
+        }
 
         initial::add_information_schema_tables(self.global_context.clone(), table_option.clone());
         initial::add_information_schema_columns(self.global_context.clone(), table_option.clone(), sparrow_column_list);
