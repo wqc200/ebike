@@ -3,7 +3,7 @@ use datafusion::logical_plan::{Expr};
 
 use crate::core::core_util;
 use crate::meta_util;
-use crate::store::reader::reader_util::{RangeValue, ScanOrder, Interval, TableIndex};
+use crate::store::reader::reader_util::{RangeValue, ScanOrder, PointType, TableIndex, Range, RangePoint};
 use datafusion::scalar::ScalarValue;
 use crate::mysql::error::{MysqlResult, MysqlError};
 use crate::meta::meta_const::MYSQL_ERROR_CODE_UNKNOWN_ERROR;
@@ -181,9 +181,10 @@ pub fn create_table_index_key(table: TableDef, table_index: TableIndexDef, colum
     Ok(k)
 }
 
+#[derive(Debug, Clone)]
 pub struct CreateScanKey {
-    key: String,
-    interval: Interval,
+    pub key: String,
+    pub point_type: PointType,
 }
 
 impl CreateScanKey {
@@ -191,7 +192,7 @@ impl CreateScanKey {
         let key = String::from(prefix);
         Self {
             key,
-            interval: Interval::Closed,
+            point_type: PointType::Closed,
         }
     }
 
@@ -200,17 +201,26 @@ impl CreateScanKey {
         self.key.push_str("/");
     }
 
-    pub fn change_interval(&mut self, interval: Interval) {
-        self.interval = interval
+    pub fn change_interval(&mut self, interval: PointType) {
+        self.point_type = interval
     }
 
     pub fn key(&self) -> String {
         self.key.clone()
     }
 
-    pub fn interval(&self) -> Interval {
-        self.interval.clone()
+    pub fn point_type(&self) -> PointType {
+        self.point_type.clone()
     }
+}
+
+pub fn create_scan_rowid(table: TableDef) -> CreateScanKey {
+    let full_table_name = table.option.full_table_name;
+
+    let mut scan_key = CreateScanKey::new("/Table/rowid/");
+    scan_key.add_key(full_table_name.to_string().as_str());
+
+    scan_key
 }
 
 pub fn create_scan_index(table: TableDef, table_index: TableIndex) -> (CreateScanKey, CreateScanKey) {
@@ -234,22 +244,35 @@ pub fn create_scan_index(table: TableDef, table_index: TableIndex) -> (CreateSca
         start.add_key(column_store_id.to_string().as_str());
         end.add_key(column_store_id.to_string().as_str());
 
-        match column_range.range_value {
-            RangeValue::Null => {
+        match column_range.range.start {
+            RangePoint::Infinity => {}
+            RangePoint::Null => {
                 start.add_key("0");
+            }
+            RangePoint::NotNull => {
+                start.add_key("1");
+            }
+            RangePoint::NotNullValue(scalar_value, point_type) => {
+                start.add_key("1");
+                let value = scalar_value.to_string();
+                start.add_key(value.as_str());
+                start.change_interval(point_type);
+            }
+        }
+
+        match column_range.range.end {
+            RangePoint::Infinity => {}
+            RangePoint::Null => {
                 end.add_key("0");
             }
-            RangeValue::NotNull(not_null_value) => {
-                if let Some((value, interval)) = not_null_value.getStart() {
-                    start.add_key("1");
-                    start.add_key(value.as_str());
-                    start.change_interval(interval);
-                }
-                if let Some((value, interval)) = not_null_value.getEnd() {
-                    end.add_key("1");
-                    end.add_key(value.as_str());
-                    end.change_interval(interval);
-                }
+            RangePoint::NotNull => {
+                end.add_key("1");
+            }
+            RangePoint::NotNullValue(scalar_value, point_type) => {
+                end.add_key("1");
+                let value = scalar_value.to_string();
+                end.add_key(value.as_str());
+                end.change_interval(point_type);
             }
         }
     }

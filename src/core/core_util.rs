@@ -45,7 +45,6 @@ use sqlparser::ast::ObjectName;
 use crate::core::global_context::GlobalContext;
 use crate::core::session_context::SessionContext;
 use crate::datafusion_impl::catalog::information_schema::CatalogWithInformationSchemaProvider;
-use crate::datafusion_impl::datasource::rocksdb::RocksdbTable;
 use crate::meta::{meta_const, meta_util};
 use crate::mysql::error::{MysqlError, MysqlResult};
 

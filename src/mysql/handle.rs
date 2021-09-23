@@ -35,7 +35,6 @@ use crate::core::global_context::GlobalContext;
 use crate::core::execution::Execution;
 use crate::core::output::{CoreOutput, OutputError};
 use crate::core::output::FinalCount;
-use crate::datafusion_impl::datasource::rocksdb::RocksdbTable;
 use crate::mysql::{command, error::MysqlError, packet, request, response, message, metadata};
 use crate::mysql::error::MysqlResult;
 use crate::core::core_util;

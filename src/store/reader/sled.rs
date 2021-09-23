@@ -14,20 +14,22 @@ use sled::Iter as SledIter;
 
 use crate::core::global_context::GlobalContext;
 use crate::meta::{meta_util as MetaUtil, meta_const, meta_util};
-use crate::store::reader::reader_util;
-use crate::store::rocksdb::db::DB;
-use crate::store::rocksdb::iterator::DBRawIterator;
-use crate::store::rocksdb::option::{Options, ReadOptions};
-use crate::store::rocksdb::slice_transform::SliceTransform;
 use crate::util;
 use crate::util::dbkey;
-use crate::store::reader::reader_util::{SeekType, ScanOrder, Interval};
+use crate::store::reader::reader_util::{SeekType, ScanOrder, PointType};
 use std::cmp::Ordering;
 use crate::util::dbkey::CreateScanKey;
 use sqlparser::ast::ObjectName;
 use crate::mysql::error::MysqlError;
 use crate::util::convert::{ToObjectName, ToIdent};
 use crate::meta::meta_def::TableDef;
+use crate::store::reader::reader_util;
+
+pub struct Seek {
+    iter: SledIter,
+    start: CreateScanKey,
+    end: CreateScanKey,
+}
 
 pub struct SledReader {
     global_context: Arc<Mutex<GlobalContext>>,
@@ -35,9 +37,7 @@ pub struct SledReader {
     projection: Option<Vec<usize>>,
     projected_schema: SchemaRef,
     batch_size: usize,
-    sled_iter: SledIter,
-    start_scan_key: CreateScanKey,
-    end_scan_key: CreateScanKey,
+    seek: Seek,
 }
 
 impl SledReader {
@@ -62,22 +62,23 @@ impl SledReader {
             None => schema_ref.clone(),
         };
 
-        let mut sled_iter = global_context.lock().unwrap().engine.sled_db.as_ref().unwrap().iter();
-
-        let mut start_scan_key = CreateScanKey::new("");
-        let mut end_scan_key = CreateScanKey::new("");
         let table_index_prefix = reader_util::get_seek_prefix(global_context.clone(), full_table_name.clone(), table.clone(), filters.clone()).unwrap();
-        match table_index_prefix {
-            SeekType::NoRecord => {},
+        let seek = match table_index_prefix {
             SeekType::FullTableScan { start, end} => {
-                sled_iter = global_context.lock().unwrap().engine.sled_db.as_ref().unwrap().scan_prefix(start.clone());
-                start_scan_key = CreateScanKey::new(start.clone().as_str());
-                end_scan_key = CreateScanKey::new(end.clone().as_str());
+                let iter = global_context.lock().unwrap().engine.sled_db.as_ref().unwrap().scan_prefix(start.key.clone());
+                Seek {
+                    iter,
+                    start,
+                    end,
+                }
             }
             SeekType::UsingTheIndex { index_name, order, start, end} => {
-                sled_iter = global_context.lock().unwrap().engine.sled_db.as_ref().unwrap().scan_prefix(start.key().clone());
-                start_scan_key = start;
-                end_scan_key = end;
+                let iter = global_context.lock().unwrap().engine.sled_db.as_ref().unwrap().scan_prefix(start.key.clone());
+                Seek {
+                    iter,
+                    start,
+                    end,
+                }
             }
         };
 
@@ -87,9 +88,7 @@ impl SledReader {
             projection,
             projected_schema,
             batch_size,
-            sled_iter,
-            start_scan_key,
-            end_scan_key,
+            seek,
         }
     }
 
@@ -105,11 +104,10 @@ impl Iterator for SledReader {
         let global_context = &self.global_context.lock().unwrap();
         let sled_db = global_context.engine.sled_db.as_ref().unwrap();
         let table_column = self.table.get_table_column();
-        let full_table_name = self.table.option.full_table_name.clone();
 
         let mut rowids: Vec<String> = vec![];
         loop {
-            let result = self.sled_iter.next();
+            let result = self.seek.iter.next();
             let (key, value) = match result {
                 Some(item) => {
                     match item {
@@ -128,26 +126,25 @@ impl Iterator for SledReader {
             };
 
             let key = String::from_utf8(key.to_vec()).expect("Found invalid UTF-8");
-            log::debug!("row key: {:?}", key);
 
-            match self.start_scan_key.interval() {
-                Interval::Open => {
-                    if key.starts_with(self.start_scan_key.key().as_str()) {
+            match self.seek.start.point_type() {
+                PointType::Open => {
+                    if key.starts_with(self.seek.start.key().as_str()) {
                         continue;
                     }
                 }
-                Interval::Closed => {}
+                PointType::Closed => {}
             }
-            match self.end_scan_key.interval() {
-                Interval::Open => {
-                    if key.starts_with(self.end_scan_key.key().as_str()) {
+            match self.seek.end.point_type() {
+                PointType::Open => {
+                    if key.starts_with(self.seek.end.key().as_str()) {
                         break;
                     }
                 }
-                Interval::Closed => {}
+                PointType::Closed => {}
             }
-            if !key.starts_with(self.end_scan_key.key().as_str()) {
-                match key.as_str().partial_cmp(self.end_scan_key.key().as_str()) {
+            if !key.starts_with(self.seek.end.key().as_str()) {
+                match key.as_str().partial_cmp(self.seek.end.key().as_str()) {
                     None => break,
                     Some(a) => {
                         match a {
@@ -160,7 +157,6 @@ impl Iterator for SledReader {
             }
 
             let value = String::from_utf8(value.to_vec()).expect("Found invalid UTF-8");
-            log::debug!("row value: {:?}", value);
 
             rowids.push(value);
 
@@ -168,8 +164,6 @@ impl Iterator for SledReader {
                 break;
             }
         }
-
-        log::debug!("rowids: {:?}", rowids);
 
         if rowids.len() < 1 {
             return None;

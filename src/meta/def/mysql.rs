@@ -44,9 +44,6 @@ use crate::mysql::metadata::MysqlType::MYSQL_TYPE_BIT;
 use crate::physical_plan::create_table::CreateTable;
 use crate::physical_plan::insert::PhysicalPlanInsert;
 use crate::store::engine::engine_util;
-use crate::store::reader::rocksdb::RocksdbReader;
-use crate::store::rocksdb::db::DB;
-use crate::store::rocksdb::option::Options;
 use crate::util::convert::{ToIdent, ToObjectName};
 
 pub fn users(global_context: Arc<Mutex<GlobalContext>>) -> meta_def::TableDef {

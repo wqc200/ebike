@@ -19,14 +19,13 @@ use crate::physical_plan;
 use crate::physical_plan::insert::PhysicalPlanInsert;
 use crate::store::engine::engine_util;
 use crate::store::engine::engine_util::{ADD_ENTRY_TYPE, TableEngine, TableEngineFactory};
-use crate::store::reader::rocksdb::RocksdbReader;
 use crate::util::convert::{ToIdent, ToObjectName};
 
 pub fn create_table(global_context: Arc<Mutex<GlobalContext>>, schema_name: &str, table_name: &str, sql_column_list: Vec<SQLColumnDef>, constraints: Vec<TableConstraint>) -> TableDef {
     let gc = global_context.lock().unwrap();
 
     let mut table_column = TableColumnDef::default();
-    table_column.use_sql_column_list(sql_column_list);
+    table_column.load_sql_column_list(sql_column_list);
 
     let column_max_store_id = table_column.get_max_store_id();
 
@@ -307,6 +306,7 @@ pub fn add_information_schema_tables(global_context: Arc<Mutex<GlobalContext>>, 
     let schema_name = table_option.schema_name;
     let table_name = table_option.table_name;
     let table_type = table_option.table_type;
+    let engine = table_option.engine;
     let column_max_store_id = table_option.column_max_store_id;
 
     let mut column_value_map_list: Vec<HashMap<Ident, ScalarValue>> = vec![];
@@ -315,7 +315,7 @@ pub fn add_information_schema_tables(global_context: Arc<Mutex<GlobalContext>>, 
     column_value_map.insert(meta_const::COLUMN_INFORMATION_SCHEMA_TABLE_SCHEMA.to_ident(), ScalarValue::Utf8(Some(schema_name.to_string())));
     column_value_map.insert(meta_const::COLUMN_INFORMATION_SCHEMA_TABLE_NAME.to_ident(), ScalarValue::Utf8(Some(table_name.to_string())));
     column_value_map.insert(meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_TABLES_TABLE_TYPE.to_ident(), ScalarValue::Utf8(Some(table_type.to_string())));
-    column_value_map.insert(meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_TABLES_ENGINE.to_ident(), ScalarValue::Utf8(Some("rocksdb".to_string())));
+    column_value_map.insert(meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_TABLES_ENGINE.to_ident(), ScalarValue::Utf8(Some(engine.to_string())));
     column_value_map.insert(meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_TABLES_VERSION.to_ident(), ScalarValue::Int32(Some(0)));
     column_value_map.insert(meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_TABLES_DATA_LENGTH.to_ident(), ScalarValue::Int32(Some(0)));
     column_value_map.insert(meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_TABLES_INDEX_LENGTH.to_ident(), ScalarValue::Int32(Some(0)));
@@ -455,7 +455,7 @@ pub fn read_all_table(global_context: Arc<Mutex<GlobalContext>>) -> MysqlResult<
         match schema_table_columns.get(&full_table_name.clone()) {
             None => {}
             Some(tc) => {
-                table_column.use_sparrow_column_list(tc.clone());
+                table_column.load_sparrow_column_list(tc.clone());
             }
         }
 

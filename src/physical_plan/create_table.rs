@@ -17,7 +17,6 @@ use crate::core::global_context::GlobalContext;
 use crate::core::output::CoreOutput;
 use crate::core::output::FinalCount;
 use crate::core::session_context::SessionContext;
-use crate::datafusion_impl::datasource::rocksdb::RocksdbTable;
 use crate::meta::{meta_const, meta_util};
 use crate::meta::def::information_schema;
 use crate::meta::initial;
@@ -72,9 +71,13 @@ impl CreateTable {
         let column_store_id = store_id;
 
         let mut table_option = TableOptionDef::new(catalog_name.to_string().as_str(), schema_name.to_string().as_str(), table_name.to_string().as_str());
-        table_option.use_table_options(self.table_options.clone());
+        table_option.load_table_options(self.table_options.clone());
         table_option.with_table_type(meta_const::VALUE_OF_TABLE_OPTION_TABLE_TYPE_BASE_TABLE);
         table_option.with_column_max_store_id(column_store_id);
+        if table_option.engine.is_empty() {
+            let mutex_guard_global_context = self.global_context.lock().unwrap();
+            table_option.with_engine(mutex_guard_global_context.my_config.server.engines.first().unwrap())
+        }
 
         initial::add_information_schema_tables(self.global_context.clone(), table_option.clone());
         initial::add_information_schema_columns(self.global_context.clone(), table_option.clone(), sparrow_column_list);
