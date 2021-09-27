@@ -1,5 +1,5 @@
 [package]
-name = "sparrow"
+name = "okdb"
 version = "1.2.3"
 description = "Fast, lightweight and schema-less search backend."
 readme = "README.md"
@@ -12,11 +12,11 @@ categories = ["database-implementations", "web-programming"]
 authors = ["Valerian Saliou <valerian@valeriansaliou.name>", "Baptiste Jamin <baptistejamin@gmail.com>"]
 
 [lib]
-name = "sparrow"
+name = "okdb"
 path = "src/lib.rs"
 
 [[bin]]
-name = "sparrow-server"
+name = "okdb-server"
 path = "src/main.rs"
 doc = false
 
