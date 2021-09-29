@@ -1,5 +1,5 @@
 [package]
-name = "okdb"
+name = "ebike"
 version = "1.2.3"
 description = "Fast, lightweight and schema-less search backend."
 readme = "README.md"
@@ -12,11 +12,11 @@ categories = ["database-implementations", "web-programming"]
 authors = ["Valerian Saliou <valerian@valeriansaliou.name>", "Baptiste Jamin <baptistejamin@gmail.com>"]
 
 [lib]
-name = "okdb"
+name = "ebike"
 path = "src/lib.rs"
 
 [[bin]]
-name = "okdb-server"
+name = "ebike-server"
 path = "src/main.rs"
 doc = false
 
