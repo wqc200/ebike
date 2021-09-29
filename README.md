@@ -1,4 +1,4 @@
-# Sparrow
+# okdb
 Sparrow is an OLAP open source database, written is Rust, that uses Apache Datafusion as its query execution framework.
 
 ## Why sparrow
