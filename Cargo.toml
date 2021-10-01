@@ -1,15 +1,15 @@
 [package]
 name = "ebike"
 version = "0.1.1"
-description = "Fast, lightweight and schema-less search backend."
+description = "Fast, lightweight and schema-less database backend."
 readme = "README.md"
-license = "MPL-2.0"
+license = "Apache-2.0"
 edition = "2018"
-homepage = "https://github.com/valeriansaliou/sonic"
-repository = "https://github.com/valeriansaliou/sonic.git"
-keywords = ["search", "query", "server", "index"]
+homepage = "https://github.com/wqc200/ebike"
+repository = "https://github.com/wqc200/ebike.git"
+keywords = ["olap", "database", "rust", "cell"]
 categories = ["database-implementations", "web-programming"]
-authors = ["Valerian Saliou <valerian@valeriansaliou.name>", "Baptiste Jamin <baptistejamin@gmail.com>"]
+authors = ["Craftsmen Soft"]
 
 [lib]
 name = "ebike"
@@ -19,7 +19,6 @@ path = "src/lib.rs"
 name = "ebike-server"
 path = "src/main.rs"
 doc = false
-
 
 [dependencies]
 bstr = "0.2.12"
@@ -38,18 +37,12 @@ log4rs = "0.10.0"
 tokio = { version = "1.11.0", features = ["full"] }
 tokio-util = { version = "0.6", features = ["full"] }
 tokio-stream = { version = "0.1" }
-
 futures = "0.3"
 env_logger = "0.3"
 byteorder = "1.2.7"
-#sqlparser = { git = "https://github.com/ballista-compute/sqlparser-rs", branch = "main" }
 sqlparser = { path = "components/sqlparser-rs" }
-#sqlparser = "0.9.0"
 sled = { version = "0.34" }
 datafusion = { path = "components/arrow-datafusion/datafusion" }
-#arrow = { path = "components/arrow-rs/arrow" }
-#arrow = { git = "https://github.com/apache/arrow-rs", rev = "4449ee96fe3fd4a0b275da8dd25ce2792699bc98", features = ["prettyprint"] }
-#parquet = { path = "components/arrow-rs/parquet" }
 arrow = { version = "5.1", features = ["prettyprint"] }
 parquet = { version = "5.1", features = ["arrow"] }
 libc = "0.2"
@@ -58,7 +51,6 @@ hex = "0.4"
 num = "0.2"
 flatbuffers = "0.6.0"
 indexmap = "1.0"
-#proc-macro2 = "=1.0.18"
 async-trait = "0.1.41"
 serde_derive = "=1.0.118"
 serde = { version = "1.0", features = ["derive"] }
