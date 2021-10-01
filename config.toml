@@ -1,7 +1,7 @@
 
 [server]
 log_file = "./log4rs.yaml"
-bind_host = "0.0.0.0:3307"
+bind_host = "0.0.0.0:3309"
 engines = ["sled"]
 
 [schema]

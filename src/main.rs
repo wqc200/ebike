@@ -7,12 +7,14 @@ use std::collections::hash_map::RandomState;
 use std::collections::HashMap;
 use std::env;
 use std::sync::{Arc, Mutex};
+use std::io;
 
 use arrow::datatypes::DataType as ArrowDataType;
 use clap::{Arg, App, SubCommand};
 use log4rs;
 use sqlparser::ast::{DataType as SQLDataType, Ident, ObjectName};
 use tokio::net::TcpListener;
+use tokio::signal::unix::{signal, SignalKind};
 
 use crate::meta::meta_def::TableDef;
 use meta::initial;
@@ -43,14 +45,9 @@ async fn main() {
 
     log4rs::init_file(global_context.lock().unwrap().my_config.server.log_file.to_string(), Default::default()).unwrap();
 
-    // Parse the address we're going to run this server on
-    // and set up our TCP listener to accept connections.
-    let addr = env::args()
-        .nth(1)
-        .unwrap_or_else(|| global_context.lock().unwrap().my_config.server.bind_host.to_string());
-
+    let addr = global_context.lock().unwrap().my_config.server.bind_host.to_string();
     let listener = TcpListener::bind(&addr).await.unwrap();
-    log::info!("Listening on: {}", addr);
+    log::info!("Listening on: {}", addr.clone());
 
     let result = meta_util::init_meta(global_context.clone()).await;
     if let Err(e) = result {
@@ -87,16 +84,30 @@ async fn main() {
         }
     }
 
-    loop {
-        match listener.accept().await {
-            Ok((socket, _)) => {
-                let mut handler = handle::Handle::new(socket, global_context.clone()).await.unwrap();
-                tokio::spawn(async move {
-                    handler.run().await;
-                    log::debug!("closed");
-                });
+    let mut stream = signal(SignalKind::interrupt()).unwrap();
+
+    tokio::select! {
+        _ = async {
+            loop {
+                match listener.accept().await {
+                    Ok((socket, _)) => {
+                        let mut handler = handle::Handle::new(socket, global_context.clone()).await.unwrap();
+                        tokio::spawn(async move {
+                            handler.run().await;
+                            log::info!("client closed");
+                        });
+                    }
+                    Err(e) => log::error!("error accepting socket; error = {:?}", e),
+                }
             }
-            Err(e) => log::error!("error accepting socket; error = {:?}", e),
-        }
+
+            Ok::<_, io::Error>(())
+        } => {}
+        _ = async {
+            stream.recv().await;
+            log::info!("got signal interrupt");
+
+            Ok::<_, io::Error>(())
+        } => {}
     }
 }

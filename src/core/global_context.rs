@@ -31,7 +31,7 @@ pub struct GlobalContext {
 impl GlobalContext {
     pub fn new() -> Self {
         let config_path = get_config_path();
-        println!("Value for config path: {}", config_path);
+        println!("The config path: {}", config_path);
 
         let my_config = read_config(config_path.as_str());
 
