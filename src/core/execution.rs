@@ -783,6 +783,9 @@ impl Execution {
                 let variable = ObjectName(idents);
                 return Ok(CoreLogicalPlan::SetVariable { variable, value });
             }
+            SQLStatement::ShowCreate { obj_type, obj_name } => {
+
+            }
             SQLStatement::ShowVariable { variable } => {
                 let first_variable = variable.get(0).unwrap();
                 if first_variable.to_string().to_uppercase() == meta_const::SHOW_VARIABLE_DATABASES.to_uppercase() {
