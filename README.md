@@ -1,9 +1,9 @@
-# okdb
-Sparrow is an OLAP open source database, written is Rust, that uses Apache Datafusion as its query execution framework.
+# Ebike
+Ebike is an OLAP open source database, written is Rust, that uses Apache Datafusion as its query execution framework.
 
-## Why sparrow
+## Why Ebike
 1. High Performance 
-   - Leveraging Rust and Arrow's memory model, Sparrow achieves very high performance
+   - Leveraging Rust and Arrow's memory model, Ebike achieves very high performance
 2. Easy to Use
    - MySQL protocol support, The ecosystem around mysql is rich.
 3. Simple
@@ -12,9 +12,10 @@ Sparrow is an OLAP open source database, written is Rust, that uses Apache Dataf
 ## Installation
 ### Install from source
 ```shell
-git clone --recurse-submodules git@github.com:wqc200/sparrow.git
-cd sparrow
+git clone --recurse-submodules git@github.com:wqc200/ebike.git
+cd ebike
 cargo build --release
+./target/release/ebike-server -c ./config.toml
 ```
 
 ## Example Usage
