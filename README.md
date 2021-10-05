@@ -1,6 +1,8 @@
 # Ebike
 Ebike is an OLAP open source database, written is Rust, that uses Apache Datafusion as its query execution framework.
 
+Tested at Rust version: rustc 1.55.0 (c8dfcfe04 2021-09-06)
+
 ## Why Ebike
 1. High Performance 
    - Leveraging Rust and Arrow's memory model, Ebike achieves very high performance
@@ -12,7 +14,7 @@ Ebike is an OLAP open source database, written is Rust, that uses Apache Datafus
 ## Installation
 ### Install from source
 ```shell
-git clone --recurse-submodules git@github.com:wqc200/ebike.git
+git clone --recurse-submodules https://github.com/wqc200/ebike.git
 cd ebike
 cargo build --release
 ./target/release/ebike-server -c ./config.toml
