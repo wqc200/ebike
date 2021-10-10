@@ -8,7 +8,6 @@ use std::io;
 
 use arrow::datatypes::DataType as ArrowDataType;
 use log4rs;
-use sqlparser::ast::{DataType as SQLDataType};
 use tokio::net::TcpListener;
 use tokio::signal::unix::{signal, SignalKind};
 
@@ -91,8 +90,6 @@ async fn main() {
                     Err(e) => log::error!("error accepting socket; error = {:?}", e),
                 }
             }
-
-            Ok::<_, io::Error>(())
         } => {}
         _ = async {
             stream.recv().await;
