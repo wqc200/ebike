@@ -358,7 +358,7 @@ pub fn get_table_index_list(table_def: TableDef, column_range_map: HashMap<Strin
                     continue;
                 }
 
-                let mut level ;
+                let level ;
                 if is_primary.clone() {
                     level = INDEX_LEVEL_PRIMARY;
                 } else {

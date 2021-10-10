@@ -75,7 +75,10 @@ impl CreateTable {
             return Err(e);
         }
 
-        meta_util::save_table_constraint(self.global_context.clone(), table_option.clone(), self.constraints.clone());
+        let result = meta_util::save_table_constraint(self.global_context.clone(), table_option.clone(), self.constraints.clone());
+        if let Err(mysql_error) = result {
+            return Err(mysql_error);
+        }
 
         let result = load_all_table(self.global_context.clone());
         if let Err(mysql_error) = result {

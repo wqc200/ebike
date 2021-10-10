@@ -41,7 +41,7 @@ pub fn get_table_index_list(global_context: Arc<Mutex<GlobalContext>>, full_tabl
                     column_name_list.push(column_name.clone());
                 }
 
-                let mut level ;
+                let level;
                 if is_primary.clone() {
                     level = 1;
                 } else {
@@ -278,7 +278,10 @@ pub async fn init_meta(global_context: Arc<Mutex<GlobalContext>>) -> MysqlResult
                 return Err(e);
             }
 
-            save_table_constraint(global_context.clone(), table.option.clone(), table.get_constraints().clone());
+            let result = save_table_constraint(global_context.clone(), table.option.clone(), table.get_constraints().clone());
+            if let Err(e) = result {
+                return Err(e);
+            }
         }
 
         let result = initial::create_schema(global_context.clone(), meta_const::FULL_SCHEMA_NAME_OF_DEF_MYSQL.to_object_name());
@@ -474,7 +477,7 @@ pub fn table_has_primary_key(global_context: Arc<Mutex<GlobalContext>>, full_tab
     }
 }
 
-pub fn save_table_constraint(global_context: Arc<Mutex<GlobalContext>>, table_option: TableOptionDef, constraints: Vec<TableConstraint>) {
+pub fn save_table_constraint(global_context: Arc<Mutex<GlobalContext>>, table_option: TableOptionDef, constraints: Vec<TableConstraint>) -> MysqlResult<()> {
     let catalog_name = table_option.catalog_name;
     let schema_name = table_option.schema_name;
     let table_name = table_option.table_name;
@@ -517,9 +520,22 @@ pub fn save_table_constraint(global_context: Arc<Mutex<GlobalContext>>, table_op
         }
     }
 
-    save_create_statistics.save();
-    save_key_column_usage.save();
-    save_table_constraints.save();
+    let result = save_create_statistics.save();
+    if let Err(e) = result {
+        return Err(e);
+    }
+
+    let result = save_key_column_usage.save();
+    if let Err(e) = result {
+        return Err(e);
+    }
+
+    let result = save_table_constraints.save();
+    if let Err(e) = result {
+        return Err(e);
+    }
+
+    Ok(())
 }
 
 pub fn create_unique_index_name(columns: Vec<Ident>) -> String {

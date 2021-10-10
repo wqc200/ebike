@@ -69,7 +69,10 @@ impl PhysicalPlanDelete {
 
             let record_rowid_key = util::dbkey::create_record_rowid(self.table.option.full_table_name.clone(), rowid.as_ref());
             log::debug!("record_rowid_key: {:?}", record_rowid_key);
-            store_engine.delete_key(record_rowid_key);
+            let result = store_engine.delete_key(record_rowid_key);
+            if let Err(e) = result {
+                return Err(e);
+            }
 
             for sql_column in self.table.get_table_column().sql_column_list {
                 let column_name = sql_column.name;
