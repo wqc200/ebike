@@ -99,15 +99,15 @@ impl Column {
         payload.bytes.push(0x0c);
         payload.dumpUint16(self.character_set as u16);
         payload.dumpUint32(self.column_length as u32);
-        payload.bytes.push(dumpColumnType(self.column_type));
-        payload.dumpUint16(dumpFlag(self.column_type, self.flags.bits as u16));
+        payload.bytes.push(dump_column_type(self.column_type));
+        payload.dumpUint16(dump_flag(self.column_type, self.flags.bits as u16));
         payload.bytes.push(self.decimals);
         payload.bytes.extend_from_slice(&[00, 00]);
 
-        /// https://dev.mysql.com/doc/internals/en/com-query-response.html#column-definition
-        /// if command was COM_FIELD_LIST
-        /// null is 0xfb
-        if (com_field_list) {
+        // https://dev.mysql.com/doc/internals/en/com-query-response.html#column-definition
+        // if command was COM_FIELD_LIST
+        // null is 0xfb
+        if com_field_list {
             match self.default_value {
                 Some(ref p) => {
                     payload.dumpUint64(p.len() as u64);
@@ -151,7 +151,7 @@ impl From<&Field> for Column {
     }
 }
 
-fn dumpFlag(tp: MysqlType, flag: u16) -> u16 {
+fn dump_flag(tp: MysqlType, flag: u16) -> u16 {
     return match tp {
         MysqlType::MYSQL_TYPE_SET => {
             flag | u16::from(ColumnFlags::SET_FLAG)
@@ -160,7 +160,7 @@ fn dumpFlag(tp: MysqlType, flag: u16) -> u16 {
             flag | u16::from(ColumnFlags::ENUM_FLAG)
         }
         _ => {
-            if hasBinaryFlag(flag) {
+            if has_binary_flag(flag) {
                 return flag | u16::from(ColumnFlags::NOT_NULL_FLAG);
             }
             flag
@@ -168,7 +168,7 @@ fn dumpFlag(tp: MysqlType, flag: u16) -> u16 {
     };
 }
 
-fn dumpColumnType(tp: MysqlType) -> u8 {
+fn dump_column_type(tp: MysqlType) -> u8 {
     return match tp {
         MysqlType::MYSQL_TYPE_SET => MysqlType::MYSQL_TYPE_STRING as u8,
         MysqlType::MYSQL_TYPE_ENUM => MysqlType::MYSQL_TYPE_STRING as u8,
@@ -178,7 +178,7 @@ fn dumpColumnType(tp: MysqlType) -> u8 {
     };
 }
 
-fn hasBinaryFlag(flag: u16) -> bool {
+fn has_binary_flag(flag: u16) -> bool {
     return (flag & u16::from(ColumnFlags::BINARY_FLAG)) > 0;
 }
 

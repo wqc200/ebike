@@ -3,9 +3,6 @@ use bytes::{Buf};
 use std::io;
 use std::sync::{Arc, Mutex};
 
-use arrow::array::ArrayBuilder;
-use arrow::array::{Array};
-
 use tokio::net::{TcpStream};
 use tokio::io::{AsyncWriteExt, AsyncReadExt};
 
@@ -33,7 +30,7 @@ impl Handle {
         socket: TcpStream,
         core_context: Arc<Mutex<GlobalContext>>,
     ) -> io::Result<Handle> {
-        let mut core_execution = Execution::new(core_context.clone());
+        let core_execution = Execution::new(core_context.clone());
         let packet_message = packet::PacketMessage::new();
         Ok(Handle { socket, packet_message, core_context: core_context.clone(), core_execution })
     }
@@ -156,19 +153,19 @@ impl Handle {
 
             let result = match command_id {
                 0x01 => {
-                    /// quit
+                    // quit
                     break;
                 }
                 0x02 => {
-                    /// ComInitDb
+                    // ComInitDb
                     self.core_execution.set_default_schema(sql.as_str()).await
                 }
                 0x03 => {
-                    /// ComQuery
+                    // ComQuery
                     self.core_execution.execute_query(sql.as_str()).await
                 }
                 0x04 => {
-                    /// ComFieldList
+                    // ComFieldList
                     let table_name = sql.trim_end_matches("\x00").to_string();
                     self.core_execution.field_list(table_name.as_str()).await
                 }
@@ -200,7 +197,7 @@ impl Handle {
                 self.write_packet(ok_message).await;
             }
             CoreOutput::ResultSet(schema_ref, results) => {
-                let mut payload = message::column_count_message(schema_ref.fields().len());
+                let payload = message::column_count_message(schema_ref.fields().len());
                 self.write_packet(payload).await;
                 for field in schema_ref.fields() {
                     let column = Column::from(field);
