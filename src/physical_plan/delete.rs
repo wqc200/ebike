@@ -1,7 +1,7 @@
 use std::sync::{Arc, Mutex};
 
-use arrow::array::{Array};
 use arrow::array::{
+    Array,
     StringArray,
 };
 use arrow::record_batch::RecordBatch;
