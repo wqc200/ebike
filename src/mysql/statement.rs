@@ -1,16 +1,10 @@
-use std::sync::Arc;
 use std::string::String;
-use std::ops::{Deref, DerefMut};
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 use std::fmt;
 
-use arrow::datatypes::{Schema, SchemaRef};
-use datafusion::error::{Result};
-use datafusion::logical_plan::{LogicalPlanBuilder, LogicalPlan, Expr};
-use datafusion::execution::context::ExecutionContext;
-use sqlparser::ast::{AlterTableOperation, Assignment, ColumnDef, ObjectName, SqlOption, TableConstraint};
+use sqlparser::ast::{ColumnDef, TableConstraint};
 
 #[derive(Clone)]
 pub enum Statement {

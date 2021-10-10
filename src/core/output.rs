@@ -2,7 +2,7 @@ use std::error;
 use std::fmt::{Display, Formatter};
 use std::result;
 
-use arrow::datatypes::{Schema, SchemaRef};
+use arrow::datatypes::{SchemaRef};
 use arrow::record_batch::RecordBatch;
 use datafusion::error::DataFusionError;
 

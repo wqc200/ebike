@@ -17,32 +17,22 @@
 
 //! Execution plan for reading CSV files
 use std::any::Any;
-use std::borrow::Borrow;
-use std::borrow::Cow;
-use std::fs::File;
 use std::pin::Pin;
 use std::sync::{Arc, Mutex};
 use std::task::{Context, Poll};
 
-use arrow::array::ArrayRef;
-use arrow::array::Int32Array;
-use arrow::datatypes::{DataType, Field};
 use arrow::datatypes::{Schema, SchemaRef};
-use arrow::error::{ArrowError, Result as ArrowResult};
-use arrow::record_batch::{RecordBatch, RecordBatchReader};
+use arrow::error::{Result as ArrowResult};
+use arrow::record_batch::{RecordBatch};
 use async_trait::async_trait;
 use datafusion::error::{DataFusionError, Result};
-//use rocksdb::{Error, IteratorMode, Options, SliceTransform, Snapshot, WriteBatch, DB, DBRawIterator, ReadOptions};
 use datafusion::logical_plan::Expr;
 use datafusion::physical_plan::{Partitioning, RecordBatchStream, SendableRecordBatchStream, Statistics};
-use datafusion::physical_plan::common::SizedRecordBatchStream;
 use datafusion::physical_plan::ExecutionPlan;
 use futures::Stream;
-use sqlparser::ast::ObjectName;
 
 use crate::core::global_context::GlobalContext;
-use crate::meta::{meta_def, meta_util};
-use crate::util;
+use crate::meta::{meta_def};
 use crate::store::reader::sled::SledReader;
 
 #[derive(Debug, Clone)]
@@ -117,7 +107,7 @@ impl ExecutionPlan for SledExec {
         }
     }
 
-    async fn execute(&self, partition: usize) -> Result<SendableRecordBatchStream> {
+    async fn execute(&self, _: usize) -> Result<SendableRecordBatchStream> {
         let reader = SledReader::new(
             self.global_context.clone(),
             self.table_def.clone(),

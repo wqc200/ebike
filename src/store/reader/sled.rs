@@ -2,26 +2,20 @@ use bstr::ByteSlice;
 use std::sync::{Arc, Mutex};
 
 use arrow::error::{ArrowError, Result};
-use arrow::array::ArrayRef;
 use arrow::array::StructBuilder;
-use arrow::array::{Float32Builder, Int32Builder, Int64Builder, StringBuilder};
-use arrow::datatypes::{Field, Schema, DataType, ToByteSlice, SchemaRef};
+use arrow::array::{Int32Builder, Int64Builder, StringBuilder};
+use arrow::datatypes::{Field, Schema, DataType, SchemaRef};
 use arrow::record_batch::RecordBatch;
 use datafusion::logical_plan::Expr;
-use uuid::Uuid;
-use sled::{Db as SledDb, Iter, IVec, Error};
 use sled::Iter as SledIter;
 
 use crate::core::global_context::GlobalContext;
-use crate::meta::{meta_util as MetaUtil, meta_const, meta_util};
+use crate::meta::{meta_const};
 use crate::util;
-use crate::util::dbkey;
-use crate::store::reader::reader_util::{SeekType, ScanOrder, PointType};
+use crate::store::reader::reader_util::{SeekType, PointType};
 use std::cmp::Ordering;
 use crate::util::dbkey::CreateScanKey;
-use sqlparser::ast::ObjectName;
-use crate::mysql::error::MysqlError;
-use crate::util::convert::{ToObjectName, ToIdent};
+use crate::util::convert::{ToIdent};
 use crate::meta::meta_def::TableDef;
 use crate::store::reader::reader_util;
 
@@ -72,7 +66,7 @@ impl SledReader {
                     end,
                 }
             }
-            SeekType::UsingTheIndex { index_name, order, start, end} => {
+            SeekType::UsingTheIndex { start, end, ..} => {
                 let iter = global_context.lock().unwrap().engine.sled_db.as_ref().unwrap().scan_prefix(start.key.clone());
                 Seek {
                     iter,
@@ -171,7 +165,10 @@ impl Iterator for SledReader {
 
         let mut struct_builder = StructBuilder::from_fields(self.projected_schema.clone().fields().clone(), rowids.len());
         for _ in rowids.clone() {
-            struct_builder.append(true);
+            let result = struct_builder.append(true);
+            if let Err(e) = result {
+                return Some(Err(e));
+            }
         }
 
         for i in 0..self.projected_schema.clone().fields().len() {
@@ -181,7 +178,10 @@ impl Iterator for SledReader {
 
             if field_name.contains(meta_const::COLUMN_ROWID) {
                 for rowid in rowids.clone() {
-                    struct_builder.field_builder::<StringBuilder>(i).unwrap().append_value(rowid);
+                    let result = struct_builder.field_builder::<StringBuilder>(i).unwrap().append_value(rowid);
+                    if let Err(e) = result {
+                        return Some(Err(e));
+                    }
                 }
             } else {
                 let column_name = field_name.to_ident();
@@ -199,7 +199,10 @@ impl Iterator for SledReader {
                                         DataType::Utf8 => {
                                             match std::str::from_utf8(value.as_ref()) {
                                                 Ok(value) => {
-                                                    struct_builder.field_builder::<StringBuilder>(i).unwrap().append_value(value);
+                                                    let result = struct_builder.field_builder::<StringBuilder>(i).unwrap().append_value(value);
+                                                    if let Err(e) = result {
+                                                        return Some(Err(e));
+                                                    }
                                                 }
                                                 Err(error) => {
                                                     return Some(Err(ArrowError::CastError(format!(
@@ -212,11 +215,17 @@ impl Iterator for SledReader {
                                         }
                                         DataType::Int32 => {
                                             let value = lexical::parse::<i32, _>(value.as_bytes()).unwrap();
-                                            struct_builder.field_builder::<Int32Builder>(i).unwrap().append_value(value);
+                                            let result = struct_builder.field_builder::<Int32Builder>(i).unwrap().append_value(value);
+                                            if let Err(e) = result {
+                                                return Some(Err(e));
+                                            }
                                         }
                                         DataType::Int64 => {
                                             let value = lexical::parse::<i64, _>(value.as_bytes()).unwrap();
-                                            struct_builder.field_builder::<Int64Builder>(i).unwrap().append_value(value);
+                                            let result = struct_builder.field_builder::<Int64Builder>(i).unwrap().append_value(value);
+                                            if let Err(e) = result {
+                                                return Some(Err(e));
+                                            }
                                         }
                                         _ => {
                                             return Some(Err(ArrowError::CastError(format!(
@@ -229,13 +238,22 @@ impl Iterator for SledReader {
                                 None => {
                                     match field.data_type() {
                                         DataType::Utf8 => {
-                                            struct_builder.field_builder::<StringBuilder>(i).unwrap().append_null();
+                                            let result = struct_builder.field_builder::<StringBuilder>(i).unwrap().append_null();
+                                            if let Err(e) = result {
+                                                return Some(Err(e));
+                                            }
                                         }
                                         DataType::Int32 => {
-                                            struct_builder.field_builder::<Int32Builder>(i).unwrap().append_null();
+                                            let result = struct_builder.field_builder::<Int32Builder>(i).unwrap().append_null();
+                                            if let Err(e) = result {
+                                                return Some(Err(e));
+                                            }
                                         }
                                         DataType::Int64 => {
-                                            struct_builder.field_builder::<Int64Builder>(i).unwrap().append_null();
+                                            let result = struct_builder.field_builder::<Int64Builder>(i).unwrap().append_null();
+                                            if let Err(e) = result {
+                                                return Some(Err(e));
+                                            }
                                         }
                                         _ => {
                                             return Some(Err(ArrowError::CastError(format!(

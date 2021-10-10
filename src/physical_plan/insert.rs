@@ -1,34 +1,18 @@
-use std::borrow::Borrow;
 use std::collections::HashMap;
-use std::ops::{Deref, DerefMut};
 use std::sync::{Arc, Mutex};
 
-use arrow::datatypes::{Schema, SchemaRef};
-use arrow::record_batch::RecordBatch;
-use bstr::{ByteSlice, ByteVec};
-use datafusion::error::DataFusionError;
-use datafusion::execution::context::{ExecutionContext, ExecutionContextState};
-use datafusion::logical_plan::{Expr, LogicalPlan, ToDFSchema};
-use datafusion::physical_plan::{ColumnarValue, PhysicalExpr};
-use datafusion::physical_plan::planner::DefaultPhysicalPlanner;
 use datafusion::scalar::ScalarValue;
-use sqlparser::ast::{Assignment, ColumnDef, ObjectName, SqlOption, TableConstraint, Ident};
+use sqlparser::ast::{Ident};
 use uuid::Uuid;
 
-use crate::core::{core_util as CoreUtil, core_util};
+use crate::core::{core_util};
 use crate::core::global_context::GlobalContext;
-use crate::core::output::CoreOutput;
-use crate::core::output::FinalCount;
-use crate::core::session_context::SessionContext;
 use crate::meta::meta_def::{TableDef, IndexDef};
-use crate::meta::meta_util;
 use crate::mysql::error::{MysqlError, MysqlResult};
-use crate::store::engine::engine_util;
 
-use crate::test;
 use crate::util;
 use crate::util::convert::ToIdent;
-use crate::store::engine::engine_util::{TableEngineFactory, StoreEngineFactory};
+use crate::store::engine::engine_util::{StoreEngineFactory};
 
 pub struct PhysicalPlanInsert {
     global_context: Arc<Mutex<GlobalContext>>,
@@ -58,7 +42,10 @@ impl PhysicalPlanInsert {
 
             let column_rowid_key = util::dbkey::create_column_rowid_key(self.table.option.full_table_name.clone(), rowid.as_str());
             log::debug!("rowid_key: {:?}", column_rowid_key);
-            store_engine.put_key(column_rowid_key, rowid.as_bytes());
+            let result = store_engine.put_key(column_rowid_key, rowid.as_bytes());
+            if let Err(e) = result {
+                return Err(e);
+            }
 
             if self.index_keys_list.len() > 0 {
                 let result = self.index_keys_list.get(row_number);
@@ -74,7 +61,10 @@ impl PhysicalPlanInsert {
 
                 if index_keys.len() > 0 {
                     for index in index_keys {
-                        store_engine.put_key(index.index_key, rowid.as_bytes());
+                        let result = store_engine.put_key(index.index_key, rowid.as_bytes());
+                        if let Err(e) = result {
+                            return Err(e);
+                        }
                     }
                 }
             }
@@ -101,7 +91,10 @@ impl PhysicalPlanInsert {
                 let result = core_util::convert_scalar_value(column_value.clone()).unwrap();
                 log::debug!("column_value: {:?}", result);
                 if let Some(value) = result {
-                    store_engine.put_key(column_key, value.as_bytes());
+                    let result = store_engine.put_key(column_key, value.as_bytes());
+                    if let Err(e) = result {
+                        return Err(e);
+                    }
                 }
             }
         }

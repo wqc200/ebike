@@ -1,45 +1,19 @@
-#![warn(rust_2018_idioms)]
+use bytes::{Buf};
 
-use bytes::{BytesMut, Bytes, Buf};
-
-use std::collections::HashMap;
-use std::env;
-use std::error::Error;
 use std::io;
-use std::net::SocketAddr;
-use std::pin::Pin;
 use std::sync::{Arc, Mutex};
-use std::task::{Context, Poll};
 
-use arrow::array::ArrayBuilder;
-use arrow::array::{as_primitive_array, as_string_array};
-use arrow::array::{Array, ArrayData, BinaryArray, Int8Array, Int16Array, Int32Array, Int64Array, UInt8Array, UInt16Array, UInt32Array, UInt64Array, Float32Array, Float64Array, StringArray};
-use arrow::datatypes::{DataType, Field, Schema, ToByteSlice};
-use arrow::record_batch::RecordBatch;
-use arrow::compute::cast;
-use arrow::datatypes::DataType::UInt8;
-use arrow::buffer::Buffer;
-
-use datafusion::datasource::{CsvFile, MemTable, TableProvider};
-use datafusion::error::{Result, DataFusionError};
-use datafusion::execution;
-use datafusion::logical_plan::Operator;
-use datafusion::scalar::ScalarValue;
-use futures::{SinkExt, Future};
-use tokio::net::{TcpListener, TcpStream};
+use tokio::net::{TcpStream};
 use tokio::io::{AsyncWriteExt, AsyncReadExt};
-use tokio_stream::StreamExt;
-use tokio_util::codec::{FramedRead, BytesCodec, Decoder};
 
 use crate::core::global_context::GlobalContext;
 use crate::core::execution::Execution;
-use crate::core::output::{CoreOutput, OutputError};
+use crate::core::output::{CoreOutput};
 use crate::core::output::FinalCount;
-use crate::mysql::{command, error::MysqlError, packet, request, response, message, metadata};
+use crate::mysql::{error::MysqlError, packet, request, response, message, metadata};
 use crate::mysql::error::MysqlResult;
 use crate::core::core_util;
 use bstr::ByteSlice;
-use crate::mysql::request::RequestPayload;
 use crate::mysql::metadata::Column;
 
 /// The state for each connected client.
@@ -56,7 +30,7 @@ impl Handle {
         socket: TcpStream,
         core_context: Arc<Mutex<GlobalContext>>,
     ) -> io::Result<Handle> {
-        let mut core_execution = Execution::new(core_context.clone());
+        let core_execution = Execution::new(core_context.clone());
         let packet_message = packet::PacketMessage::new();
         Ok(Handle { socket, packet_message, core_context: core_context.clone(), core_execution })
     }
@@ -115,7 +89,7 @@ impl Handle {
             }
         };
         let bytes = &buf[0..n];
-        let rp = self.payload_packet(bytes);
+        let _rp = self.payload_packet(bytes);
 
         self.write_packet(message::handshark_auth_switch_request()).await;
 
@@ -128,7 +102,7 @@ impl Handle {
             }
         };
         let bytes = &buf[0..n];
-        let rp = self.payload_packet(bytes);
+        let _rp = self.payload_packet(bytes);
 
         let result = self.core_execution.try_init();
         if let Err(mysql_error) = result {
@@ -179,19 +153,19 @@ impl Handle {
 
             let result = match command_id {
                 0x01 => {
-                    /// quit
+                    // quit
                     break;
                 }
                 0x02 => {
-                    /// ComInitDb
+                    // ComInitDb
                     self.core_execution.set_default_schema(sql.as_str()).await
                 }
                 0x03 => {
-                    /// ComQuery
+                    // ComQuery
                     self.core_execution.execute_query(sql.as_str()).await
                 }
                 0x04 => {
-                    /// ComFieldList
+                    // ComFieldList
                     let table_name = sql.trim_end_matches("\x00").to_string();
                     self.core_execution.field_list(table_name.as_str()).await
                 }
@@ -223,7 +197,7 @@ impl Handle {
                 self.write_packet(ok_message).await;
             }
             CoreOutput::ResultSet(schema_ref, results) => {
-                let mut payload = message::column_count_message(schema_ref.fields().len());
+                let payload = message::column_count_message(schema_ref.fields().len());
                 self.write_packet(payload).await;
                 for field in schema_ref.fields() {
                     let column = Column::from(field);

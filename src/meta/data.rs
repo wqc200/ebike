@@ -1,19 +1,9 @@
-use std::collections::{HashMap, HashSet};
-use std::collections::hash_map::RandomState;
-use std::ops::{Deref, DerefMut};
-use std::sync::Arc;
+use std::collections::{HashMap};
 
-use arrow::datatypes::{DataType, Field, Schema, SchemaRef};
-use datafusion::error::Result;
-use num::ToPrimitive;
-use parquet::data_type::AsBytes;
-use sled::Db as sledDb;
-use sqlparser::ast::{Assignment, ColumnDef, ColumnOption, ColumnOptionDef, DataType as SQLDataType, Ident, ObjectName, SqlOption, TableConstraint, Value};
+use sqlparser::ast::{Ident, ObjectName};
 
-use crate::meta::{meta_def, meta_util};
+use crate::meta::{meta_def};
 use crate::mysql::error::{MysqlError, MysqlResult};
-use crate::test;
-use crate::util;
 use crate::meta::meta_def::TableDef;
 
 #[derive(Debug, Clone)]

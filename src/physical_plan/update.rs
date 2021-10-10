@@ -1,10 +1,7 @@
-use std::ops::{Deref, DerefMut};
 use std::sync::{Arc, Mutex};
 
 use arrow::array::{Array};
 use arrow::array::{
-    ArrayData,
-    BinaryArray,
     Int8Array,
     Int16Array,
     Int32Array,
@@ -17,28 +14,17 @@ use arrow::array::{
     Float64Array,
     StringArray,
 };
-use arrow::datatypes::{DataType, Field, SchemaRef, ToByteSlice};
+use arrow::datatypes::{DataType};
 use arrow::record_batch::RecordBatch;
-use datafusion::error::{Result};
-use datafusion::execution::context::ExecutionContext;
-use datafusion::logical_plan::{Expr, LogicalPlan};
 use datafusion::physical_plan::{collect, ExecutionPlan};
-use sqlparser::ast::{Assignment, ObjectName, Expr as SQLExpr, Value};
-use uuid::Uuid;
+use sqlparser::ast::{Assignment};
 
-use crate::mysql::{command, packet, request, response, message, metadata};
+use crate::mysql::{metadata};
 use crate::core::global_context::GlobalContext;
-use crate::core::output::CoreOutput;
-use crate::core::output::FinalCount;
-use crate::core::core_util as CoreUtil;
 
 use crate::mysql::error::{MysqlError, MysqlResult};
 
-use crate::test;
-use crate::util;
 use crate::core::session_context::SessionContext;
-use crate::meta::meta_util;
-use crate::util::convert::ToObjectName;
 use crate::store::engine::engine_util::StoreEngineFactory;
 use crate::util::dbkey::create_column_key;
 use crate::meta::meta_def::TableDef;
@@ -47,7 +33,7 @@ pub struct Update {
     global_context: Arc<Mutex<GlobalContext>>,
     table: TableDef,
     assignments: Vec<Assignment>,
-    execution_plan: Arc<ExecutionPlan>,
+    execution_plan: Arc<dyn ExecutionPlan>,
 }
 
 impl Update {
@@ -55,7 +41,7 @@ impl Update {
         global_context: Arc<Mutex<GlobalContext>>,
         table: TableDef,
         assignments: Vec<Assignment>,
-        execution_plan: Arc<ExecutionPlan>,
+        execution_plan: Arc<dyn ExecutionPlan>,
     ) -> Self {
         Self {
             global_context,
@@ -65,7 +51,7 @@ impl Update {
         }
     }
 
-    pub async fn execute(&self, session_context: &mut SessionContext) -> MysqlResult<(u64)> {
+    pub async fn execute(&self, session_context: &mut SessionContext) -> MysqlResult<u64> {
         let result = collect(self.execution_plan.clone()).await;
         match result {
             Ok(records) => {
@@ -85,7 +71,7 @@ impl Update {
         }
     }
 
-    pub fn update_record(&self, session_context: &mut SessionContext, batch: RecordBatch) -> MysqlResult<(u64)> {
+    pub fn update_record(&self, _: &mut SessionContext, batch: RecordBatch) -> MysqlResult<u64> {
         let store_engine = StoreEngineFactory::try_new_with_table(self.global_context.clone(), self.table.clone()).unwrap();
 
         let mut assignment_column_value: Vec<metadata::ArrayCell> = Vec::new();
@@ -194,7 +180,7 @@ impl Update {
             let rowid = rowid_array.value(row_index);
             for assignment_index in 0..self.assignments.len() {
                 let assignment = &self.assignments[assignment_index];
-                let mut column_value;
+                let column_value;
                 match assignment_column_value[assignment_index] {
                     metadata::ArrayCell::StringArray(s) => {
                         column_value = s.value(row_index).to_string()

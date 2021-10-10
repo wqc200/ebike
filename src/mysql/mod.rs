@@ -9,5 +9,3 @@ pub mod metadata;
 pub mod message;
 pub mod handle;
 pub mod statement;
-
-use metadata::MysqlType;

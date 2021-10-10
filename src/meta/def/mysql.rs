@@ -1,50 +1,10 @@
-use std::collections::{HashMap, HashSet};
-use std::env;
-use std::fs;
-use std::fs::File;
-use std::io::{BufReader, BufWriter};
-use std::io::prelude::*;
-use std::process::*;
 use std::sync::{Arc, Mutex};
 
-use arrow::array;
-use arrow::array::{
-    ArrayData,
-    BinaryArray,
-    Float32Array,
-    Float64Array,
-    Int16Array,
-    Int32Array,
-    Int64Array,
-    Int8Array,
-    StringArray,
-    UInt16Array,
-    UInt32Array,
-    UInt64Array,
-    UInt8Array,
-};
-use arrow::datatypes::{DataType, Field, Schema, SchemaRef};
-use arrow::datatypes::ToByteSlice;
-use arrow::record_batch::RecordBatch;
-use datafusion::datasource::csv::{CsvFile, CsvReadOptions};
-use datafusion::datasource::TableProvider;
-use datafusion::error::Result;
-use datafusion::logical_plan::{col, DFField, DFSchema, DFSchemaRef, Expr};
-use datafusion::scalar::ScalarValue;
-use sqlparser::ast::{Assignment, ColumnDef as SQLColumnDef, ColumnOption, ColumnOptionDef, DataType as SQLDataType, Ident, ObjectName, SqlOption, TableConstraint, Value};
-use tempdir::TempDir;
-use uuid::Uuid;
+use sqlparser::ast::{ColumnOption, DataType as SQLDataType, Ident, TableConstraint};
 
 use crate::core::global_context::GlobalContext;
 use crate::meta::{meta_def, meta_const, meta_util};
-use crate::meta::meta_def::{TableColumnDef, TableDef, TableOptionDef};
 use crate::meta::initial::create_table;
-use crate::mysql::error::MysqlResult;
-use crate::mysql::metadata::MysqlType::MYSQL_TYPE_BIT;
-use crate::physical_plan::create_table::CreateTable;
-use crate::physical_plan::insert::PhysicalPlanInsert;
-use crate::store::engine::engine_util;
-use crate::util::convert::{ToIdent, ToObjectName};
 
 pub fn users(global_context: Arc<Mutex<GlobalContext>>) -> meta_def::TableDef {
     let sql_column_list = vec![

@@ -1,20 +1,13 @@
-use std::fs::File;
-use std::string::String;
 use std::sync::{Arc, Mutex};
-use std::borrow::Cow;
 
 use bitflags::_core::any::Any;
 
-use arrow::csv;
-use arrow::array::ArrayRef;
-use arrow::datatypes::{Field, Schema, DataType};
-use arrow::record_batch::RecordBatch;
+use arrow::datatypes::Schema;
 use datafusion::datasource::datasource::{TableProviderFilterPushDown};
 use datafusion::datasource::TableProvider;
 use datafusion::error::Result;
 use datafusion::logical_plan::Expr;
 use datafusion::physical_plan::ExecutionPlan;
-use sqlparser::ast::ObjectName;
 
 use crate::datafusion_impl::physical_plan::sled::SledExec;
 use crate::core::global_context::GlobalContext;
@@ -48,8 +41,8 @@ impl TableProvider for SledTable {
         &self,
         projection: &Option<Vec<usize>>,
         batch_size: usize,
-        filters: &[Expr],
-        limit: Option<usize>,
+        _: &[Expr],
+        _: Option<usize>,
     ) -> Result<Arc<dyn ExecutionPlan>> {
         let exec = SledExec::try_new(
             self.global_context.clone(),

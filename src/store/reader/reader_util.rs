@@ -2,20 +2,14 @@ use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
-use arrow::compute::not;
-use datafusion::logical_plan::{Expr, Column};
+use datafusion::logical_plan::{Expr};
 use datafusion::logical_plan::Operator;
 use datafusion::scalar::ScalarValue;
 use sqlparser::ast::{ObjectName, TableConstraint};
 
-use crate::core::core_util;
 use crate::core::global_context::GlobalContext;
-use crate::meta::meta_def::SparrowColumnDef;
-use crate::meta::meta_util;
 use crate::meta::meta_def::TableDef;
-use crate::mysql::error::{MysqlError, MysqlResult};
-use crate::store::engine::engine_util;
-use crate::util::convert::{ToIdent, ToObjectName};
+use crate::mysql::error::{MysqlResult};
 use crate::util::dbkey;
 use crate::util::dbkey::CreateScanKey;
 
@@ -42,11 +36,11 @@ pub struct RangeNotNullValue {
 }
 
 impl RangeNotNullValue {
-    pub fn getStart(&self) -> Option<(String, PointType)> {
+    pub fn get_start(&self) -> Option<(String, PointType)> {
         self.start.clone()
     }
 
-    pub fn getEnd(&self) -> Option<(String, PointType)> {
+    pub fn get_end(&self) -> Option<(String, PointType)> {
         self.end.clone()
     }
 }
@@ -315,7 +309,7 @@ pub fn create_column_filter(filters: &[Expr]) -> MysqlResult<HashMap<String, Vec
                     _ => continue
                 }
             }
-            Expr::BinaryExpr { left, op, right } => {
+            Expr::BinaryExpr { left, .. } => {
                 match left.as_ref() {
                     Expr::Column(value) => {
                         column_name = value.clone();
@@ -364,7 +358,7 @@ pub fn get_table_index_list(table_def: TableDef, column_range_map: HashMap<Strin
                     continue;
                 }
 
-                let mut level = 0;
+                let level ;
                 if is_primary.clone() {
                     level = INDEX_LEVEL_PRIMARY;
                 } else {
@@ -389,7 +383,7 @@ pub fn get_seek_prefix_with_index(global_context: Arc<Mutex<GlobalContext>>, tab
         return Ok(get_seek_prefix_default(table));
     }
 
-    /// Find the index with the most matching fields
+    // Find the index with the most matching fields
     let table_index = table_index_list.iter().fold(table_index_list[0].clone(), |accumulator, item| {
         if item.column_range_list.len() > accumulator.column_range_list.len() {
             item.clone()

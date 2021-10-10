@@ -22,7 +22,6 @@ use datafusion::variable::VarProvider;
 use datafusion::scalar::ScalarValue;
 
 use crate::core::global_context::GlobalContext;
-use std::collections::HashMap;
 
 /// System variable
 pub struct SystemVar {
@@ -41,7 +40,7 @@ impl SystemVar {
 impl VarProvider for SystemVar {
     /// get system variable value
     fn get_value(&self, mut var_names: Vec<String>) -> Result<ScalarValue> {
-        let mut value;
+        let value;
         let mut is_session = false;
         if var_names.len() > 1 {
             if var_names[0].eq("@@session") {

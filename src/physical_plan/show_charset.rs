@@ -1,32 +1,12 @@
-use std::collections::{HashMap, HashSet};
-use std::ops::{Deref, DerefMut};
 use std::sync::{Mutex, Arc};
 
-use arrow::array::{as_primitive_array, as_string_array};
-use arrow::array::{Array, ArrayData, BinaryArray, Int8Array, Int16Array, Int32Array, Int64Array, UInt8Array, UInt16Array, UInt32Array, UInt64Array, Float32Array, Float64Array, StringArray};
+use arrow::array::{StringArray};
 use arrow::datatypes::{SchemaRef};
-use arrow::datatypes::{DataType, Field, Schema, ToByteSlice};
+use arrow::datatypes::{DataType, Field, Schema};
 use arrow::record_batch::RecordBatch;
-use datafusion::error::{Result};
-use datafusion::execution::context::ExecutionContext;
-use datafusion::logical_plan::{Expr, LogicalPlan};
-use datafusion::scalar::ScalarValue;
-use sqlparser::ast::{ColumnDef, ColumnOption, HiveDistributionStyle, Ident, ObjectName, SqlOption, Statement, TableConstraint, Value};
 
 use crate::core::global_context::GlobalContext;
-use crate::core::output::CoreOutput;
-use crate::core::output::FinalCount;
-use crate::core::core_util;
-use crate::core::session_context::SessionContext;
-use crate::meta::def::information_schema;
-use crate::meta::{meta_util, scalar_value};
-use crate::mysql::error::{MysqlResult, MysqlError};
-use crate::mysql::metadata;
-use crate::physical_plan::insert::PhysicalPlanInsert;
-
-use crate::util;
-use crate::mysql::metadata::ArrayCell;
-use arrow::compute::not;
+use crate::mysql::error::{MysqlResult};
 
 pub struct ShowCharset {
     global_context: Arc<Mutex<GlobalContext>>,

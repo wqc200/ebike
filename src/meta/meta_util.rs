@@ -1,46 +1,10 @@
-use std::collections::{HashMap, HashSet};
-use std::convert::TryFrom;
-use std::env;
-use std::fs;
-use std::fs::File;
-use std::io::{BufReader, BufWriter};
-use std::io::prelude::*;
-use std::panic::set_hook;
-use std::process::*;
+use std::collections::{HashMap};
 use std::sync::{Arc, Mutex};
 
-use arrow::array::{Array, as_primitive_array, as_string_array};
-use arrow::array::{
-    ArrayData,
-    BinaryArray,
-    Float32Array,
-    Float64Array,
-    Int16Array,
-    Int32Array,
-    Int64Array,
-    Int8Array,
-    StringArray,
-    UInt16Array,
-    UInt32Array,
-    UInt64Array,
-    UInt8Array,
-};
-use arrow::datatypes::{DataType, Field, Int32Type, Schema, SchemaRef};
-use arrow::datatypes::ToByteSlice;
-use arrow::record_batch::RecordBatch;
-use bytes::Buf;
-use datafusion::catalog::ResolvedTableReference;
-use datafusion::catalog::TableReference;
-use datafusion::datasource::csv::{CsvFile, CsvReadOptions};
-use datafusion::datasource::TableProvider;
+use arrow::datatypes::{DataType};
 use datafusion::error::{DataFusionError, Result};
-use datafusion::logical_plan::{col, DFField, DFSchema, DFSchemaRef, Expr};
 use datafusion::scalar::ScalarValue;
-use futures::StreamExt;
-use parquet::data_type::AsBytes;
-use sqlparser::ast::{Assignment, BinaryOperator, ColumnDef as SQLColumnDef, ColumnOption, ColumnOptionDef, DataType as SQLDataType, Expr as SQLExpr, Ident, ObjectName, SqlOption, TableConstraint, Value};
-use tempdir::TempDir;
-use uuid::Uuid;
+use sqlparser::ast::{ColumnDef as SQLColumnDef, ColumnOption, ColumnOptionDef, DataType as SQLDataType, Ident, ObjectName, TableConstraint};
 
 use crate::core::global_context::GlobalContext;
 use crate::core::session_context::SessionContext;
@@ -48,22 +12,15 @@ use crate::meta::{def, initial, meta_const, meta_util};
 use crate::meta;
 use crate::meta::def::information_schema::{key_column_usage, table_constraints};
 use crate::meta::initial::{SaveKeyColumnUsage, SaveStatistics, SaveTableConstraints, get_full_table_name_list};
-use crate::meta::meta_def::{SchemaDef, SparrowColumnDef, StatisticsColumn, TableDef, TableIndexDef, TableOptionDef};
+use crate::meta::meta_def::{SchemaDef, SparrowColumnDef, TableDef, TableIndexDef, TableOptionDef};
 use crate::mysql::error::{MysqlError, MysqlResult};
-use crate::physical_plan::create_table::CreateTable;
-use crate::physical_plan::delete::PhysicalPlanDelete;
-use crate::physical_plan::insert::PhysicalPlanInsert;
-use crate::store::engine::engine_util;
-use crate::store::engine::engine_util::{StoreEngine, StoreEngineFactory, TableEngine, TableEngineFactory};
-use crate::util::convert::{ToIdent, ToObjectName};
-
-use super::super::util;
+use crate::util::convert::{ToObjectName};
 
 pub fn get_table(global_context: Arc<Mutex<GlobalContext>>, full_table_name: ObjectName) -> MysqlResult<TableDef> {
     let gc = global_context.lock().unwrap();
     let result = gc.meta_data.get_table(full_table_name.clone());
     match result {
-        Some(table) => Ok((table.clone())),
+        Some(table) => Ok(table.clone()),
         None => {
             return Err(error_of_table_doesnt_exists(full_table_name.clone()));
         }
@@ -84,7 +41,7 @@ pub fn get_table_index_list(global_context: Arc<Mutex<GlobalContext>>, full_tabl
                     column_name_list.push(column_name.clone());
                 }
 
-                let mut level = 0;
+                let level;
                 if is_primary.clone() {
                     level = 1;
                 } else {
@@ -167,7 +124,7 @@ pub fn create_full_column_name(catalog_name: &str, schema_name: &str, table_name
     object_name
 }
 
-pub fn object_name_remove_quote(mut object_name: ObjectName) -> ObjectName {
+pub fn object_name_remove_quote(object_name: ObjectName) -> ObjectName {
     let mut idents = vec![];
     for ident in object_name.0 {
         let new_ident = Ident::from(ident.value.as_str());
@@ -176,7 +133,7 @@ pub fn object_name_remove_quote(mut object_name: ObjectName) -> ObjectName {
     ObjectName(idents)
 }
 
-pub fn cut_out_catalog_name(mut full_catalog_name: ObjectName) -> ObjectName {
+pub fn cut_out_catalog_name(full_catalog_name: ObjectName) -> ObjectName {
     let mut idents = vec![];
     if let Some(ident) = full_catalog_name.0.get(0) {
         idents.push(ident.clone());
@@ -184,7 +141,7 @@ pub fn cut_out_catalog_name(mut full_catalog_name: ObjectName) -> ObjectName {
     ObjectName(idents)
 }
 
-pub fn cut_out_schema_name(mut full_schema_name: ObjectName) -> ObjectName {
+pub fn cut_out_schema_name(full_schema_name: ObjectName) -> ObjectName {
     let mut idents = vec![];
     if let Some(ident) = full_schema_name.0.get(1) {
         idents.push(ident.clone());
@@ -192,7 +149,7 @@ pub fn cut_out_schema_name(mut full_schema_name: ObjectName) -> ObjectName {
     ObjectName(idents)
 }
 
-pub fn cut_out_table_name(mut full_table_name: ObjectName) -> ObjectName {
+pub fn cut_out_table_name(full_table_name: ObjectName) -> ObjectName {
     let mut idents = vec![];
     if let Some(ident) = full_table_name.0.get(2) {
         idents.push(ident.clone());
@@ -200,7 +157,7 @@ pub fn cut_out_table_name(mut full_table_name: ObjectName) -> ObjectName {
     ObjectName(idents)
 }
 
-pub fn cut_out_column_name(mut full_column_name: ObjectName) -> ObjectName {
+pub fn cut_out_column_name(full_column_name: ObjectName) -> ObjectName {
     let mut idents = vec![];
     if let Some(ident) = full_column_name.0.get(3) {
         idents.push(ident.clone());
@@ -265,7 +222,7 @@ pub fn fill_up_column_name(session_context: &mut SessionContext, mut original_co
 }
 
 pub fn convert_to_object_name(schema_name: &str) -> ObjectName {
-    let mut object_names: Vec<&str> = schema_name.split(".").collect();
+    let object_names: Vec<&str> = schema_name.split(".").collect();
 
     let mut idents = vec![];
     for object_name in object_names {
@@ -311,18 +268,37 @@ pub async fn init_meta(global_context: Arc<Mutex<GlobalContext>>) -> MysqlResult
     let full_table_names = get_full_table_name_list(global_context.clone()).unwrap();
     if full_table_names.len() < 1 {
         for table in init_tables.iter() {
-            initial::add_information_schema_tables(global_context.clone(), table.option.clone());
-            initial::add_information_schema_columns(global_context.clone(), table.option.clone(), table.column.sparrow_column_list.clone());
-            save_table_constraint(global_context.clone(), table.option.clone(), table.get_constraints().clone());
+            let result = initial::add_information_schema_tables(global_context.clone(), table.option.clone());
+            if let Err(e) = result {
+                return Err(e);
+            }
+
+            let result = initial::add_information_schema_columns(global_context.clone(), table.option.clone(), table.column.sparrow_column_list.clone());
+            if let Err(e) = result {
+                return Err(e);
+            }
+
+            let result = save_table_constraint(global_context.clone(), table.option.clone(), table.get_constraints().clone());
+            if let Err(e) = result {
+                return Err(e);
+            }
         }
 
-        initial::create_schema(global_context.clone(), meta_const::FULL_SCHEMA_NAME_OF_DEF_MYSQL.to_object_name());
-        initial::create_schema(global_context.clone(), meta_const::FULL_SCHEMA_NAME_OF_DEF_PERFORMANCE_SCHEMA.to_object_name());
+        let result = initial::create_schema(global_context.clone(), meta_const::FULL_SCHEMA_NAME_OF_DEF_MYSQL.to_object_name());
+        if let Err(e) = result {
+            return Err(e);
+        }
+
+        let result = initial::create_schema(global_context.clone(), meta_const::FULL_SCHEMA_NAME_OF_DEF_PERFORMANCE_SCHEMA.to_object_name());
+        if let Err(e) = result {
+            return Err(e);
+        }
 
         let result = meta::initial::add_def_mysql_users(global_context.clone());
         if let Err(e) = result {
             return Err(e);
         }
+
         let result = meta::initial::add_def_performance_schmea_global_variables(global_context.clone());
         if let Err(e) = result {
             return Err(e);
@@ -501,7 +477,7 @@ pub fn table_has_primary_key(global_context: Arc<Mutex<GlobalContext>>, full_tab
     }
 }
 
-pub fn save_table_constraint(global_context: Arc<Mutex<GlobalContext>>, table_option: TableOptionDef, constraints: Vec<TableConstraint>) {
+pub fn save_table_constraint(global_context: Arc<Mutex<GlobalContext>>, table_option: TableOptionDef, constraints: Vec<TableConstraint>) -> MysqlResult<()> {
     let catalog_name = table_option.catalog_name;
     let schema_name = table_option.schema_name;
     let table_name = table_option.table_name;
@@ -544,9 +520,22 @@ pub fn save_table_constraint(global_context: Arc<Mutex<GlobalContext>>, table_op
         }
     }
 
-    save_create_statistics.save();
-    save_key_column_usage.save();
-    save_table_constraints.save();
+    let result = save_create_statistics.save();
+    if let Err(e) = result {
+        return Err(e);
+    }
+
+    let result = save_key_column_usage.save();
+    if let Err(e) = result {
+        return Err(e);
+    }
+
+    let result = save_table_constraints.save();
+    if let Err(e) = result {
+        return Err(e);
+    }
+
+    Ok(())
 }
 
 pub fn create_unique_index_name(columns: Vec<Ident>) -> String {

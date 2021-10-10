@@ -22,39 +22,24 @@
 use std::{any, sync::Arc};
 
 use arrow::{
-    array::{StringBuilder, UInt64Builder},
     datatypes::{DataType, Field, Schema},
     record_batch::RecordBatch,
 };
 use arrow::array::{
-    ArrayData,
-    BinaryArray,
-    Float32Array,
-    Float64Array,
-    Int16Array,
     Int32Array,
-    Int64Array,
-    Int8Array,
     StringArray,
-    UInt16Array,
-    UInt32Array,
-    UInt64Array,
-    UInt8Array,
 };
 use datafusion::catalog::{
     catalog::{CatalogList, CatalogProvider},
     schema::SchemaProvider,
 };
-use datafusion::datasource::{MemTable, TableProvider, TableType};
-use datafusion::error::{DataFusionError, Result};
+use datafusion::datasource::{MemTable, TableProvider};
+use datafusion::error::{Result};
 
-use crate::meta::{meta_const, meta_util, initial};
+use crate::meta::{meta_const};
 use datafusion::catalog::catalog::MemoryCatalogProvider;
 use crate::core::global_context::GlobalContext;
 use std::sync::Mutex;
-use crate::store::engine::engine_util;
-use crate::util::convert::ToObjectName;
-use crate::meta::def::information_schema::key_column_usage;
 
 /// Wraps another [`CatalogProvider`] and adds a "information_schema"
 /// schema that can introspect on tables in the catalog_list

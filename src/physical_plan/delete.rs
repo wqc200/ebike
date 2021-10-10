@@ -1,42 +1,17 @@
-use std::ops::{Deref, DerefMut};
 use std::sync::{Arc, Mutex};
 
-use arrow::array::{Array, StringBuilder};
 use arrow::array::{
-    ArrayData,
-    BinaryArray,
-    Int8Array,
-    Int16Array,
-    Int32Array,
-    Int64Array,
-    UInt8Array,
-    UInt16Array,
-    UInt32Array,
-    UInt64Array,
-    Float32Array,
-    Float64Array,
+    Array,
     StringArray,
 };
-use arrow::datatypes::{DataType, Field, SchemaRef, ToByteSlice};
 use arrow::record_batch::RecordBatch;
-use datafusion::error::{Result};
-use datafusion::execution::context::ExecutionContext;
-use datafusion::logical_plan::{Expr, LogicalPlan};
 use datafusion::physical_plan::{collect, ExecutionPlan};
-use sqlparser::ast::{Assignment, ObjectName, Expr as SQLExpr, Value};
-use uuid::Uuid;
 
 use crate::core::global_context::GlobalContext;
-use crate::core::output::CoreOutput;
-use crate::core::output::FinalCount;
-use crate::core::core_util as CoreUtil;
-use crate::meta::{meta_util, meta_const};
-use crate::mysql::{command, packet, request, response, message, metadata};
+use crate::meta::{meta_const};
 use crate::mysql::error::{MysqlError, MysqlResult};
-use crate::store::engine::engine_util;
-use crate::store::engine::engine_util::{TableEngine, StoreEngineFactory};
+use crate::store::engine::engine_util::{StoreEngineFactory};
 
-use crate::test;
 use crate::util;
 use crate::core::session_context::SessionContext;
 use crate::meta::meta_def::TableDef;
@@ -94,7 +69,10 @@ impl PhysicalPlanDelete {
 
             let record_rowid_key = util::dbkey::create_record_rowid(self.table.option.full_table_name.clone(), rowid.as_ref());
             log::debug!("record_rowid_key: {:?}", record_rowid_key);
-            store_engine.delete_key(record_rowid_key);
+            let result = store_engine.delete_key(record_rowid_key);
+            if let Err(e) = result {
+                return Err(e);
+            }
 
             for sql_column in self.table.get_table_column().sql_column_list {
                 let column_name = sql_column.name;

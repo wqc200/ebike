@@ -1,33 +1,4 @@
-use std::sync::Arc;
-
-use arrow::array::*;
-use arrow::datatypes::*;
-use arrow::datatypes::Field;
-use arrow::datatypes::TimeUnit;
-use arrow::record_batch::RecordBatch;
-use arrow::error::{ArrowError, Result};
-
-use sled::IVec;
 use sqlparser::ast::{ObjectName, Ident};
-use datafusion::scalar::ScalarValue;
-use crate::mysql::error::{MysqlResult, MysqlError};
-use crate::meta::meta_const;
-use std::string::ToString;
-
-const DEFAULT_DATE_FORMAT: &str = "%F";
-const DEFAULT_TIME_FORMAT: &str = "%T";
-const DEFAULT_TIMESTAMP_FORMAT: &str = "%FT%H:%M:%S.%9f";
-
-// pub fn convert_sled_result(f: Option<IVec>) -> Option<String> {
-//     match f {
-//         Some(b) => {
-//             Some(String::from_utf8(b.to_vec()).unwrap())
-//         }
-//         _ => {
-//             None
-//         }
-//     }
-// }
 
 pub trait ToObjectName {
     fn to_object_name(&self) -> ObjectName;
@@ -35,7 +6,7 @@ pub trait ToObjectName {
 
 impl ToObjectName for str {
     fn to_object_name(&self) -> ObjectName {
-        let mut object_names: Vec<&str> = self.split(".").collect();
+        let object_names: Vec<&str> = self.split(".").collect();
 
         let mut idents = vec![];
         for object_name in object_names {

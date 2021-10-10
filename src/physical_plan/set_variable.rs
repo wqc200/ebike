@@ -1,21 +1,12 @@
-use std::ops::{Deref, DerefMut};
 use std::sync::{Arc, Mutex};
 
-use datafusion::error::{Result};
 use datafusion::execution::context::ExecutionContext;
-use datafusion::logical_plan::LogicalPlan;
 
-use crate::core::core_util;
 use crate::core::global_context::GlobalContext;
-use crate::core::output::CoreOutput;
-use crate::core::output::FinalCount;
 use crate::core::session_context::SessionContext;
-use crate::meta::{meta_util, meta_const};
-use crate::mysql::error::{MysqlResult, MysqlError};
+use crate::mysql::error::{MysqlResult};
 
-use crate::util;
 use sqlparser::ast::{ObjectName, SetVariableValue};
-
 
 pub struct SetVariable {
     variable: ObjectName,
@@ -27,7 +18,7 @@ impl SetVariable {
         Self { variable, value }
     }
 
-    pub fn execute(&self, datafusion_context: &mut ExecutionContext, global_context: Arc<Mutex<GlobalContext>>, session_context: &mut SessionContext) -> MysqlResult<u64> {
+    pub fn execute(&self, _: &mut ExecutionContext, _: Arc<Mutex<GlobalContext>>, _: &mut SessionContext) -> MysqlResult<u64> {
         Ok(0)
     }
 }

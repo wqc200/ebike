@@ -1,86 +1,46 @@
 //! ExecutionContext contains methods for registering data sources and executing queries
 
-use std::collections::HashMap;
-use std::convert::TryFrom;
-use std::fs;
-use std::path::Path;
-use std::ptr::null;
 use std::string::String;
 use std::sync::{Arc, Mutex};
 
 use arrow::array::{
-    ArrayData,
     ArrayRef,
-    BinaryArray,
-    Float32Array,
-    Float64Array,
-    Int16Array,
-    Int32Array,
-    Int64Array,
-    Int8Array,
     StringArray,
-    StringBuilder,
-    UInt16Array,
-    UInt32Array,
-    UInt64Array,
-    UInt8Array,
 };
-use arrow::datatypes::{DataType, Field, Schema, ToByteSlice};
-use arrow::record_batch::RecordBatch;
-use datafusion::catalog::catalog::{CatalogList, CatalogProvider, MemoryCatalogList, MemoryCatalogProvider};
-use datafusion::catalog::schema::{MemorySchemaProvider, SchemaProvider};
-use datafusion::catalog::TableReference;
-use datafusion::datasource::{CsvFile, CsvReadOptions, MemTable, TableProvider};
-use datafusion::error::{DataFusionError, Result as DataFusionResult};
-use datafusion::execution::context::{ExecutionConfig, ExecutionContext, ExecutionContextState};
-use datafusion::logical_plan::{DFField, DFSchema, DFSchemaRef, Expr, LogicalPlan, LogicalPlanBuilder};
+use arrow::datatypes::{DataType};
+
+use datafusion::execution::context::{ExecutionConfig, ExecutionContext};
+use datafusion::logical_plan::LogicalPlan;
 use datafusion::logical_plan::create_udf;
-use datafusion::physical_plan::{collect, ColumnarValue, ExecutionPlan};
-use datafusion::physical_plan::functions::{make_scalar_function, ReturnTypeFunction, ScalarFunctionImplementation, Signature};
-use datafusion::physical_plan::udf::ScalarUDF;
-use datafusion::scalar::ScalarValue;
+
+use datafusion::physical_plan::functions::make_scalar_function;
 use datafusion::sql::parser::{DFParser, Statement};
 use datafusion::sql::planner::{ContextProvider, SqlToRel};
 use datafusion::variable::VarType;
-use sqlparser::ast::{ColumnDef as SQLColumnDef, ColumnOption, DataType as SQLDataType, FunctionArg, Ident, ShowStatementFilter, TableAlias, ShowCreateObject};
-use sqlparser::ast::{AlterTableOperation, Assignment, ObjectName, ObjectType, OrderByExpr, Statement as SQLStatement};
+use sqlparser::ast::{FunctionArg, Ident, ShowStatementFilter, ShowCreateObject};
+use sqlparser::ast::{AlterTableOperation, ObjectName, ObjectType, Statement as SQLStatement};
 use sqlparser::ast::{
-    BinaryOperator, Expr as SQLExpr, Join, JoinConstraint, JoinOperator,
-    Query, Select, SelectItem, SetExpr, TableFactor, TableWithJoins, UnaryOperator, Value,
+    BinaryOperator, Expr as SQLExpr, JoinConstraint, JoinOperator,
+    Select, SelectItem, SetExpr, TableFactor, Value,
 };
-use sqlparser::dialect::{AnsiDialect, GenericDialect, MySqlDialect};
-use sqlparser::test_utils::table;
+use sqlparser::dialect::GenericDialect;
 use uuid::Uuid;
 
 use crate::core::core_util;
 use crate::core::core_util as CoreUtil;
 use crate::core::global_context::GlobalContext;
 use crate::core::logical_plan::{CoreLogicalPlan, CoreSelectFrom, CoreSelectFromWithAssignment};
-use crate::core::logical_plan::CoreLogicalPlan::CreateTable;
 use crate::core::output::{CoreOutput, FinalCount};
-use crate::core::output::{OutputError, Result};
 use crate::core::session_context::SessionContext;
-use crate::core::udf;
-use crate::datafusion_impl::catalog::information_schema::CatalogWithInformationSchemaProvider;
 use crate::meta::{meta_const, meta_util};
-use crate::meta::initial;
 use crate::mysql::error::{MysqlError, MysqlResult};
-use crate::mysql::metadata::MysqlType::MYSQL_TYPE_BIT;
 use crate::physical_plan;
-use crate::logical_plan;
-use crate::physical_plan::create_db::CreateDb;
 use crate::physical_plan::util::CorePhysicalPlan;
-use crate::store::engine::engine_util;
 
-use crate::test;
-use crate::util::convert::{convert_ident_to_lowercase, ToLowercase, ToObjectName, convert_object_name_to_lowercase};
+use crate::util::convert::{ToLowercase, ToObjectName, convert_ident_to_lowercase};
 use crate::variable::system::SystemVar;
 use crate::variable::user_defined::UserDefinedVar;
-use std::process::id;
-use crate::meta::initial::get_full_table_name_list;
 use crate::physical_plan::insert::PhysicalPlanInsert;
-use crate::store::engine::engine_util::TableEngineFactory;
-use crate::meta::meta_def::TableDef;
 use crate::logical_plan::insert::LogicalPlanInsert;
 use crate::physical_plan::delete::PhysicalPlanDelete;
 use crate::physical_plan::drop_table::PhysicalPlanDropTable;
@@ -95,14 +55,14 @@ pub struct Execution {
 
 impl Execution {
     pub fn new(global_context: Arc<Mutex<GlobalContext>>) -> Self {
-        let mut datafusion_context = ExecutionContext::with_config(
+        let datafusion_context = ExecutionContext::with_config(
             ExecutionConfig::new()
                 .with_information_schema(true)
                 .create_default_catalog_and_schema(true)
                 .with_default_catalog_and_schema(meta_const::CATALOG_NAME, meta_const::SCHEMA_NAME_OF_DEF_INFORMATION_SCHEMA),
         );
 
-        let mut session_context = SessionContext::new_with_catalog(meta_const::CATALOG_NAME);
+        let session_context = SessionContext::new_with_catalog(meta_const::CATALOG_NAME);
 
         let client_id = Uuid::new_v4().to_simple().encode_lower(&mut Uuid::encode_buffer()).to_string();
 
@@ -164,7 +124,7 @@ impl Execution {
                     SetExpr::Select(select) => {
                         let mut new_select = select.clone();
 
-                        /// select database()
+                        // select database()
                         if new_select.from.len() == 0 {
                             let table_name = meta_const::TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_DUAL.to_object_name();
                             let table_with_joins = CoreUtil::build_table_with_joins(table_name);
@@ -328,9 +288,9 @@ impl Execution {
         Ok(None)
     }
 
-    pub fn fix_join_constraint(&mut self, table_alias_vec: &mut Vec<Ident>, join_constraint: &JoinConstraint) -> MysqlResult<Option<JoinConstraint>> {
+    pub fn fix_join_constraint(&mut self, _: &mut Vec<Ident>, join_constraint: &JoinConstraint) -> MysqlResult<Option<JoinConstraint>> {
         match join_constraint {
-            JoinConstraint::On(expr) => {}
+            JoinConstraint::On(_) => {}
             JoinConstraint::Using(idents) => {
                 let mut new_idents = vec![];
                 for ident in idents {
@@ -349,7 +309,7 @@ impl Execution {
     pub fn fix_table_factor(&mut self, table_alias_vec: &mut Vec<Ident>, table_factor: TableFactor) -> MysqlResult<Option<TableFactor>> {
         match table_factor {
             TableFactor::Table { name, alias, args, with_hints } => {
-                /// select database() from dual;
+                // select database() from dual;
                 let full_table_name = if name.to_string().eq(meta_const::TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_DUAL) {
                     meta_const::FULL_TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_DUAL.to_object_name()
                 } else {
@@ -832,7 +792,7 @@ impl Execution {
                     let table_with_joins = core_util::build_table_with_joins(full_table_name.clone());
                     let sql_expr = SQLExpr::Identifier(Ident { value: meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_SCHEMATA_SCHEMA_NAME.to_string(), quote_style: None });
                     let ident = Ident::new("Database");
-                    let mut projection = vec![SelectItem::ExprWithAlias { expr: sql_expr, alias: ident }];
+                    let projection = vec![SelectItem::ExprWithAlias { expr: sql_expr, alias: ident }];
                     let select = Select {
                         distinct: false,
                         top: None,
@@ -865,7 +825,7 @@ impl Execution {
                 log::error!("{}", message);
                 Err(MysqlError::new_global_error(67, message.as_str()))
             }
-            SQLStatement::ShowTableStatus { db_name, filter } => {
+            SQLStatement::ShowTableStatus { db_name, .. } => {
                 // table
                 let full_table_name = meta_util::convert_to_object_name(meta_const::FULL_TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_TABLES);
                 let table_with_joins = core_util::build_table_with_joins(full_table_name.clone());
@@ -897,7 +857,7 @@ impl Execution {
 
                 return Ok(CoreLogicalPlan::Select(logical_plan));
             }
-            SQLStatement::ShowTables { full, from, db_name, filter } => {
+            SQLStatement::ShowTables { full, db_name, ..} => {
                 let db_name = match db_name {
                     None => {
                         let captured_name = core_util::captured_name(self.session_context.current_schema.clone());
@@ -1009,7 +969,7 @@ impl Execution {
                 let logical_plan = query_planner.select_to_plan(&select, &mut Default::default())?;
                 return Ok(CoreLogicalPlan::Select(logical_plan));
             }
-            SQLStatement::Explain { describe_alias, analyze, verbose, statement } => {
+            SQLStatement::Explain { analyze, verbose, statement, .. } => {
                 let mut logical_plan = query_planner.explain_statement_to_plan(verbose, analyze, &statement)?;
 
                 let has_rowid = self.projection_has_rowid(&statement);
@@ -1042,7 +1002,7 @@ impl Execution {
                 Ok(CoreLogicalPlan::Select(logical_plan))
             }
             SQLStatement::CreateSchema { schema_name, .. } => {
-                let mut db_name = meta_util::object_name_remove_quote(schema_name.clone());
+                let db_name = meta_util::object_name_remove_quote(schema_name.clone());
 
                 let full_db_name = meta_util::fill_up_schema_name(&mut self.session_context, db_name.clone()).unwrap();
 
@@ -1061,12 +1021,6 @@ impl Execution {
                 columns,
                 constraints,
                 with_options,
-                if_not_exists,
-                external,
-                file_format,
-                location,
-                query,
-                without_rowid,
                 ..
             } => {
                 let table_name = name.clone();
@@ -1081,8 +1035,8 @@ impl Execution {
             SQLStatement::Insert {
                 table_name, columns, overwrite, source, ..
             } => {
-                let logicalPlanInsert = LogicalPlanInsert::new(self.global_context.clone(), table_name.clone(), columns.clone(), overwrite, source.clone());
-                logicalPlanInsert.create_logical_plan(&mut self.datafusion_context, &mut self.session_context, query_planner)
+                let logical_plan_insert = LogicalPlanInsert::new(self.global_context.clone(), table_name.clone(), columns.clone(), overwrite, source.clone());
+                logical_plan_insert.create_logical_plan(&mut self.datafusion_context, &mut self.session_context, query_planner)
             }
             SQLStatement::Update { table_name, assignments, selection } => {
                 let gc = self.global_context.lock().unwrap();
@@ -1128,7 +1082,7 @@ impl Execution {
 
                 Ok(CoreLogicalPlan::Delete { logical_plan, table })
             }
-            SQLStatement::Commit { chain } => {
+            SQLStatement::Commit { .. } => {
                 Ok(CoreLogicalPlan::Commit)
             }
             _ => Err(MysqlError::new_global_error(1105, format!(
@@ -1286,7 +1240,7 @@ impl Execution {
                 Ok(CorePhysicalPlan::CreateDb(create_schema))
             }
             CoreLogicalPlan::CreateTable { table_name, columns, constraints, with_options } => {
-                let mut create_table = physical_plan::create_table::CreateTable::new(self.global_context.clone(), table_name.clone(), columns.clone(), constraints.clone(), with_options.clone());
+                let create_table = physical_plan::create_table::CreateTable::new(self.global_context.clone(), table_name.clone(), columns.clone(), constraints.clone(), with_options.clone());
                 Ok(CorePhysicalPlan::CreateTable(create_table))
             }
             CoreLogicalPlan::Insert { table, column_name_list, index_keys_list, column_value_map_list } => {
@@ -1483,19 +1437,19 @@ impl Execution {
             CorePhysicalPlan::ShowCreateTable(show_create_table, select_columns, select_statistics, select_tables) => {
                 let result = select_columns.execute().await;
                 let columns_record = match result {
-                    Ok((schema_ref, records)) => records,
+                    Ok((_, records)) => records,
                     Err(mysql_error) => return Err(mysql_error),
                 };
 
                 let result = select_statistics.execute().await;
                 let statistics_record = match result {
-                    Ok((schema_ref, records)) => records,
+                    Ok((_, records)) => records,
                     Err(mysql_error) => return Err(mysql_error),
                 };
 
                 let result = select_tables.execute().await;
                 let tables_record = match result {
-                    Ok((schema_ref, records)) => records,
+                    Ok((_, records)) => records,
                     Err(mysql_error) => return Err(mysql_error),
                 };
 
@@ -1508,13 +1462,13 @@ impl Execution {
             CorePhysicalPlan::ShowColumnsFrom(show_columns_from, select_columns, select_statistics) => {
                 let result = select_columns.execute().await;
                 let columns_record = match result {
-                    Ok((schema_ref, records)) => records,
+                    Ok((_, records)) => records,
                     Err(mysql_error) => return Err(mysql_error),
                 };
 
                 let result = select_statistics.execute().await;
                 let statistics_record = match result {
-                    Ok((schema_ref, records)) => records,
+                    Ok((_, records)) => records,
                     Err(mysql_error) => return Err(mysql_error),
                 };
 

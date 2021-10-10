@@ -1,29 +1,16 @@
-use std::collections::{HashMap, HashSet};
-use std::ops::{Deref, DerefMut};
 use std::sync::{Arc, Mutex};
 
-use arrow::datatypes::{Schema, SchemaRef};
-use datafusion::error::Result;
 use datafusion::execution::context::ExecutionContext;
-use datafusion::logical_plan::{Expr, LogicalPlan};
-use datafusion::scalar::ScalarValue;
-use sqlparser::ast::{AlterTableOperation, ColumnDef, Ident, ObjectName, SqlOption, TableConstraint, Value};
+use sqlparser::ast::{AlterTableOperation};
 
 use crate::core::core_util::register_all_table;
 use crate::core::global_context::GlobalContext;
-use crate::core::output::CoreOutput;
-use crate::core::output::FinalCount;
 use crate::core::session_context::SessionContext;
-use crate::meta::def::information_schema;
 use crate::meta::initial;
 use crate::meta::meta_def::{SparrowColumnDef, TableDef};
 use crate::meta::meta_util;
 use crate::meta::meta_util::load_all_table;
-use crate::mysql::error::{MysqlError, MysqlResult};
-use crate::physical_plan::insert::PhysicalPlanInsert;
-use crate::store::engine::engine_util;
-use crate::store::engine::engine_util::TableEngineFactory;
-use crate::util;
+use crate::mysql::error::{MysqlResult};
 
 pub struct AlterTable {
     global_context: Arc<Mutex<GlobalContext>>,
@@ -44,7 +31,7 @@ impl AlterTable {
         }
     }
 
-    pub fn execute(&self, datafusion_context: &mut ExecutionContext, session_context: &mut SessionContext) -> MysqlResult<u64> {
+    pub fn execute(&self, datafusion_context: &mut ExecutionContext, _: &mut SessionContext) -> MysqlResult<u64> {
         match self.operation.clone() {
             AlterTableOperation::DropColumn { column_name, .. } => {
                 meta_util::cache_add_all_table(self.global_context.clone());

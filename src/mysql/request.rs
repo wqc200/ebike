@@ -1,15 +1,6 @@
-use std::io::{self, Error, ErrorKind, Read, Write};
-
-use arrow::datatypes::ToByteSlice;
-use arrow::datatypes::DataType::{Int32, UInt32};
-use datafusion::error::{Result, DataFusionError};
-use byteorder::{LittleEndian};
-use byteorder::{ReadBytesExt, WriteBytesExt};
-
-use bstr::{ByteSlice, ByteVec, Utf8Error};
+use bstr::{ByteSlice};
 
 use super::packet::PacketType;
-use super::mysql_util;
 use crate::mysql::error::{MysqlError, MysqlResult};
 
 /// A payload is just a wrapper for a Vec<u8>

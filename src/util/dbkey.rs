@@ -2,8 +2,7 @@ use datafusion::error::{DataFusionError, Result};
 use datafusion::logical_plan::{Expr};
 
 use crate::core::core_util;
-use crate::meta_util;
-use crate::store::reader::reader_util::{RangeValue, ScanOrder, PointType, TableIndex, Range, RangePoint};
+use crate::store::reader::reader_util::{RangeValue, PointType, TableIndex, RangePoint};
 use datafusion::scalar::ScalarValue;
 use crate::mysql::error::{MysqlResult, MysqlError};
 use crate::meta::meta_const::MYSQL_ERROR_CODE_UNKNOWN_ERROR;
@@ -303,12 +302,12 @@ pub fn scan_index(schema_name: &str, index_name: &str, column_index_values: Vec<
                 end.push_str("/");
             }
             RangeValue::NotNull(not_null_value) => {
-                if let Some((value, interval)) = not_null_value.getStart() {
+                if let Some((value, _)) = not_null_value.get_start() {
                     start.push_str("1/");
                     start.push_str(value.as_str());
                     start.push_str("/");
                 }
-                if let Some((value, interval)) = not_null_value.getEnd() {
+                if let Some((value, _)) = not_null_value.get_end() {
                     end.push_str("1/");
                     end.push_str(value.as_str());
                     end.push_str("/");

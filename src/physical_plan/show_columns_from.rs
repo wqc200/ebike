@@ -1,32 +1,15 @@
-use std::collections::{HashMap, HashSet};
-use std::ops::{Deref, DerefMut};
+use std::collections::{HashMap};
 use std::sync::{Mutex, Arc};
 
-use arrow::array::{as_primitive_array, as_string_array};
-use arrow::array::{Array, ArrayData, BinaryArray, Int8Array, Int16Array, Int32Array, Int64Array, UInt8Array, UInt16Array, UInt32Array, UInt64Array, Float32Array, Float64Array, StringArray};
+use arrow::array::{StringArray};
 use arrow::datatypes::{SchemaRef};
-use arrow::datatypes::{DataType, Field, Schema, ToByteSlice};
+use arrow::datatypes::{DataType, Field, Schema};
 use arrow::record_batch::RecordBatch;
-use datafusion::error::{Result};
-use datafusion::execution::context::ExecutionContext;
-use datafusion::logical_plan::{Expr, LogicalPlan};
-use datafusion::scalar::ScalarValue;
-use sqlparser::ast::{ColumnDef, ColumnOption, HiveDistributionStyle, Ident, ObjectName, SqlOption, Statement, TableConstraint, Value};
 
 use crate::core::global_context::GlobalContext;
-use crate::core::output::CoreOutput;
-use crate::core::output::FinalCount;
 use crate::core::core_util;
-use crate::core::session_context::SessionContext;
-use crate::meta::def::information_schema;
 use crate::meta::{meta_util, scalar_value};
-use crate::mysql::error::{MysqlResult, MysqlError};
-use crate::mysql::metadata;
-use crate::physical_plan::insert::PhysicalPlanInsert;
-
-use crate::util;
-use crate::mysql::metadata::ArrayCell;
-use arrow::compute::not;
+use crate::mysql::error::{MysqlResult};
 
 pub struct ShowColumnsFrom {
     global_context: Arc<Mutex<GlobalContext>>,
@@ -34,10 +17,10 @@ pub struct ShowColumnsFrom {
 
 impl ShowColumnsFrom {
     pub fn new(
-        core_context: Arc<Mutex<GlobalContext>>,
+        global_context: Arc<Mutex<GlobalContext>>,
     ) -> Self {
         Self {
-            global_context: core_context,
+            global_context,
         }
     }
 
@@ -53,10 +36,10 @@ impl ShowColumnsFrom {
             for row_index in 0..record_batch.num_rows() {
                 let row = statistics_rows.get(row_index).unwrap();
 
-                /// column name
+                // column name
                 let value = row.get(column_index_of_column_name).unwrap();
                 let column_name = scalar_value::to_utf8(value.clone()).unwrap();
-                /// index name
+                // index name
                 let value = row.get(column_index_of_index_name).unwrap();
                 let index_name = scalar_value::to_utf8(value.clone()).unwrap();
 
@@ -77,21 +60,21 @@ impl ShowColumnsFrom {
         for row_index in 0..record_batch.num_rows() {
             let row = columns_rows.get(row_index).unwrap();
 
-            /// column name
+            // column name
             let value = row.get(column_index_of_column_name).unwrap();
             let column_name = scalar_value::to_utf8(value.clone()).unwrap();
             column_fields.push(column_name.clone());
-            /// data type
+            // data type
             let value = row.get(column_index_of_data_type).unwrap();
             let text_data_type = scalar_value::to_utf8(value.clone()).unwrap();
             let sql_data_type = meta_util::text_to_sql_data_type(text_data_type.as_str()).unwrap();
             column_types.push(sql_data_type.to_string());
-            /// nullable
+            // nullable
             let value = row.get(column_index_of_is_nullable).unwrap();
             let text_is_nullable = scalar_value::to_utf8(value.clone()).unwrap();
             let nullable = meta_util::text_to_null(text_is_nullable.as_str()).unwrap();
             column_nulls.push(nullable.to_string());
-            /// key
+            // key
             if let Some(value) = statistics_map.get(column_name.clone().as_str()) {
                 column_keys.push(value.clone());
             } else {
@@ -106,10 +89,10 @@ impl ShowColumnsFrom {
             Field::new("Key", DataType::Utf8, false),
         ]));
 
-        let column_fields = column_fields.iter().map(|x|x.as_str()).collect::<Vec<_>>();
-        let column_types = column_types.iter().map(|x|x.as_str()).collect::<Vec<_>>();
-        let column_nulls = column_nulls.iter().map(|x|x.as_str()).collect::<Vec<_>>();
-        let column_keys = column_keys.iter().map(|x|x.as_str()).collect::<Vec<_>>();
+        let column_fields = column_fields.iter().map(|x| x.as_str()).collect::<Vec<_>>();
+        let column_types = column_types.iter().map(|x| x.as_str()).collect::<Vec<_>>();
+        let column_nulls = column_nulls.iter().map(|x| x.as_str()).collect::<Vec<_>>();
+        let column_keys = column_keys.iter().map(|x| x.as_str()).collect::<Vec<_>>();
         let column_table_name = StringArray::from(column_fields);
         let column_type = StringArray::from(column_types);
         let column_null = StringArray::from(column_nulls);
