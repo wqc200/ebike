@@ -2,20 +2,14 @@ use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
-use arrow::compute::not;
-use datafusion::logical_plan::{Expr, Column};
+use datafusion::logical_plan::{Expr};
 use datafusion::logical_plan::Operator;
 use datafusion::scalar::ScalarValue;
 use sqlparser::ast::{ObjectName, TableConstraint};
 
-use crate::core::core_util;
 use crate::core::global_context::GlobalContext;
-use crate::meta::meta_def::SparrowColumnDef;
-use crate::meta::meta_util;
 use crate::meta::meta_def::TableDef;
-use crate::mysql::error::{MysqlError, MysqlResult};
-use crate::store::engine::engine_util;
-use crate::util::convert::{ToIdent, ToObjectName};
+use crate::mysql::error::{MysqlResult};
 use crate::util::dbkey;
 use crate::util::dbkey::CreateScanKey;
 

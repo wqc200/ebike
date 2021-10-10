@@ -1,17 +1,15 @@
-use std::collections::hash_map::RandomState;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
-use arrow::array::{Array, StringArray};
+use arrow::array::{Array};
 use arrow::record_batch::RecordBatch;
-use arrow::error::{ArrowError, Result};
+use arrow::error::{Result};
 use datafusion::datasource::TableProvider;
 use datafusion::logical_plan::Expr;
 use datafusion::scalar::ScalarValue;
 use sqlparser::ast::{ObjectName, Ident};
 
 use crate::core::global_context::GlobalContext;
-use crate::core::session_context::SessionContext;
 use crate::meta::{meta_const, meta_util};
 use crate::mysql::error::{MysqlError, MysqlResult};
 

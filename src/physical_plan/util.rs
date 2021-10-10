@@ -1,17 +1,3 @@
-use std::sync::{Arc, Mutex};
-
-use datafusion::error::Result;
-use datafusion::physical_plan::ExecutionPlan;
-use datafusion::scalar::ScalarValue;
-use sqlparser::ast::ObjectName;
-use uuid::Uuid;
-
-use crate::core::core_util;
-use crate::core::global_context::GlobalContext;
-use crate::core::logical_plan::CoreLogicalPlan;
-use crate::core::output::CoreOutput;
-use crate::meta::meta_util;
-use crate::mysql::error::{MysqlError, MysqlResult};
 use crate::physical_plan::alter_table::AlterTable;
 use crate::physical_plan::com_field_list::ComFieldList;
 use crate::physical_plan::create_db::CreateDb;
@@ -31,10 +17,6 @@ use crate::physical_plan::show_engines::ShowEngines;
 use crate::physical_plan::show_grants::ShowGrants;
 use crate::physical_plan::show_privileges::ShowPrivileges;
 use crate::physical_plan::update::Update;
-use crate::store::engine::engine_util;
-use crate::store::engine::engine_util::TableEngine;
-use crate::util;
-use crate::util::convert::ToIdent;
 
 pub enum CorePhysicalPlan {
     AlterTableAddColumn(AlterTable),

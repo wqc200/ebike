@@ -1,18 +1,4 @@
-use std::sync::Arc;
-
-use arrow::array::*;
-use arrow::datatypes::*;
-use arrow::datatypes::Field;
-use arrow::datatypes::TimeUnit;
-use arrow::record_batch::RecordBatch;
-use arrow::error::{ArrowError, Result};
-
-use sled::IVec;
 use sqlparser::ast::{ObjectName, Ident};
-use datafusion::scalar::ScalarValue;
-use crate::mysql::error::{MysqlResult, MysqlError};
-use crate::meta::meta_const;
-use std::string::ToString;
 
 const DEFAULT_DATE_FORMAT: &str = "%F";
 const DEFAULT_TIME_FORMAT: &str = "%T";

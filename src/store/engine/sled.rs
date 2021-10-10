@@ -1,11 +1,6 @@
-use bstr::ByteSlice;
 use std::sync::{Arc, Mutex};
 
-use sled::{Config, IVec};
-use sled::{Db, Iter};
-
-use arrow::array::{StringArray, Array};
-use arrow::error::{ArrowError, Result};
+use arrow::error::{Result};
 use arrow::record_batch::RecordBatch;
 use datafusion::datasource::TableProvider;
 use datafusion::logical_plan::Expr;
@@ -13,13 +8,9 @@ use sled::Db as SledDb;
 
 use crate::core::global_context::GlobalContext;
 use crate::datafusion_impl::datasource::sled::SledTable;
-use crate::meta::meta_util;
-use crate::mysql::error::{MysqlResult, MysqlError};
+use crate::mysql::error::{MysqlResult};
 
 use super::engine_util::TableEngine;
-use crate::core::session_context::SessionContext;
-use sqlparser::ast::ObjectName;
-use datafusion::scalar::ScalarValue;
 use crate::meta::meta_def::TableDef;
 use crate::store::reader::sled::SledReader;
 use crate::store::engine::engine_util::StoreEngine;

@@ -246,8 +246,8 @@ pub fn delete_db_form_information_schema(global_context: Arc<Mutex<GlobalContext
     let db_name_index = schema_ref.index_of(meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_SCHEMATA_SCHEMA_NAME).unwrap();
     let projection = Some(vec![rowid_index, db_name_index]);
 
-    let mut store_engine = engine_util::StoreEngineFactory::try_new_with_table_name(global_context.clone(), full_table_name.clone()).unwrap();
-    let mut table_engine = engine_util::TableEngineFactory::try_new_with_table_name(global_context.clone(), full_table_name.clone()).unwrap();
+    let store_engine = engine_util::StoreEngineFactory::try_new_with_table_name(global_context.clone(), full_table_name.clone()).unwrap();
+    let table_engine = engine_util::TableEngineFactory::try_new_with_table_name(global_context.clone(), full_table_name.clone()).unwrap();
     let mut table_iterator = table_engine.table_iterator(projection, &[]);
 
     let mut total = 0;
@@ -377,51 +377,51 @@ pub fn add_information_schema_columns(global_context: Arc<Mutex<GlobalContext>>,
         }
 
         let mut column_value_map = HashMap::new();
-        /// TABLE_CATALOG
+        // TABLE_CATALOG
         column_value_map.insert("table_catalog".to_ident(), ScalarValue::Utf8(Some(catalog_name.clone())));
-        /// TABLE_SCHEMA
+        // TABLE_SCHEMA
         column_value_map.insert("table_schema".to_ident(), ScalarValue::Utf8(Some(schema_name.clone())));
-        /// TABLE_NAME
+        // TABLE_NAME
         column_value_map.insert("table_name".to_ident(), ScalarValue::Utf8(Some(table_name.clone())));
-        /// COLUMN_NAME
+        // COLUMN_NAME
         column_value_map.insert("column_name".to_ident(), ScalarValue::Utf8(Some(column_name.clone())));
-        /// ORDINAL_POSITION
+        // ORDINAL_POSITION
         column_value_map.insert("store_id".to_ident(), ScalarValue::Int32(Some(sparrow_column.store_id)));
-        /// ORDINAL_POSITION
+        // ORDINAL_POSITION
         column_value_map.insert("ordinal_position".to_ident(), ScalarValue::Int32(Some(sparrow_column.ordinal_position)));
-        /// COLUMN_DEFAULT
+        // COLUMN_DEFAULT
         column_value_map.insert("COLUMN_DEFAULT".to_ident(), ScalarValue::Utf8(None));
-        /// IS_NULLABLE
+        // IS_NULLABLE
         column_value_map.insert("is_nullable".to_ident(), ScalarValue::Utf8(Some(is_nullable.to_string())));
-        /// DATA_TYPE
+        // DATA_TYPE
         column_value_map.insert("data_type".to_ident(), ScalarValue::Utf8(Some(data_type)));
-        /// CHARACTER_MAXIMUM_LENGTH
+        // CHARACTER_MAXIMUM_LENGTH
         column_value_map.insert("CHARACTER_MAXIMUM_LENGTH".to_ident(), ScalarValue::Int32(None));
-        /// CHARACTER_OCTET_LENGTH
+        // CHARACTER_OCTET_LENGTH
         column_value_map.insert("CHARACTER_OCTET_LENGTH".to_ident(), ScalarValue::Int32(None));
-        /// NUMERIC_PRECISION
+        // NUMERIC_PRECISION
         column_value_map.insert("NUMERIC_PRECISION".to_ident(), ScalarValue::Int32(None));
-        /// NUMERIC_SCALE
+        // NUMERIC_SCALE
         column_value_map.insert("NUMERIC_SCALE".to_ident(), ScalarValue::Int32(None));
-        /// DATETIME_PRECISION
+        // DATETIME_PRECISION
         column_value_map.insert("DATETIME_PRECISION".to_ident(), ScalarValue::Int32(None));
-        /// CHARACTER_SET_NAME
+        // CHARACTER_SET_NAME
         column_value_map.insert("CHARACTER_SET_NAME".to_ident(), ScalarValue::Utf8(None));
-        /// COLLATION_NAME
+        // COLLATION_NAME
         column_value_map.insert("COLLATION_NAME".to_ident(), ScalarValue::Utf8(None));
-        /// COLUMN_TYPE
+        // COLUMN_TYPE
         column_value_map.insert("COLUMN_TYPE".to_ident(), ScalarValue::Utf8(None));
-        /// COLUMN_KEY
+        // COLUMN_KEY
         column_value_map.insert("COLUMN_KEY".to_ident(), ScalarValue::Utf8(None));
-        /// EXTRA
+        // EXTRA
         column_value_map.insert("EXTRA".to_ident(), ScalarValue::Utf8(None));
-        /// PRIVILEGES
+        // PRIVILEGES
         column_value_map.insert("PRIVILEGES".to_ident(), ScalarValue::Utf8(None));
-        /// COLUMN_COMMENT
+        // COLUMN_COMMENT
         column_value_map.insert("COLUMN_COMMENT".to_ident(), ScalarValue::Utf8(None));
-        /// GENERATION_EXPRESSION
+        // GENERATION_EXPRESSION
         column_value_map.insert("GENERATION_EXPRESSION".to_ident(), ScalarValue::Utf8(None));
-        /// SRS_ID
+        // SRS_ID
         column_value_map.insert("SRS_ID".to_ident(), ScalarValue::Int32(None));
         column_value_map_list.push(column_value_map);
     }
@@ -446,7 +446,7 @@ pub fn read_all_table(global_context: Arc<Mutex<GlobalContext>>) -> MysqlResult<
 
     let mut all_schema: HashMap<ObjectName, TableDef> = HashMap::new();
 
-    for (full_table_name, mut table_option) in schema_table_sql_options {
+    for (full_table_name, table_option) in schema_table_sql_options {
         let mut table_column = TableColumnDef::default();
         match schema_table_columns.get(&full_table_name.clone()) {
             None => {}

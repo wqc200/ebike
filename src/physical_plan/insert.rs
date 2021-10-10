@@ -1,34 +1,18 @@
-use std::borrow::Borrow;
 use std::collections::HashMap;
-use std::ops::{Deref, DerefMut};
 use std::sync::{Arc, Mutex};
 
-use arrow::datatypes::{Schema, SchemaRef};
-use arrow::record_batch::RecordBatch;
-use bstr::{ByteSlice, ByteVec};
-use datafusion::error::DataFusionError;
-use datafusion::execution::context::{ExecutionContext, ExecutionContextState};
-use datafusion::logical_plan::{Expr, LogicalPlan, ToDFSchema};
-use datafusion::physical_plan::{ColumnarValue, PhysicalExpr};
-use datafusion::physical_plan::planner::DefaultPhysicalPlanner;
 use datafusion::scalar::ScalarValue;
-use sqlparser::ast::{Assignment, ColumnDef, ObjectName, SqlOption, TableConstraint, Ident};
+use sqlparser::ast::{Ident};
 use uuid::Uuid;
 
-use crate::core::{core_util as CoreUtil, core_util};
+use crate::core::{core_util};
 use crate::core::global_context::GlobalContext;
-use crate::core::output::CoreOutput;
-use crate::core::output::FinalCount;
-use crate::core::session_context::SessionContext;
 use crate::meta::meta_def::{TableDef, IndexDef};
-use crate::meta::meta_util;
 use crate::mysql::error::{MysqlError, MysqlResult};
-use crate::store::engine::engine_util;
 
-use crate::test;
 use crate::util;
 use crate::util::convert::ToIdent;
-use crate::store::engine::engine_util::{TableEngineFactory, StoreEngineFactory};
+use crate::store::engine::engine_util::{StoreEngineFactory};
 
 pub struct PhysicalPlanInsert {
     global_context: Arc<Mutex<GlobalContext>>,

@@ -1,10 +1,7 @@
-use std::ops::{Deref, DerefMut};
 use std::sync::{Arc, Mutex};
 
 use arrow::array::{Array};
 use arrow::array::{
-    ArrayData,
-    BinaryArray,
     Int8Array,
     Int16Array,
     Int32Array,
@@ -17,28 +14,17 @@ use arrow::array::{
     Float64Array,
     StringArray,
 };
-use arrow::datatypes::{DataType, Field, SchemaRef, ToByteSlice};
+use arrow::datatypes::{DataType};
 use arrow::record_batch::RecordBatch;
-use datafusion::error::{Result};
-use datafusion::execution::context::ExecutionContext;
-use datafusion::logical_plan::{Expr, LogicalPlan};
 use datafusion::physical_plan::{collect, ExecutionPlan};
-use sqlparser::ast::{Assignment, ObjectName, Expr as SQLExpr, Value};
-use uuid::Uuid;
+use sqlparser::ast::{Assignment};
 
-use crate::mysql::{command, packet, request, response, message, metadata};
+use crate::mysql::{metadata};
 use crate::core::global_context::GlobalContext;
-use crate::core::output::CoreOutput;
-use crate::core::output::FinalCount;
-use crate::core::core_util as CoreUtil;
 
 use crate::mysql::error::{MysqlError, MysqlResult};
 
-use crate::test;
-use crate::util;
 use crate::core::session_context::SessionContext;
-use crate::meta::meta_util;
-use crate::util::convert::ToObjectName;
 use crate::store::engine::engine_util::StoreEngineFactory;
 use crate::util::dbkey::create_column_key;
 use crate::meta::meta_def::TableDef;

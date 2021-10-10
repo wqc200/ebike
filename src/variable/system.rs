@@ -22,7 +22,6 @@ use datafusion::variable::VarProvider;
 use datafusion::scalar::ScalarValue;
 
 use crate::core::global_context::GlobalContext;
-use std::collections::HashMap;
 
 /// System variable
 pub struct SystemVar {

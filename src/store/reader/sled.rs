@@ -2,26 +2,20 @@ use bstr::ByteSlice;
 use std::sync::{Arc, Mutex};
 
 use arrow::error::{ArrowError, Result};
-use arrow::array::ArrayRef;
 use arrow::array::StructBuilder;
-use arrow::array::{Float32Builder, Int32Builder, Int64Builder, StringBuilder};
-use arrow::datatypes::{Field, Schema, DataType, ToByteSlice, SchemaRef};
+use arrow::array::{Int32Builder, Int64Builder, StringBuilder};
+use arrow::datatypes::{Field, Schema, DataType, SchemaRef};
 use arrow::record_batch::RecordBatch;
 use datafusion::logical_plan::Expr;
-use uuid::Uuid;
-use sled::{Db as SledDb, Iter, IVec, Error};
 use sled::Iter as SledIter;
 
 use crate::core::global_context::GlobalContext;
-use crate::meta::{meta_util as MetaUtil, meta_const, meta_util};
+use crate::meta::{meta_const};
 use crate::util;
-use crate::util::dbkey;
-use crate::store::reader::reader_util::{SeekType, ScanOrder, PointType};
+use crate::store::reader::reader_util::{SeekType, PointType};
 use std::cmp::Ordering;
 use crate::util::dbkey::CreateScanKey;
-use sqlparser::ast::ObjectName;
-use crate::mysql::error::MysqlError;
-use crate::util::convert::{ToObjectName, ToIdent};
+use crate::util::convert::{ToIdent};
 use crate::meta::meta_def::TableDef;
 use crate::store::reader::reader_util;
 
