@@ -51,7 +51,7 @@ impl Update {
         }
     }
 
-    pub async fn execute(&self, session_context: &mut SessionContext) -> MysqlResult<(u64)> {
+    pub async fn execute(&self, session_context: &mut SessionContext) -> MysqlResult<u64> {
         let result = collect(self.execution_plan.clone()).await;
         match result {
             Ok(records) => {
@@ -71,7 +71,7 @@ impl Update {
         }
     }
 
-    pub fn update_record(&self, session_context: &mut SessionContext, batch: RecordBatch) -> MysqlResult<(u64)> {
+    pub fn update_record(&self, _: &mut SessionContext, batch: RecordBatch) -> MysqlResult<u64> {
         let store_engine = StoreEngineFactory::try_new_with_table(self.global_context.clone(), self.table.clone()).unwrap();
 
         let mut assignment_column_value: Vec<metadata::ArrayCell> = Vec::new();

@@ -18,6 +18,7 @@ use crate::util::dbkey::CreateScanKey;
 use crate::util::convert::{ToIdent};
 use crate::meta::meta_def::TableDef;
 use crate::store::reader::reader_util;
+use crate::mysql::error::MysqlError;
 
 pub struct Seek {
     iter: SledIter,
@@ -165,7 +166,10 @@ impl Iterator for SledReader {
 
         let mut struct_builder = StructBuilder::from_fields(self.projected_schema.clone().fields().clone(), rowids.len());
         for _ in rowids.clone() {
-            struct_builder.append(true);
+            let result = struct_builder.append(true);
+            if let Err(e) = result {
+                return Some(Err(e));
+            }
         }
 
         for i in 0..self.projected_schema.clone().fields().len() {

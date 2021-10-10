@@ -41,7 +41,7 @@ pub fn get_table_index_list(global_context: Arc<Mutex<GlobalContext>>, full_tabl
                     column_name_list.push(column_name.clone());
                 }
 
-                let mut level = 0;
+                let mut level ;
                 if is_primary.clone() {
                     level = 1;
                 } else {
@@ -268,18 +268,34 @@ pub async fn init_meta(global_context: Arc<Mutex<GlobalContext>>) -> MysqlResult
     let full_table_names = get_full_table_name_list(global_context.clone()).unwrap();
     if full_table_names.len() < 1 {
         for table in init_tables.iter() {
-            initial::add_information_schema_tables(global_context.clone(), table.option.clone());
-            initial::add_information_schema_columns(global_context.clone(), table.option.clone(), table.column.sparrow_column_list.clone());
+            let result = initial::add_information_schema_tables(global_context.clone(), table.option.clone());
+            if let Err(e) = result {
+                return Err(e);
+            }
+
+            let result = initial::add_information_schema_columns(global_context.clone(), table.option.clone(), table.column.sparrow_column_list.clone());
+            if let Err(e) = result {
+                return Err(e);
+            }
+
             save_table_constraint(global_context.clone(), table.option.clone(), table.get_constraints().clone());
         }
 
-        initial::create_schema(global_context.clone(), meta_const::FULL_SCHEMA_NAME_OF_DEF_MYSQL.to_object_name());
-        initial::create_schema(global_context.clone(), meta_const::FULL_SCHEMA_NAME_OF_DEF_PERFORMANCE_SCHEMA.to_object_name());
+        let result = initial::create_schema(global_context.clone(), meta_const::FULL_SCHEMA_NAME_OF_DEF_MYSQL.to_object_name());
+        if let Err(e) = result {
+            return Err(e);
+        }
+
+        let result = initial::create_schema(global_context.clone(), meta_const::FULL_SCHEMA_NAME_OF_DEF_PERFORMANCE_SCHEMA.to_object_name());
+        if let Err(e) = result {
+            return Err(e);
+        }
 
         let result = meta::initial::add_def_mysql_users(global_context.clone());
         if let Err(e) = result {
             return Err(e);
         }
+
         let result = meta::initial::add_def_performance_schmea_global_variables(global_context.clone());
         if let Err(e) = result {
             return Err(e);

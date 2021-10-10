@@ -24,7 +24,11 @@ impl CreateDb {
 
         let db_name = meta_util::cut_out_schema_name(full_schema_name.clone());
 
-        initial::create_schema(global_context, full_schema_name);
+        let result = initial::create_schema(global_context, full_schema_name);
+        if let Err(e) = result {
+            return Err(e);
+        }
+
         core_util::register_schema(execution_context, meta_const::CATALOG_NAME, db_name.to_string().as_str());
 
         Ok(1)

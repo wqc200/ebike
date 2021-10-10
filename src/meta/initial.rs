@@ -426,7 +426,10 @@ pub fn add_information_schema_columns(global_context: Arc<Mutex<GlobalContext>>,
         column_value_map_list.push(column_value_map);
     }
 
-    create_statistics.save();
+    let result = create_statistics.save();
+    if let Err(e) = result {
+        return Err(e);
+    }
 
     let insert = physical_plan::insert::PhysicalPlanInsert::new(
         global_context.clone(),

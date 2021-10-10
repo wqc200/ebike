@@ -42,7 +42,10 @@ impl PhysicalPlanInsert {
 
             let column_rowid_key = util::dbkey::create_column_rowid_key(self.table.option.full_table_name.clone(), rowid.as_str());
             log::debug!("rowid_key: {:?}", column_rowid_key);
-            store_engine.put_key(column_rowid_key, rowid.as_bytes());
+            let result = store_engine.put_key(column_rowid_key, rowid.as_bytes());
+            if let Err(e) = result {
+                return Err(e);
+            }
 
             if self.index_keys_list.len() > 0 {
                 let result = self.index_keys_list.get(row_number);
@@ -58,7 +61,10 @@ impl PhysicalPlanInsert {
 
                 if index_keys.len() > 0 {
                     for index in index_keys {
-                        store_engine.put_key(index.index_key, rowid.as_bytes());
+                        let result = store_engine.put_key(index.index_key, rowid.as_bytes());
+                        if let Err(e) = result {
+                            return Err(e);
+                        }
                     }
                 }
             }
@@ -85,7 +91,10 @@ impl PhysicalPlanInsert {
                 let result = core_util::convert_scalar_value(column_value.clone()).unwrap();
                 log::debug!("column_value: {:?}", result);
                 if let Some(value) = result {
-                    store_engine.put_key(column_key, value.as_bytes());
+                    let result = store_engine.put_key(column_key, value.as_bytes());
+                    if let Err(e) = result {
+                        return Err(e);
+                    }
                 }
             }
         }

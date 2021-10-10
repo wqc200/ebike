@@ -28,7 +28,10 @@ impl DropDB {
         let db_name = self.schema_name.clone();
         let full_db_name = meta_util::fill_up_schema_name(session_context, db_name).unwrap();
 
-        initial::delete_db_form_information_schema(self.global_context.clone(), full_db_name);
+        let result = initial::delete_db_form_information_schema(self.global_context.clone(), full_db_name);
+        if let Err(e) = result {
+            return Err(e);
+        }
 
         Ok(1)
     }

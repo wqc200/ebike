@@ -857,7 +857,7 @@ impl Execution {
 
                 return Ok(CoreLogicalPlan::Select(logical_plan));
             }
-            SQLStatement::ShowTables { full, from, db_name, filter } => {
+            SQLStatement::ShowTables { full, db_name, ..} => {
                 let db_name = match db_name {
                     None => {
                         let captured_name = core_util::captured_name(self.session_context.current_schema.clone());
@@ -969,7 +969,7 @@ impl Execution {
                 let logical_plan = query_planner.select_to_plan(&select, &mut Default::default())?;
                 return Ok(CoreLogicalPlan::Select(logical_plan));
             }
-            SQLStatement::Explain { describe_alias, analyze, verbose, statement } => {
+            SQLStatement::Explain { analyze, verbose, statement, .. } => {
                 let mut logical_plan = query_planner.explain_statement_to_plan(verbose, analyze, &statement)?;
 
                 let has_rowid = self.projection_has_rowid(&statement);
@@ -1021,12 +1021,6 @@ impl Execution {
                 columns,
                 constraints,
                 with_options,
-                if_not_exists,
-                external,
-                file_format,
-                location,
-                query,
-                without_rowid,
                 ..
             } => {
                 let table_name = name.clone();
@@ -1088,7 +1082,7 @@ impl Execution {
 
                 Ok(CoreLogicalPlan::Delete { logical_plan, table })
             }
-            SQLStatement::Commit { chain } => {
+            SQLStatement::Commit { .. } => {
                 Ok(CoreLogicalPlan::Commit)
             }
             _ => Err(MysqlError::new_global_error(1105, format!(
@@ -1443,19 +1437,19 @@ impl Execution {
             CorePhysicalPlan::ShowCreateTable(show_create_table, select_columns, select_statistics, select_tables) => {
                 let result = select_columns.execute().await;
                 let columns_record = match result {
-                    Ok((schema_ref, records)) => records,
+                    Ok((_, records)) => records,
                     Err(mysql_error) => return Err(mysql_error),
                 };
 
                 let result = select_statistics.execute().await;
                 let statistics_record = match result {
-                    Ok((schema_ref, records)) => records,
+                    Ok((_, records)) => records,
                     Err(mysql_error) => return Err(mysql_error),
                 };
 
                 let result = select_tables.execute().await;
                 let tables_record = match result {
-                    Ok((schema_ref, records)) => records,
+                    Ok((_, records)) => records,
                     Err(mysql_error) => return Err(mysql_error),
                 };
 
@@ -1468,13 +1462,13 @@ impl Execution {
             CorePhysicalPlan::ShowColumnsFrom(show_columns_from, select_columns, select_statistics) => {
                 let result = select_columns.execute().await;
                 let columns_record = match result {
-                    Ok((schema_ref, records)) => records,
+                    Ok((_, records)) => records,
                     Err(mysql_error) => return Err(mysql_error),
                 };
 
                 let result = select_statistics.execute().await;
                 let statistics_record = match result {
-                    Ok((schema_ref, records)) => records,
+                    Ok((_, records)) => records,
                     Err(mysql_error) => return Err(mysql_error),
                 };
 

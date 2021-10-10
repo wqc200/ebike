@@ -1,7 +1,7 @@
 use std::collections::{HashMap};
 use std::sync::{Mutex, Arc};
 
-use arrow::array::{Array, StringArray};
+use arrow::array::{StringArray};
 use arrow::datatypes::{SchemaRef};
 use arrow::datatypes::{DataType, Field, Schema};
 use arrow::record_batch::RecordBatch;
@@ -17,10 +17,10 @@ pub struct ShowColumnsFrom {
 
 impl ShowColumnsFrom {
     pub fn new(
-        core_context: Arc<Mutex<GlobalContext>>,
+        global_context: Arc<Mutex<GlobalContext>>,
     ) -> Self {
         Self {
-            global_context: core_context,
+            global_context,
         }
     }
 
@@ -89,10 +89,10 @@ impl ShowColumnsFrom {
             Field::new("Key", DataType::Utf8, false),
         ]));
 
-        let column_fields = column_fields.iter().map(|x|x.as_str()).collect::<Vec<_>>();
-        let column_types = column_types.iter().map(|x|x.as_str()).collect::<Vec<_>>();
-        let column_nulls = column_nulls.iter().map(|x|x.as_str()).collect::<Vec<_>>();
-        let column_keys = column_keys.iter().map(|x|x.as_str()).collect::<Vec<_>>();
+        let column_fields = column_fields.iter().map(|x| x.as_str()).collect::<Vec<_>>();
+        let column_types = column_types.iter().map(|x| x.as_str()).collect::<Vec<_>>();
+        let column_nulls = column_nulls.iter().map(|x| x.as_str()).collect::<Vec<_>>();
+        let column_keys = column_keys.iter().map(|x| x.as_str()).collect::<Vec<_>>();
         let column_table_name = StringArray::from(column_fields);
         let column_type = StringArray::from(column_types);
         let column_null = StringArray::from(column_nulls);
