@@ -1,5 +1,3 @@
-use std::io::{self};
-
 use bstr::{ByteSlice};
 
 use super::packet::PacketType;

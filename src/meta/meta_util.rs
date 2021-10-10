@@ -1,5 +1,4 @@
 use std::collections::{HashMap};
-use std::io::prelude::*;
 use std::sync::{Arc, Mutex};
 
 use arrow::datatypes::{DataType};
@@ -21,7 +20,7 @@ pub fn get_table(global_context: Arc<Mutex<GlobalContext>>, full_table_name: Obj
     let gc = global_context.lock().unwrap();
     let result = gc.meta_data.get_table(full_table_name.clone());
     match result {
-        Some(table) => Ok((table.clone())),
+        Some(table) => Ok(table.clone()),
         None => {
             return Err(error_of_table_doesnt_exists(full_table_name.clone()));
         }

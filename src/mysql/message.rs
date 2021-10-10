@@ -1,17 +1,10 @@
 use byteorder::{LittleEndian};
 use byteorder::WriteBytesExt;
-use arrow::datatypes::{Field};
 
-use arrow::array::ArrayBuilder;
-use arrow::array::{
-    StringArray,
-};
 use arrow::record_batch::RecordBatch;
 
-use super::metadata::Column;
 use super::response::ResponsePayload;
 use super::{mysql_util, metadata};
-use parquet::data_type::AsBytes;
 use datafusion::scalar::ScalarValue;
 
 pub enum MessageType {

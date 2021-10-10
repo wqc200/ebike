@@ -1,10 +1,8 @@
 use bitflags;
 use serde_derive::{Deserialize, Serialize};
 
-use arrow::datatypes::{DataType, Field, Schema, ToByteSlice};
+use arrow::datatypes::{Field};
 use arrow::array::{
-    ArrayData,
-    BinaryArray,
     Int8Array,
     Int16Array,
     Int32Array,
@@ -19,8 +17,6 @@ use arrow::array::{
 };
 
 use super::response::ResponsePayload;
-use crate::mysql::metadata::MysqlType::MYSQL_TYPE_STRING;
-use num::traits::AsPrimitive;
 use crate::mysql::mysql_util;
 use crate::meta::meta_def::SparrowColumnDef;
 use crate::meta::{meta_util, meta_const};

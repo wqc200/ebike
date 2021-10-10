@@ -1,45 +1,22 @@
-#![warn(rust_2018_idioms)]
+use bytes::{Buf};
 
-use bytes::{BytesMut, Bytes, Buf};
-
-use std::collections::HashMap;
-use std::env;
-use std::error::Error;
 use std::io;
-use std::net::SocketAddr;
-use std::pin::Pin;
 use std::sync::{Arc, Mutex};
-use std::task::{Context, Poll};
 
 use arrow::array::ArrayBuilder;
-use arrow::array::{as_primitive_array, as_string_array};
-use arrow::array::{Array, ArrayData, BinaryArray, Int8Array, Int16Array, Int32Array, Int64Array, UInt8Array, UInt16Array, UInt32Array, UInt64Array, Float32Array, Float64Array, StringArray};
-use arrow::datatypes::{DataType, Field, Schema, ToByteSlice};
-use arrow::record_batch::RecordBatch;
-use arrow::compute::cast;
-use arrow::datatypes::DataType::UInt8;
-use arrow::buffer::Buffer;
+use arrow::array::{Array};
 
-use datafusion::datasource::{CsvFile, MemTable, TableProvider};
-use datafusion::error::{Result, DataFusionError};
-use datafusion::execution;
-use datafusion::logical_plan::Operator;
-use datafusion::scalar::ScalarValue;
-use futures::{SinkExt, Future};
-use tokio::net::{TcpListener, TcpStream};
+use tokio::net::{TcpStream};
 use tokio::io::{AsyncWriteExt, AsyncReadExt};
-use tokio_stream::StreamExt;
-use tokio_util::codec::{FramedRead, BytesCodec, Decoder};
 
 use crate::core::global_context::GlobalContext;
 use crate::core::execution::Execution;
-use crate::core::output::{CoreOutput, OutputError};
+use crate::core::output::{CoreOutput};
 use crate::core::output::FinalCount;
-use crate::mysql::{command, error::MysqlError, packet, request, response, message, metadata};
+use crate::mysql::{error::MysqlError, packet, request, response, message, metadata};
 use crate::mysql::error::MysqlResult;
 use crate::core::core_util;
 use bstr::ByteSlice;
-use crate::mysql::request::RequestPayload;
 use crate::mysql::metadata::Column;
 
 /// The state for each connected client.
