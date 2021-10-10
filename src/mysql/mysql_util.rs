@@ -1,11 +1,8 @@
 
-use arrow::datatypes::{Int32Type, DataType, Field, Schema, SchemaRef};
-
 use crate::ArrowDataType;
 use crate::MysqlType;
-use crate::SQLDataType;
 
-use crate::mysql::error::{MysqlError, MysqlResult};
+use crate::mysql::error::{MysqlResult};
 
 pub fn length_encoded_int_size(n: u64) -> i32 {
     if n <= 250 {

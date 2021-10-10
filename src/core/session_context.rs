@@ -1,18 +1,7 @@
-use num::ToPrimitive;
-use std::collections::{HashMap, HashSet};
-use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
 use std::sync::Mutex;
 
-use arrow::datatypes::{DataType, Field, Schema, SchemaRef};
-use datafusion::error::{Result};
-use sled::Db as sledDb;
-
-// use crate::core::udf::UdfContext;
-use crate::meta::data::MetaData;
 use crate::meta::variable::Variable;
-use crate::test;
-use crate::util;
 
 #[derive(Clone, Debug)]
 pub struct SessionContext {

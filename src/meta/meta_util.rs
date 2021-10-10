@@ -1,46 +1,11 @@
-use std::collections::{HashMap, HashSet};
-use std::convert::TryFrom;
-use std::env;
-use std::fs;
-use std::fs::File;
-use std::io::{BufReader, BufWriter};
+use std::collections::{HashMap};
 use std::io::prelude::*;
-use std::panic::set_hook;
-use std::process::*;
 use std::sync::{Arc, Mutex};
 
-use arrow::array::{Array, as_primitive_array, as_string_array};
-use arrow::array::{
-    ArrayData,
-    BinaryArray,
-    Float32Array,
-    Float64Array,
-    Int16Array,
-    Int32Array,
-    Int64Array,
-    Int8Array,
-    StringArray,
-    UInt16Array,
-    UInt32Array,
-    UInt64Array,
-    UInt8Array,
-};
-use arrow::datatypes::{DataType, Field, Int32Type, Schema, SchemaRef};
-use arrow::datatypes::ToByteSlice;
-use arrow::record_batch::RecordBatch;
-use bytes::Buf;
-use datafusion::catalog::ResolvedTableReference;
-use datafusion::catalog::TableReference;
-use datafusion::datasource::csv::{CsvFile, CsvReadOptions};
-use datafusion::datasource::TableProvider;
+use arrow::datatypes::{DataType};
 use datafusion::error::{DataFusionError, Result};
-use datafusion::logical_plan::{col, DFField, DFSchema, DFSchemaRef, Expr};
 use datafusion::scalar::ScalarValue;
-use futures::StreamExt;
-use parquet::data_type::AsBytes;
-use sqlparser::ast::{Assignment, BinaryOperator, ColumnDef as SQLColumnDef, ColumnOption, ColumnOptionDef, DataType as SQLDataType, Expr as SQLExpr, Ident, ObjectName, SqlOption, TableConstraint, Value};
-use tempdir::TempDir;
-use uuid::Uuid;
+use sqlparser::ast::{ColumnDef as SQLColumnDef, ColumnOption, ColumnOptionDef, DataType as SQLDataType, Ident, ObjectName, TableConstraint};
 
 use crate::core::global_context::GlobalContext;
 use crate::core::session_context::SessionContext;
@@ -48,16 +13,9 @@ use crate::meta::{def, initial, meta_const, meta_util};
 use crate::meta;
 use crate::meta::def::information_schema::{key_column_usage, table_constraints};
 use crate::meta::initial::{SaveKeyColumnUsage, SaveStatistics, SaveTableConstraints, get_full_table_name_list};
-use crate::meta::meta_def::{SchemaDef, SparrowColumnDef, StatisticsColumn, TableDef, TableIndexDef, TableOptionDef};
+use crate::meta::meta_def::{SchemaDef, SparrowColumnDef, TableDef, TableIndexDef, TableOptionDef};
 use crate::mysql::error::{MysqlError, MysqlResult};
-use crate::physical_plan::create_table::CreateTable;
-use crate::physical_plan::delete::PhysicalPlanDelete;
-use crate::physical_plan::insert::PhysicalPlanInsert;
-use crate::store::engine::engine_util;
-use crate::store::engine::engine_util::{StoreEngine, StoreEngineFactory, TableEngine, TableEngineFactory};
-use crate::util::convert::{ToIdent, ToObjectName};
-
-use super::super::util;
+use crate::util::convert::{ToObjectName};
 
 pub fn get_table(global_context: Arc<Mutex<GlobalContext>>, full_table_name: ObjectName) -> MysqlResult<TableDef> {
     let gc = global_context.lock().unwrap();

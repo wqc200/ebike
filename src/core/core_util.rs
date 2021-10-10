@@ -1,56 +1,37 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap};
 use std::sync::Arc;
 use std::sync::Mutex;
 
 use arrow::array::{Array, as_primitive_array, as_string_array};
 use arrow::array::{
-    ArrayData,
-    BinaryArray,
-    Float32Array,
-    Float64Array,
-    Int16Array,
     Int32Array,
     Int64Array,
-    Int8Array,
     StringArray,
-    UInt16Array,
-    UInt32Array,
     UInt64Array,
-    UInt8Array,
 };
-use arrow::buffer::Buffer;
-use arrow::compute::cast;
-use arrow::datatypes::{DataType, Field, Schema, ToByteSlice};
-use arrow::datatypes::DataType::UInt8;
-use arrow::record_batch::{RecordBatch, RecordBatchReader};
+use arrow::datatypes::{DataType, Field, Schema};
+use arrow::record_batch::{RecordBatch};
 use datafusion::catalog::catalog::{CatalogProvider, MemoryCatalogProvider};
 use datafusion::catalog::schema::{MemorySchemaProvider, SchemaProvider};
-use datafusion::datasource::{CsvFile, CsvReadOptions, MemTable, TableProvider};
+use datafusion::datasource::{MemTable, TableProvider};
 use datafusion::error::{DataFusionError, Result};
 use datafusion::execution::context::ExecutionContext;
-use datafusion::logical_plan::{col, Expr, LogicalPlan, PlanType};
-use datafusion::logical_plan::{DFField, DFSchema, DFSchemaRef};
-use datafusion::physical_plan::math_expressions;
+use datafusion::logical_plan::{Expr, LogicalPlan};
+use datafusion::logical_plan::{DFSchema};
 use datafusion::scalar::ScalarValue;
-use datafusion::sql::parser::{DFParser, FileType};
-use datafusion::sql::planner::{ContextProvider, SqlToRel};
-use parquet::data_type::AsBytes;
 use sqlparser::ast::{
-    Assignment, BinaryOperator, Expr as SQLExpr, Join, JoinConstraint, JoinOperator,
-    Query, Select, SelectItem, SetExpr, TableFactor, TableWithJoins, UnaryOperator, Value,
+    Assignment, BinaryOperator, Expr as SQLExpr,
+    Select, SelectItem, TableFactor, TableWithJoins, Value,
 };
 use sqlparser::ast::Ident;
 use sqlparser::ast::ObjectName;
 
 use crate::core::global_context::GlobalContext;
-use crate::core::session_context::SessionContext;
 use crate::datafusion_impl::catalog::information_schema::CatalogWithInformationSchemaProvider;
-use crate::meta::{meta_const, meta_util};
+use crate::meta::{meta_const};
 use crate::mysql::error::{MysqlError, MysqlResult};
 
-use crate::test;
-use crate::util;
-use crate::meta::initial::{read_all_table, read_information_schema_schemata};
+use crate::meta::initial::{read_all_table};
 use crate::store::engine::engine_util::TableEngineFactory;
 use crate::meta::meta_util::read_all_schema;
 
@@ -74,9 +55,15 @@ pub fn register_schema(execution_context: &mut ExecutionContext, catalog_name: &
     catalog_provider.register_schema(schema_name, schema_provider);
 }
 
-pub fn register_table(execution_context: &mut ExecutionContext, catalog_name: &str, schema_name: &str, table_name: &str, table_provider: Arc<dyn TableProvider>) {
+pub fn register_table(execution_context: &mut ExecutionContext, catalog_name: &str, schema_name: &str, table_name: &str, table_provider: Arc<dyn TableProvider>) -> MysqlResult<()> {
     let schema_provider = get_schema_provider(execution_context, catalog_name, schema_name);
-    schema_provider.register_table(table_name.to_string(), table_provider);
+    let result = schema_provider.register_table(table_name.to_string(), table_provider);
+
+    if let Err(e) = result {
+        return Err(MysqlError::from(e));
+    }
+
+    Ok(())
 }
 
 pub fn get_catalog_provider(execution_context: &mut ExecutionContext, catalog_name: &str) -> Arc<dyn CatalogProvider> {
@@ -123,7 +110,10 @@ pub fn register_all_table(global_context: Arc<Mutex<GlobalContext>>, datafusion_
                     Err(mysql_error) => return Err(mysql_error),
                 };
 
-                register_table(datafusion_context, catalog_name.as_str(), schema_name.as_str(), table_name.as_str(), table_provider);
+                let result = register_table(datafusion_context, catalog_name.as_str(), schema_name.as_str(), table_name.as_str(), table_provider);
+                if let Err(e) = result {
+                    return Err(e);
+                }
             }
         }
     }
@@ -213,7 +203,7 @@ pub fn convert_record_to_scalar_value(record_batch: RecordBatch) -> Vec<Vec<Scal
             _ => {
                 let message = format!("unsupported data type: {}", field.data_type().to_string());
                 log::error!("{}", message);
-                panic!(message)
+                panic!("{}", message)
             }
         }
     }
@@ -257,7 +247,7 @@ pub fn projection_has_rowid(projection: Vec<SelectItem>) -> bool {
                     _ => { false }
                 }
             }
-            SelectItem::ExprWithAlias { expr, .. } => {
+            SelectItem::ExprWithAlias { .. } => {
                 false
             }
             _ => {
@@ -434,7 +424,7 @@ pub fn build_select_rowid_sqlselect(table_name: ObjectName, selection: Option<SQ
     let table_with_joins = build_table_with_joins(table_name.clone());
 
     let sql_expr = SQLExpr::Identifier(Ident { value: meta_const::COLUMN_ROWID.to_string(), quote_style: None });
-    let mut projection = vec![SelectItem::UnnamedExpr(sql_expr)];
+    let projection = vec![SelectItem::UnnamedExpr(sql_expr)];
 
     let select = Select {
         distinct: false,

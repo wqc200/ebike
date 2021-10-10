@@ -1,18 +1,6 @@
-use std::io::{self, Error, ErrorKind, Read, Write};
-use bitflags;
-
-use byteorder::{ReadBytesExt, WriteBytesExt};
 use byteorder::{ByteOrder, LittleEndian};
-use bstr::{ByteSlice, ByteVec, Utf8Error};
 
-use arrow::array::ArrayBuilder;
-use arrow::array::{StringArray, Array};
-
-use super::packet::PacketType;
-use super::metadata;
-use super::mysql_util;
 use datafusion::scalar::ScalarValue;
-use parquet::data_type::AsBytes;
 
 #[derive(Debug, PartialEq)]
 pub struct ResponsePayload {

@@ -19,13 +19,10 @@
 
 use std::error;
 use std::fmt::{Display, Formatter};
-use std::io;
 use std::result;
 
 use arrow::error::ArrowError;
 use datafusion::error::DataFusionError;
-use parquet::errors::ParquetError;
-use sqlparser::parser::ParserError;
 
 pub type MysqlResult<T> = result::Result<T, MysqlError>;
 

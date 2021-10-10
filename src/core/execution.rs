@@ -1,86 +1,46 @@
 //! ExecutionContext contains methods for registering data sources and executing queries
 
-use std::collections::HashMap;
-use std::convert::TryFrom;
-use std::fs;
-use std::path::Path;
-use std::ptr::null;
 use std::string::String;
 use std::sync::{Arc, Mutex};
 
 use arrow::array::{
-    ArrayData,
     ArrayRef,
-    BinaryArray,
-    Float32Array,
-    Float64Array,
-    Int16Array,
-    Int32Array,
-    Int64Array,
-    Int8Array,
     StringArray,
-    StringBuilder,
-    UInt16Array,
-    UInt32Array,
-    UInt64Array,
-    UInt8Array,
 };
-use arrow::datatypes::{DataType, Field, Schema, ToByteSlice};
-use arrow::record_batch::RecordBatch;
-use datafusion::catalog::catalog::{CatalogList, CatalogProvider, MemoryCatalogList, MemoryCatalogProvider};
-use datafusion::catalog::schema::{MemorySchemaProvider, SchemaProvider};
-use datafusion::catalog::TableReference;
-use datafusion::datasource::{CsvFile, CsvReadOptions, MemTable, TableProvider};
-use datafusion::error::{DataFusionError, Result as DataFusionResult};
-use datafusion::execution::context::{ExecutionConfig, ExecutionContext, ExecutionContextState};
-use datafusion::logical_plan::{DFField, DFSchema, DFSchemaRef, Expr, LogicalPlan, LogicalPlanBuilder};
+use arrow::datatypes::{DataType};
+
+use datafusion::execution::context::{ExecutionConfig, ExecutionContext};
+use datafusion::logical_plan::LogicalPlan;
 use datafusion::logical_plan::create_udf;
-use datafusion::physical_plan::{collect, ColumnarValue, ExecutionPlan};
-use datafusion::physical_plan::functions::{make_scalar_function, ReturnTypeFunction, ScalarFunctionImplementation, Signature};
-use datafusion::physical_plan::udf::ScalarUDF;
-use datafusion::scalar::ScalarValue;
+
+use datafusion::physical_plan::functions::make_scalar_function;
 use datafusion::sql::parser::{DFParser, Statement};
 use datafusion::sql::planner::{ContextProvider, SqlToRel};
 use datafusion::variable::VarType;
-use sqlparser::ast::{ColumnDef as SQLColumnDef, ColumnOption, DataType as SQLDataType, FunctionArg, Ident, ShowStatementFilter, TableAlias, ShowCreateObject};
-use sqlparser::ast::{AlterTableOperation, Assignment, ObjectName, ObjectType, OrderByExpr, Statement as SQLStatement};
+use sqlparser::ast::{FunctionArg, Ident, ShowStatementFilter, ShowCreateObject};
+use sqlparser::ast::{AlterTableOperation, ObjectName, ObjectType, Statement as SQLStatement};
 use sqlparser::ast::{
-    BinaryOperator, Expr as SQLExpr, Join, JoinConstraint, JoinOperator,
-    Query, Select, SelectItem, SetExpr, TableFactor, TableWithJoins, UnaryOperator, Value,
+    BinaryOperator, Expr as SQLExpr, JoinConstraint, JoinOperator,
+    Select, SelectItem, SetExpr, TableFactor, Value,
 };
-use sqlparser::dialect::{AnsiDialect, GenericDialect, MySqlDialect};
-use sqlparser::test_utils::table;
+use sqlparser::dialect::GenericDialect;
 use uuid::Uuid;
 
 use crate::core::core_util;
 use crate::core::core_util as CoreUtil;
 use crate::core::global_context::GlobalContext;
 use crate::core::logical_plan::{CoreLogicalPlan, CoreSelectFrom, CoreSelectFromWithAssignment};
-use crate::core::logical_plan::CoreLogicalPlan::CreateTable;
 use crate::core::output::{CoreOutput, FinalCount};
-use crate::core::output::{OutputError, Result};
 use crate::core::session_context::SessionContext;
-use crate::core::udf;
-use crate::datafusion_impl::catalog::information_schema::CatalogWithInformationSchemaProvider;
 use crate::meta::{meta_const, meta_util};
-use crate::meta::initial;
 use crate::mysql::error::{MysqlError, MysqlResult};
-use crate::mysql::metadata::MysqlType::MYSQL_TYPE_BIT;
 use crate::physical_plan;
-use crate::logical_plan;
-use crate::physical_plan::create_db::CreateDb;
 use crate::physical_plan::util::CorePhysicalPlan;
-use crate::store::engine::engine_util;
 
-use crate::test;
-use crate::util::convert::{convert_ident_to_lowercase, ToLowercase, ToObjectName, convert_object_name_to_lowercase};
+use crate::util::convert::{ToLowercase, ToObjectName, convert_ident_to_lowercase};
 use crate::variable::system::SystemVar;
 use crate::variable::user_defined::UserDefinedVar;
-use std::process::id;
-use crate::meta::initial::get_full_table_name_list;
 use crate::physical_plan::insert::PhysicalPlanInsert;
-use crate::store::engine::engine_util::TableEngineFactory;
-use crate::meta::meta_def::TableDef;
 use crate::logical_plan::insert::LogicalPlanInsert;
 use crate::physical_plan::delete::PhysicalPlanDelete;
 use crate::physical_plan::drop_table::PhysicalPlanDropTable;
@@ -164,7 +124,7 @@ impl Execution {
                     SetExpr::Select(select) => {
                         let mut new_select = select.clone();
 
-                        /// select database()
+                        // select database()
                         if new_select.from.len() == 0 {
                             let table_name = meta_const::TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_DUAL.to_object_name();
                             let table_with_joins = CoreUtil::build_table_with_joins(table_name);
@@ -328,9 +288,9 @@ impl Execution {
         Ok(None)
     }
 
-    pub fn fix_join_constraint(&mut self, table_alias_vec: &mut Vec<Ident>, join_constraint: &JoinConstraint) -> MysqlResult<Option<JoinConstraint>> {
+    pub fn fix_join_constraint(&mut self, _: &mut Vec<Ident>, join_constraint: &JoinConstraint) -> MysqlResult<Option<JoinConstraint>> {
         match join_constraint {
-            JoinConstraint::On(expr) => {}
+            JoinConstraint::On(_) => {}
             JoinConstraint::Using(idents) => {
                 let mut new_idents = vec![];
                 for ident in idents {
@@ -349,7 +309,7 @@ impl Execution {
     pub fn fix_table_factor(&mut self, table_alias_vec: &mut Vec<Ident>, table_factor: TableFactor) -> MysqlResult<Option<TableFactor>> {
         match table_factor {
             TableFactor::Table { name, alias, args, with_hints } => {
-                /// select database() from dual;
+                // select database() from dual;
                 let full_table_name = if name.to_string().eq(meta_const::TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_DUAL) {
                     meta_const::FULL_TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_DUAL.to_object_name()
                 } else {
@@ -865,7 +825,7 @@ impl Execution {
                 log::error!("{}", message);
                 Err(MysqlError::new_global_error(67, message.as_str()))
             }
-            SQLStatement::ShowTableStatus { db_name, filter } => {
+            SQLStatement::ShowTableStatus { db_name, .. } => {
                 // table
                 let full_table_name = meta_util::convert_to_object_name(meta_const::FULL_TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_TABLES);
                 let table_with_joins = core_util::build_table_with_joins(full_table_name.clone());

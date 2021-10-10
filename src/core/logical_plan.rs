@@ -1,14 +1,9 @@
-use std::ops::{Deref, DerefMut};
-use std::string::String;
-use std::sync::Arc;
 
-use arrow::datatypes::{Schema, SchemaRef};
-use datafusion::error::Result;
-use datafusion::execution::context::ExecutionContext;
-use datafusion::logical_plan::{Expr, LogicalPlan, LogicalPlanBuilder};
+use std::string::String;
+
+use datafusion::logical_plan::{LogicalPlan};
 use sqlparser::ast::{AlterTableOperation, Assignment, ColumnDef, Ident, ObjectName, SetVariableValue, SqlOption, TableConstraint};
 
-use crate::meta::{meta_def, meta_util};
 use std::collections::HashMap;
 use datafusion::scalar::ScalarValue;
 use crate::meta::meta_def::{TableDef, IndexDef};

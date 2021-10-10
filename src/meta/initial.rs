@@ -1,16 +1,12 @@
 use std::collections::HashMap;
-use std::convert::TryFrom;
 use std::sync::{Arc, Mutex};
 
 use arrow::array::{as_primitive_array, as_string_array, Int32Array, StringArray};
-use datafusion::catalog::TableReference;
-use datafusion::logical_plan::Expr;
 use datafusion::scalar::ScalarValue;
-use futures::StreamExt;
-use sqlparser::ast::{ColumnDef as SQLColumnDef, ColumnDef, ColumnOption, Ident, ObjectName, SqlOption, TableConstraint, Value};
+use sqlparser::ast::{ColumnDef as SQLColumnDef, ColumnOption, Ident, ObjectName, TableConstraint};
 
 use crate::core::global_context::GlobalContext;
-use crate::meta::{def, initial, meta_const, meta_util};
+use crate::meta::{def, meta_const, meta_util};
 use crate::meta::def::{information_schema, mysql};
 use crate::meta::def::performance_schema;
 use crate::meta::meta_def::{SchemaDef, SchemaOptionDef, SparrowColumnDef, StatisticsColumn, TableColumnDef, TableDef, TableOptionDef};
@@ -18,7 +14,7 @@ use crate::mysql::error::{MysqlError, MysqlResult};
 use crate::physical_plan;
 use crate::physical_plan::insert::PhysicalPlanInsert;
 use crate::store::engine::engine_util;
-use crate::store::engine::engine_util::{ADD_ENTRY_TYPE, TableEngine, TableEngineFactory};
+use crate::store::engine::engine_util::{ADD_ENTRY_TYPE, TableEngineFactory};
 use crate::util::convert::{ToIdent, ToObjectName};
 
 pub fn create_table(global_context: Arc<Mutex<GlobalContext>>, schema_name: &str, table_name: &str, sql_column_list: Vec<SQLColumnDef>, constraints: Vec<TableConstraint>) -> TableDef {

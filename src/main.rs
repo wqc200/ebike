@@ -3,29 +3,20 @@ extern crate bitflags;
 #[macro_use]
 extern crate clap;
 
-use std::collections::hash_map::RandomState;
-use std::collections::HashMap;
-use std::env;
 use std::sync::{Arc, Mutex};
 use std::io;
 
 use arrow::datatypes::DataType as ArrowDataType;
-use clap::{Arg, App, SubCommand};
 use log4rs;
-use sqlparser::ast::{DataType as SQLDataType, Ident, ObjectName};
+use sqlparser::ast::{DataType as SQLDataType};
 use tokio::net::TcpListener;
 use tokio::signal::unix::{signal, SignalKind};
 
-use crate::meta::meta_def::TableDef;
 use meta::initial;
-use crate::mysql::error::MysqlError;
 use crate::core::global_context::GlobalContext;
 use crate::meta::meta_util;
 use crate::mysql::handle;
 use crate::mysql::metadata::MysqlType;
-use config::def::MyConfig;
-use config::util::get_config_path;
-use config::util::read_config;
 
 pub mod core;
 pub mod config;

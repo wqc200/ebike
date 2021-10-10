@@ -3,9 +3,6 @@ use datafusion::execution::context::ExecutionProps;
 use datafusion::logical_plan::{Expr, LogicalPlan};
 use datafusion::optimizer::optimizer::OptimizerRule;
 use datafusion::optimizer::utils;
-use arrow::datatypes::{Field, Schema, SchemaRef};
-use arrow::error::Result as ArrowResult;
-use std::{collections::HashSet, sync::Arc};
 
 pub struct SelectPushDown {}
 

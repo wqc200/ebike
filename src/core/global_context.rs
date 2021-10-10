@@ -1,17 +1,8 @@
-use num::ToPrimitive;
-use std::collections::{HashMap, HashSet};
-use std::ops::{Deref, DerefMut};
-use std::sync::Arc;
-
-use arrow::datatypes::{DataType, Field, Schema, SchemaRef};
-use datafusion::error::{Result};
 use sled::Db as SledDb;
 
 use crate::config::util::get_config_path;
 use crate::config::util::read_config;
 use crate::meta::data::MetaData;
-use crate::test;
-use crate::util;
 use crate::meta::variable::Variable;
 use crate::config::def::MyConfig;
 
