@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
-use arrow::array::{Array};
 use arrow::record_batch::RecordBatch;
 use arrow::error::{Result};
 use datafusion::datasource::TableProvider;
@@ -15,12 +14,6 @@ use crate::mysql::error::{MysqlError, MysqlResult};
 
 use super::sled;
 use crate::meta::meta_def::TableDef;
-
-#[derive(Clone, Debug, PartialEq)]
-pub enum ADD_ENTRY_TYPE {
-    INSERT,
-    REPLACE,
-}
 
 pub trait StoreEngine {
     fn delete_key(&self, key: String) -> MysqlResult<()>;

@@ -10,13 +10,13 @@ use crate::mysql::error::{MysqlError, MysqlResult};
 
 pub struct Select {
     core_context: Arc<Mutex<GlobalContext>>,
-    execution_plan: Arc<ExecutionPlan>,
+    execution_plan: Arc<dyn ExecutionPlan>,
 }
 
 impl Select {
     pub fn new(
         core_context: Arc<Mutex<GlobalContext>>,
-        execution_plan: Arc<ExecutionPlan>,
+        execution_plan: Arc<dyn ExecutionPlan>,
     ) -> Self {
         Self {
             core_context,

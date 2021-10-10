@@ -15,13 +15,13 @@ pub enum MessageType {
 
 pub fn row_message(columns: Vec<ScalarValue>) -> ResponsePayload {
     let mut payload = ResponsePayload::new(1024);
-    payload.dumpTextRow(columns);
+    payload.dump_text_row(columns);
     return payload;
 }
 
 pub fn column_count_message(count: usize) -> ResponsePayload {
     let mut payload = ResponsePayload::new(1024);
-    payload.dumpLengthEncodedInt(count as u64);
+    payload.dump_length_encoded_int(count as u64);
     return payload;
 }
 
@@ -34,18 +34,18 @@ pub fn column_count_message(count: usize) -> ResponsePayload {
 ///
 /// https://dev.mysql.com/doc/internals/en/packet-OK_Packet.html
 ///
-pub fn ok_message(affect_rows: u64, last_insert_id: u64, statusFlags: metadata::StatusFlags, warning_count: u16, msg: String) -> ResponsePayload {
-    let status = u16::from(statusFlags);
+pub fn ok_message(affect_rows: u64, last_insert_id: u64, status_flags: metadata::StatusFlags, warning_count: u16, msg: String) -> ResponsePayload {
+    let status = u16::from(status_flags);
     let enclen = mysql_util::length_encoded_int_size(msg.len() as u64) + msg.len() as i32;
 
     let mut payload = ResponsePayload::new(32 + enclen as usize);
     payload.bytes.push(0x00);
-    payload.dumpLengthEncodedInt(affect_rows);
-    payload.dumpLengthEncodedInt(last_insert_id);
-    payload.dumpUint16(status);
-    payload.dumpUint16(warning_count);
+    payload.dump_length_encoded_int(affect_rows);
+    payload.dump_length_encoded_int(last_insert_id);
+    payload.dump_uint16(status);
+    payload.dump_uint16(warning_count);
     if enclen > 0 {
-        payload.dumpLengthEncodedString(msg.as_bytes());
+        payload.dump_length_encoded_string(msg.as_bytes());
     }
 
     // let mut body: Vec<u8> = Vec::with_capacity(32);
@@ -80,8 +80,8 @@ pub fn eof_message(warning_count: u16, status: u16) -> ResponsePayload {
     // start building payload
     let mut payload = ResponsePayload::new(5);
     payload.bytes.push(0xfe); // packet type
-    payload.dumpUint16(warning_count);
-    payload.dumpUint16(status);
+    payload.dump_uint16(warning_count);
+    payload.dump_uint16(status);
     return payload;
 }
 

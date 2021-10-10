@@ -89,7 +89,7 @@ impl Handle {
             }
         };
         let bytes = &buf[0..n];
-        let rp = self.payload_packet(bytes);
+        let _rp = self.payload_packet(bytes);
 
         self.write_packet(message::handshark_auth_switch_request()).await;
 
@@ -102,7 +102,7 @@ impl Handle {
             }
         };
         let bytes = &buf[0..n];
-        let rp = self.payload_packet(bytes);
+        let _rp = self.payload_packet(bytes);
 
         let result = self.core_execution.try_init();
         if let Err(mysql_error) = result {

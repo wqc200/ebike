@@ -33,7 +33,7 @@ pub struct Update {
     global_context: Arc<Mutex<GlobalContext>>,
     table: TableDef,
     assignments: Vec<Assignment>,
-    execution_plan: Arc<ExecutionPlan>,
+    execution_plan: Arc<dyn ExecutionPlan>,
 }
 
 impl Update {
@@ -41,7 +41,7 @@ impl Update {
         global_context: Arc<Mutex<GlobalContext>>,
         table: TableDef,
         assignments: Vec<Assignment>,
-        execution_plan: Arc<ExecutionPlan>,
+        execution_plan: Arc<dyn ExecutionPlan>,
     ) -> Self {
         Self {
             global_context,
@@ -180,7 +180,7 @@ impl Update {
             let rowid = rowid_array.value(row_index);
             for assignment_index in 0..self.assignments.len() {
                 let assignment = &self.assignments[assignment_index];
-                let mut column_value;
+                let column_value;
                 match assignment_column_value[assignment_index] {
                     metadata::ArrayCell::StringArray(s) => {
                         column_value = s.value(row_index).to_string()

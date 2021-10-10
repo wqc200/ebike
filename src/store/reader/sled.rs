@@ -66,7 +66,7 @@ impl SledReader {
                     end,
                 }
             }
-            SeekType::UsingTheIndex { index_name, order, start, end} => {
+            SeekType::UsingTheIndex { start, end, ..} => {
                 let iter = global_context.lock().unwrap().engine.sled_db.as_ref().unwrap().scan_prefix(start.key.clone());
                 Seek {
                     iter,

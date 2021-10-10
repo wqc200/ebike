@@ -94,7 +94,7 @@ impl LogicalPlanInsert {
 
         let dfschema = schema.clone().to_dfschema().unwrap();
 
-        let mut state = datafusion_context.state.lock().unwrap();
+        let state = datafusion_context.state.lock().unwrap();
         let planner = DefaultPhysicalPlanner::default();
 
         let mut column_value_map_list = vec![];

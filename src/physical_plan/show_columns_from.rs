@@ -36,10 +36,10 @@ impl ShowColumnsFrom {
             for row_index in 0..record_batch.num_rows() {
                 let row = statistics_rows.get(row_index).unwrap();
 
-                /// column name
+                // column name
                 let value = row.get(column_index_of_column_name).unwrap();
                 let column_name = scalar_value::to_utf8(value.clone()).unwrap();
-                /// index name
+                // index name
                 let value = row.get(column_index_of_index_name).unwrap();
                 let index_name = scalar_value::to_utf8(value.clone()).unwrap();
 
@@ -60,21 +60,21 @@ impl ShowColumnsFrom {
         for row_index in 0..record_batch.num_rows() {
             let row = columns_rows.get(row_index).unwrap();
 
-            /// column name
+            // column name
             let value = row.get(column_index_of_column_name).unwrap();
             let column_name = scalar_value::to_utf8(value.clone()).unwrap();
             column_fields.push(column_name.clone());
-            /// data type
+            // data type
             let value = row.get(column_index_of_data_type).unwrap();
             let text_data_type = scalar_value::to_utf8(value.clone()).unwrap();
             let sql_data_type = meta_util::text_to_sql_data_type(text_data_type.as_str()).unwrap();
             column_types.push(sql_data_type.to_string());
-            /// nullable
+            // nullable
             let value = row.get(column_index_of_is_nullable).unwrap();
             let text_is_nullable = scalar_value::to_utf8(value.clone()).unwrap();
             let nullable = meta_util::text_to_null(text_is_nullable.as_str()).unwrap();
             column_nulls.push(nullable.to_string());
-            /// key
+            // key
             if let Some(value) = statistics_map.get(column_name.clone().as_str()) {
                 column_keys.push(value.clone());
             } else {

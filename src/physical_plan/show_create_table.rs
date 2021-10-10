@@ -43,18 +43,18 @@ impl ShowCreateTable {
         for row_index in 0..record_batch.num_rows() {
             let row = columns_rows.get(row_index).unwrap();
 
-            /// column name
+            // column name
             let value = row.get(column_index_of_column_name).unwrap();
             let column_name = scalar_value::to_utf8(value.clone()).unwrap();
-            /// data type
+            // data type
             let value = row.get(column_index_of_data_type).unwrap();
             let text_data_type = scalar_value::to_utf8(value.clone()).unwrap();
             let sql_data_type = meta_util::text_to_sql_data_type(text_data_type.as_str()).unwrap();
-            /// nullable
+            // nullable
             let value = row.get(column_index_of_is_nullable).unwrap();
             let text_is_nullable = scalar_value::to_utf8(value.clone()).unwrap();
             let nullable = meta_util::text_to_null(text_is_nullable.as_str()).unwrap();
-            /// create sql column
+            // create sql column
             let sql_column = meta_util::create_sql_column(column_name.as_str(), sql_data_type, nullable);
 
             columns.push(sql_column);

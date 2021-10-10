@@ -302,12 +302,12 @@ pub fn scan_index(schema_name: &str, index_name: &str, column_index_values: Vec<
                 end.push_str("/");
             }
             RangeValue::NotNull(not_null_value) => {
-                if let Some((value, interval)) = not_null_value.getStart() {
+                if let Some((value, _)) = not_null_value.get_start() {
                     start.push_str("1/");
                     start.push_str(value.as_str());
                     start.push_str("/");
                 }
-                if let Some((value, interval)) = not_null_value.getEnd() {
+                if let Some((value, _)) = not_null_value.get_end() {
                     end.push_str("1/");
                     end.push_str(value.as_str());
                     end.push_str("/");

@@ -90,17 +90,17 @@ impl Column {
 impl Column {
     pub fn to_response_payload(&self, com_field_list: bool) -> ResponsePayload {
         let mut payload = ResponsePayload::new(1024);
-        payload.dumpLengthEncodedString(meta_const::CATALOG_NAME.as_bytes());
-        payload.dumpLengthEncodedString(self.schema.as_ref());
-        payload.dumpLengthEncodedString(self.table.as_ref());
-        payload.dumpLengthEncodedString(self.org_table.as_ref());
-        payload.dumpLengthEncodedString(self.name.as_ref());
-        payload.dumpLengthEncodedString(self.org_name.as_ref());
+        payload.dump_length_encoded_string(meta_const::CATALOG_NAME.as_bytes());
+        payload.dump_length_encoded_string(self.schema.as_ref());
+        payload.dump_length_encoded_string(self.table.as_ref());
+        payload.dump_length_encoded_string(self.org_table.as_ref());
+        payload.dump_length_encoded_string(self.name.as_ref());
+        payload.dump_length_encoded_string(self.org_name.as_ref());
         payload.bytes.push(0x0c);
-        payload.dumpUint16(self.character_set as u16);
-        payload.dumpUint32(self.column_length as u32);
+        payload.dump_uint16(self.character_set as u16);
+        payload.dump_uint32(self.column_length as u32);
         payload.bytes.push(dump_column_type(self.column_type));
-        payload.dumpUint16(dump_flag(self.column_type, self.flags.bits as u16));
+        payload.dump_uint16(dump_flag(self.column_type, self.flags.bits as u16));
         payload.bytes.push(self.decimals);
         payload.bytes.extend_from_slice(&[00, 00]);
 
@@ -110,11 +110,11 @@ impl Column {
         if com_field_list {
             match self.default_value {
                 Some(ref p) => {
-                    payload.dumpUint64(p.len() as u64);
+                    payload.dump_uint64(p.len() as u64);
                     payload.bytes.extend_from_slice(p.as_ref());
                 }
                 None => {
-                    payload.dumpUint64(1);
+                    payload.dump_uint64(1);
                     payload.bytes.push(0xfb);
                 }
             }

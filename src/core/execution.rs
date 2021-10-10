@@ -55,14 +55,14 @@ pub struct Execution {
 
 impl Execution {
     pub fn new(global_context: Arc<Mutex<GlobalContext>>) -> Self {
-        let mut datafusion_context = ExecutionContext::with_config(
+        let datafusion_context = ExecutionContext::with_config(
             ExecutionConfig::new()
                 .with_information_schema(true)
                 .create_default_catalog_and_schema(true)
                 .with_default_catalog_and_schema(meta_const::CATALOG_NAME, meta_const::SCHEMA_NAME_OF_DEF_INFORMATION_SCHEMA),
         );
 
-        let mut session_context = SessionContext::new_with_catalog(meta_const::CATALOG_NAME);
+        let session_context = SessionContext::new_with_catalog(meta_const::CATALOG_NAME);
 
         let client_id = Uuid::new_v4().to_simple().encode_lower(&mut Uuid::encode_buffer()).to_string();
 
@@ -792,7 +792,7 @@ impl Execution {
                     let table_with_joins = core_util::build_table_with_joins(full_table_name.clone());
                     let sql_expr = SQLExpr::Identifier(Ident { value: meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_SCHEMATA_SCHEMA_NAME.to_string(), quote_style: None });
                     let ident = Ident::new("Database");
-                    let mut projection = vec![SelectItem::ExprWithAlias { expr: sql_expr, alias: ident }];
+                    let projection = vec![SelectItem::ExprWithAlias { expr: sql_expr, alias: ident }];
                     let select = Select {
                         distinct: false,
                         top: None,
@@ -1002,7 +1002,7 @@ impl Execution {
                 Ok(CoreLogicalPlan::Select(logical_plan))
             }
             SQLStatement::CreateSchema { schema_name, .. } => {
-                let mut db_name = meta_util::object_name_remove_quote(schema_name.clone());
+                let db_name = meta_util::object_name_remove_quote(schema_name.clone());
 
                 let full_db_name = meta_util::fill_up_schema_name(&mut self.session_context, db_name.clone()).unwrap();
 
@@ -1041,8 +1041,8 @@ impl Execution {
             SQLStatement::Insert {
                 table_name, columns, overwrite, source, ..
             } => {
-                let logicalPlanInsert = LogicalPlanInsert::new(self.global_context.clone(), table_name.clone(), columns.clone(), overwrite, source.clone());
-                logicalPlanInsert.create_logical_plan(&mut self.datafusion_context, &mut self.session_context, query_planner)
+                let logical_plan_insert = LogicalPlanInsert::new(self.global_context.clone(), table_name.clone(), columns.clone(), overwrite, source.clone());
+                logical_plan_insert.create_logical_plan(&mut self.datafusion_context, &mut self.session_context, query_planner)
             }
             SQLStatement::Update { table_name, assignments, selection } => {
                 let gc = self.global_context.lock().unwrap();
@@ -1246,7 +1246,7 @@ impl Execution {
                 Ok(CorePhysicalPlan::CreateDb(create_schema))
             }
             CoreLogicalPlan::CreateTable { table_name, columns, constraints, with_options } => {
-                let mut create_table = physical_plan::create_table::CreateTable::new(self.global_context.clone(), table_name.clone(), columns.clone(), constraints.clone(), with_options.clone());
+                let create_table = physical_plan::create_table::CreateTable::new(self.global_context.clone(), table_name.clone(), columns.clone(), constraints.clone(), with_options.clone());
                 Ok(CorePhysicalPlan::CreateTable(create_table))
             }
             CoreLogicalPlan::Insert { table, column_name_list, index_keys_list, column_value_map_list } => {

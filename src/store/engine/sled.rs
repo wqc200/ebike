@@ -58,7 +58,7 @@ impl StoreEngineSled {
 
 impl StoreEngine for StoreEngineSled {
     fn delete_key(&self, key: String) -> MysqlResult<()> {
-        let result = self.sled_db.remove(key).unwrap();
+        let _result = self.sled_db.remove(key).unwrap();
         Ok(())
     }
 
@@ -74,7 +74,7 @@ impl StoreEngine for StoreEngineSled {
     }
 
     fn put_key(&self, key: String, value: &[u8]) -> MysqlResult<()> {
-        let result = self.sled_db.insert(key, value).unwrap();
+        let _result = self.sled_db.insert(key, value).unwrap();
         Ok(())
     }
 }

@@ -124,7 +124,7 @@ pub fn create_full_column_name(catalog_name: &str, schema_name: &str, table_name
     object_name
 }
 
-pub fn object_name_remove_quote(mut object_name: ObjectName) -> ObjectName {
+pub fn object_name_remove_quote(object_name: ObjectName) -> ObjectName {
     let mut idents = vec![];
     for ident in object_name.0 {
         let new_ident = Ident::from(ident.value.as_str());
@@ -133,7 +133,7 @@ pub fn object_name_remove_quote(mut object_name: ObjectName) -> ObjectName {
     ObjectName(idents)
 }
 
-pub fn cut_out_catalog_name(mut full_catalog_name: ObjectName) -> ObjectName {
+pub fn cut_out_catalog_name(full_catalog_name: ObjectName) -> ObjectName {
     let mut idents = vec![];
     if let Some(ident) = full_catalog_name.0.get(0) {
         idents.push(ident.clone());
@@ -141,7 +141,7 @@ pub fn cut_out_catalog_name(mut full_catalog_name: ObjectName) -> ObjectName {
     ObjectName(idents)
 }
 
-pub fn cut_out_schema_name(mut full_schema_name: ObjectName) -> ObjectName {
+pub fn cut_out_schema_name(full_schema_name: ObjectName) -> ObjectName {
     let mut idents = vec![];
     if let Some(ident) = full_schema_name.0.get(1) {
         idents.push(ident.clone());
@@ -149,7 +149,7 @@ pub fn cut_out_schema_name(mut full_schema_name: ObjectName) -> ObjectName {
     ObjectName(idents)
 }
 
-pub fn cut_out_table_name(mut full_table_name: ObjectName) -> ObjectName {
+pub fn cut_out_table_name(full_table_name: ObjectName) -> ObjectName {
     let mut idents = vec![];
     if let Some(ident) = full_table_name.0.get(2) {
         idents.push(ident.clone());
@@ -157,7 +157,7 @@ pub fn cut_out_table_name(mut full_table_name: ObjectName) -> ObjectName {
     ObjectName(idents)
 }
 
-pub fn cut_out_column_name(mut full_column_name: ObjectName) -> ObjectName {
+pub fn cut_out_column_name(full_column_name: ObjectName) -> ObjectName {
     let mut idents = vec![];
     if let Some(ident) = full_column_name.0.get(3) {
         idents.push(ident.clone());
@@ -222,7 +222,7 @@ pub fn fill_up_column_name(session_context: &mut SessionContext, mut original_co
 }
 
 pub fn convert_to_object_name(schema_name: &str) -> ObjectName {
-    let mut object_names: Vec<&str> = schema_name.split(".").collect();
+    let object_names: Vec<&str> = schema_name.split(".").collect();
 
     let mut idents = vec![];
     for object_name in object_names {

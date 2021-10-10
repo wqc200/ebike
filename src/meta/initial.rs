@@ -272,7 +272,7 @@ pub fn delete_db_form_information_schema(global_context: Arc<Mutex<GlobalContext
                         for rowid in rowids {
                             let result = store_engine.delete_key(rowid);
                             match result {
-                                Ok(count) => { total += 1 }
+                                Ok(_) => { total += 1 }
                                 Err(mysql_error) => {
                                     return Err(mysql_error);
                                 }

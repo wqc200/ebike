@@ -9,61 +9,61 @@ pub struct ResponsePayload {
 
 impl ResponsePayload {
     pub fn new(length: usize)  -> Self {
-        let mut body: Vec<u8> = Vec::with_capacity(length);
+        let body: Vec<u8> = Vec::with_capacity(length);
         ResponsePayload { bytes: body }
     }
 
-    pub fn dumpTextRow(&mut self, columns: Vec<ScalarValue>) {
+    pub fn dump_text_row(&mut self, columns: Vec<ScalarValue>) {
         for column_index in 0..columns.len() {
             let scalar_value = columns[column_index].clone();
             match scalar_value {
                 ScalarValue::Utf8(item) => {
                     if let Some(value) = item {
-                        self.dumpLengthEncodedString(value.as_ref());
+                        self.dump_length_encoded_string(value.as_ref());
                     } else {
-                        self.dumpLengthEncodedNull()
+                        self.dump_length_encoded_null()
                     }
                 }
                 ScalarValue::Int32(item) => {
                     if let Some(value) = item {
-                        self.dumpLengthEncodedString(value.to_string().as_ref());
+                        self.dump_length_encoded_string(value.to_string().as_ref());
                     } else {
-                        self.dumpLengthEncodedNull()
+                        self.dump_length_encoded_null()
                     }
                 }
                 ScalarValue::Int64(item) => {
                     if let Some(value) = item {
-                        self.dumpLengthEncodedString(value.to_string().as_ref());
+                        self.dump_length_encoded_string(value.to_string().as_ref());
                     } else {
-                        self.dumpLengthEncodedNull()
+                        self.dump_length_encoded_null()
                     }
                 }
                 ScalarValue::UInt64(item) => {
                     if let Some(value) = item {
-                        self.dumpLengthEncodedString(value.to_string().as_ref());
+                        self.dump_length_encoded_string(value.to_string().as_ref());
                     } else {
-                        self.dumpLengthEncodedNull()
+                        self.dump_length_encoded_null()
                     }
                 }
                 _ => {
                     let message = format!("unsupported scalar value type: {}", scalar_value.get_datatype().to_string());
                     log::error!("{}", message);
-                    panic!(message)
+                    panic!("{}", message)
                 }
             }
         }
     }
 
-    pub fn dumpLengthEncodedString(&mut self, msg: &[u8]) {
-        self.dumpLengthEncodedInt(msg.len() as u64);
+    pub fn dump_length_encoded_string(&mut self, msg: &[u8]) {
+        self.dump_length_encoded_int(msg.len() as u64);
         self.bytes.extend_from_slice(msg);
     }
 
-    pub fn dumpLengthEncodedNull(&mut self) {
+    pub fn dump_length_encoded_null(&mut self) {
         self.bytes.extend_from_slice(&[0xfb]);
     }
 
-    pub fn dumpLengthEncodedInt(&mut self, n: u64) {
+    pub fn dump_length_encoded_int(&mut self, n: u64) {
         if n <= 250 {
             self.bytes.push(n as u8)
         } else if n <= 0xffff {
@@ -85,19 +85,19 @@ impl ResponsePayload {
         }
     }
 
-    pub fn dumpUint16(&mut self, n: u16) {
+    pub fn dump_uint16(&mut self, n: u16) {
         let a = n >> 8;
         self.bytes.extend_from_slice(&[n as u8, a as u8])
     }
 
-    pub fn dumpUint32(&mut self, n: u32) {
+    pub fn dump_uint32(&mut self, n: u32) {
         let a = n >> 8;
         let b = n >> 16;
         let c = n >> 24;
         self.bytes.extend_from_slice(&[n as u8, a as u8, b as u8, c as u8])
     }
 
-    pub fn dumpUint64(&mut self, n: u64) {
+    pub fn dump_uint64(&mut self, n: u64) {
         let a = n >> 8;
         let b = n >> 16;
         let c = n >> 24;
@@ -108,7 +108,7 @@ impl ResponsePayload {
         self.bytes.extend_from_slice(&[n as u8, a as u8, b as u8, c as u8, d as u8, e as u8, f as u8, g as u8])
     }
 
-    pub fn dumpBinaryTime(&mut self, mut nanoseconds: i64) {
+    pub fn dump_binary_time(&mut self, mut nanoseconds: i64) {
         if nanoseconds == 0 {
             self.bytes.push(0);
             return;

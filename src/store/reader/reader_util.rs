@@ -36,11 +36,11 @@ pub struct RangeNotNullValue {
 }
 
 impl RangeNotNullValue {
-    pub fn getStart(&self) -> Option<(String, PointType)> {
+    pub fn get_start(&self) -> Option<(String, PointType)> {
         self.start.clone()
     }
 
-    pub fn getEnd(&self) -> Option<(String, PointType)> {
+    pub fn get_end(&self) -> Option<(String, PointType)> {
         self.end.clone()
     }
 }
@@ -309,7 +309,7 @@ pub fn create_column_filter(filters: &[Expr]) -> MysqlResult<HashMap<String, Vec
                     _ => continue
                 }
             }
-            Expr::BinaryExpr { left, op, right } => {
+            Expr::BinaryExpr { left, .. } => {
                 match left.as_ref() {
                     Expr::Column(value) => {
                         column_name = value.clone();
@@ -383,7 +383,7 @@ pub fn get_seek_prefix_with_index(global_context: Arc<Mutex<GlobalContext>>, tab
         return Ok(get_seek_prefix_default(table));
     }
 
-    /// Find the index with the most matching fields
+    // Find the index with the most matching fields
     let table_index = table_index_list.iter().fold(table_index_list[0].clone(), |accumulator, item| {
         if item.column_range_list.len() > accumulator.column_range_list.len() {
             item.clone()
