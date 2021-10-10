@@ -42,7 +42,7 @@ use datafusion::scalar::ScalarValue;
 use datafusion::sql::parser::{DFParser, Statement};
 use datafusion::sql::planner::{ContextProvider, SqlToRel};
 use datafusion::variable::VarType;
-use sqlparser::ast::{ColumnDef as SQLColumnDef, ColumnOption, DataType as SQLDataType, FunctionArg, Ident, ShowStatementFilter, TableAlias};
+use sqlparser::ast::{ColumnDef as SQLColumnDef, ColumnOption, DataType as SQLDataType, FunctionArg, Ident, ShowStatementFilter, TableAlias, ShowCreateObject};
 use sqlparser::ast::{AlterTableOperation, Assignment, ObjectName, ObjectType, OrderByExpr, Statement as SQLStatement};
 use sqlparser::ast::{
     BinaryOperator, Expr as SQLExpr, Join, JoinConstraint, JoinOperator,
@@ -784,44 +784,9 @@ impl Execution {
                 return Ok(CoreLogicalPlan::SetVariable { variable, value });
             }
             SQLStatement::ShowCreate { obj_type, obj_name } => {
-
-            }
-            SQLStatement::ShowVariable { variable } => {
-                let first_variable = variable.get(0).unwrap();
-                if first_variable.to_string().to_uppercase() == meta_const::SHOW_VARIABLE_DATABASES.to_uppercase() {
-                    let table_name = meta_util::convert_to_object_name(meta_const::FULL_TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_SCHEMATA);
-                    let full_table_name = meta_util::fill_up_table_name(&mut self.session_context, table_name.clone()).unwrap();
-
-                    let table_with_joins = core_util::build_table_with_joins(full_table_name.clone());
-                    let sql_expr = SQLExpr::Identifier(Ident { value: meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_SCHEMATA_SCHEMA_NAME.to_string(), quote_style: None });
-                    let ident = Ident::new("Database");
-                    let mut projection = vec![SelectItem::ExprWithAlias { expr: sql_expr, alias: ident }];
-                    let select = Select {
-                        distinct: false,
-                        top: None,
-                        projection,
-                        from: vec![table_with_joins],
-                        lateral_views: vec![],
-                        selection: None,
-                        group_by: vec![],
-                        cluster_by: vec![],
-                        distribute_by: vec![],
-                        sort_by: vec![],
-                        having: None,
-                    };
-                    let logical_plan = query_planner.select_to_plan(&select, &mut Default::default())?;
-                    return Ok(CoreLogicalPlan::Select(logical_plan));
-                } else if first_variable.to_string().to_uppercase() == meta_const::SHOW_VARIABLE_CREATE.to_uppercase() {
-                    let second_variable = variable.get(1).unwrap();
-                    if second_variable.to_string().to_uppercase() == meta_const::SHOW_VARIABLE_CREATE_TABLE.to_uppercase() {
-                        let mut idents = vec![];
-                        if let Some(ident) = variable.get(2) {
-                            idents.push(ident.clone());
-                        }
-                        if let Some(ident) = variable.get(3) {
-                            idents.push(ident.clone());
-                        }
-                        let table_name = ObjectName(idents);
+                match obj_type {
+                    ShowCreateObject::Table => {
+                        let table_name = obj_name;
 
                         let full_table_name = meta_util::fill_up_table_name(&mut self.session_context, table_name.clone()).unwrap();
 
@@ -851,6 +816,38 @@ impl Execution {
 
                         return Ok(CoreLogicalPlan::ShowCreateTable { select_columns: select_from_columns, select_statistics: select_from_statistics, select_tables: select_from_tables, table });
                     }
+                    _ => {
+                        let message = format!("Unsupported show create statement, show type: {:?}, show name: {:?}", obj_type.clone(), obj_name.clone());
+                        log::error!("{}", message);
+                        return Err(MysqlError::new_global_error(67, message.as_str()))
+                    }
+                }
+            }
+            SQLStatement::ShowVariable { variable } => {
+                let first_variable = variable.get(0).unwrap();
+                if first_variable.to_string().to_uppercase() == meta_const::SHOW_VARIABLE_DATABASES.to_uppercase() {
+                    let table_name = meta_util::convert_to_object_name(meta_const::FULL_TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_SCHEMATA);
+                    let full_table_name = meta_util::fill_up_table_name(&mut self.session_context, table_name.clone()).unwrap();
+
+                    let table_with_joins = core_util::build_table_with_joins(full_table_name.clone());
+                    let sql_expr = SQLExpr::Identifier(Ident { value: meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_SCHEMATA_SCHEMA_NAME.to_string(), quote_style: None });
+                    let ident = Ident::new("Database");
+                    let mut projection = vec![SelectItem::ExprWithAlias { expr: sql_expr, alias: ident }];
+                    let select = Select {
+                        distinct: false,
+                        top: None,
+                        projection,
+                        from: vec![table_with_joins],
+                        lateral_views: vec![],
+                        selection: None,
+                        group_by: vec![],
+                        cluster_by: vec![],
+                        distribute_by: vec![],
+                        sort_by: vec![],
+                        having: None,
+                    };
+                    let logical_plan = query_planner.select_to_plan(&select, &mut Default::default())?;
+                    return Ok(CoreLogicalPlan::Select(logical_plan));
                 } else if first_variable.to_string().to_uppercase() == meta_const::SHOW_VARIABLE_GRANTS.to_uppercase() {
                     let user = variable.get(2).unwrap();
                     return Ok(CoreLogicalPlan::ShowGrants { user: user.clone() });

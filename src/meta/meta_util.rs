@@ -604,8 +604,5 @@ mod tests {
     fn check_hex() {
         let aa = hex::encode("Hello world!");
         assert_eq!(aa, "48656c6c6f20776f726c6421");
-
-        let aa = hex::encode("");
-        assert_eq!(aa, "48656c6c6f20776f726c6421");
     }
 }
