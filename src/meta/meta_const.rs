@@ -144,8 +144,6 @@ pub const VALUE_OF_TABLE_OPTION_ENGINE_SLED: &str = "sled";
 
 // SHOW ......
 pub const SHOW_VARIABLE_DATABASES: &str = "DATABASES";
-pub const SHOW_VARIABLE_CREATE: &str = "CREATE";
-pub const SHOW_VARIABLE_CREATE_TABLE: &str = "TABLE";
 pub const SHOW_VARIABLE_VARIABLES: &str = "VARIABLES";
 pub const SHOW_VARIABLE_GRANTS: &str = "GRANTS";
 pub const SHOW_VARIABLE_PRIVILEGES: &str = "PRIVILEGES";
