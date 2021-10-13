@@ -31,7 +31,7 @@ impl ::std::default::Default for ConfigServer {
         Self {
             log_file: "./log4rs.yaml".into(),
             bind_host: "0.0.0.0:3307".into(),
-            engines: vec![],
+            engines: vec!["sled".to_string()],
         }
     }
 }
@@ -70,7 +70,7 @@ pub struct EngineSled {
 impl ::std::default::Default for EngineSled {
     fn default() -> Self {
         Self {
-            data_path: "./data/sled".into(),
+            data_path: "./data/ebike/sled".into(),
         }
     }
 }
