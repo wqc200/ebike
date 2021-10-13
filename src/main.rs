@@ -16,6 +16,8 @@ use crate::core::global_context::GlobalContext;
 use crate::meta::meta_util;
 use crate::mysql::handle;
 use crate::mysql::metadata::MysqlType;
+use crate::config::util::get_config_path;
+use crate::config::util::read_config;
 
 pub mod core;
 pub mod config;
@@ -31,7 +33,12 @@ pub mod variable;
 
 #[tokio::main]
 async fn main() {
-    let global_context = Arc::new(Mutex::new(GlobalContext::new()));
+    let config_path = get_config_path();
+    println!("The config path: {}", config_path);
+
+    let my_config = read_config(config_path.as_str());
+
+    let global_context = Arc::new(Mutex::new(GlobalContext::new_with_config(my_config)));
 
     log4rs::init_file(global_context.lock().unwrap().my_config.server.log_file.to_string(), Default::default()).unwrap();
 

@@ -1,7 +1,5 @@
 use sled::Db as SledDb;
 
-use crate::config::util::get_config_path;
-use crate::config::util::read_config;
 use crate::meta::data::MetaData;
 use crate::meta::variable::Variable;
 use crate::config::def::MyConfig;
@@ -20,11 +18,7 @@ pub struct GlobalContext {
 }
 
 impl GlobalContext {
-    pub fn new() -> Self {
-        let config_path = get_config_path();
-        println!("The config path: {}", config_path);
-
-        let my_config = read_config(config_path.as_str());
+    pub fn new_with_config(my_config: MyConfig) -> Self {
 
         let meta_cache = MetaData::new();
         let variable = Variable::new();
