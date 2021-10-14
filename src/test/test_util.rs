@@ -5,10 +5,15 @@ use crate::meta::{initial, meta_util};
 use crate::mysql::error::MysqlResult;
 use std::sync::{Arc, Mutex};
 use tokio::net::TcpListener;
+use uuid::Uuid;
 
 pub async fn create_execution() -> MysqlResult<Execution> {
+    let mut my_config = MyConfig::default();
+    let test_id = Uuid::new_v4().to_simple().encode_lower(&mut Uuid::encode_buffer()).to_string();
+    my_config.engine.sled.data_path = format!("./data/ebike/sled/{}", test_id);
+
     let global_context = Arc::new(Mutex::new(GlobalContext::new_with_config(
-        MyConfig::default(),
+        my_config.clone(),
     )));
 
     log4rs::init_file(
