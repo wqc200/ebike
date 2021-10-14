@@ -1,8 +1,7 @@
 
 #[cfg(test)]
 mod tests {
-    use crate::core::output::CoreOutput;
-    use crate::core::output::CoreOutput::FinalCount;
+    use crate::core::output::{CoreOutput, FinalCount};
     use crate::mysql::error::MysqlResult;
     use crate::mysql::{message, metadata};
     use crate::test::test_util::create_execution;
@@ -33,6 +32,23 @@ mod tests {
         ];
 
         assert_batches_eq!(expected, &results);
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn show_create_table() -> MysqlResult<()> {
+        let mut core_execution = create_execution().await?;
+
+        let result = core_execution.execute_query("create schema test").await?;
+
+        let mut count = 0;
+        match result {
+            CoreOutput::FinalCount(f) => count = f.affect_rows,
+            _ => {}
+        }
+
+        assert_eq!(1, count);
 
         Ok(())
     }
