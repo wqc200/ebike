@@ -15,13 +15,11 @@ mod tests {
         let mut core_execution = create_execution().await?;
 
         let result = core_execution.execute_query("show databases").await?;
-
         let mut results: Vec<RecordBatch> = vec![];
         match result {
             CoreOutput::ResultSet(_, r) => results = r,
             _ => {}
         }
-
         let expected = vec![
             "+--------------------+",
             "| Database           |",
@@ -30,25 +28,184 @@ mod tests {
             "| performance_schema |",
             "+--------------------+",
         ];
-
         assert_batches_eq!(expected, &results);
 
         Ok(())
     }
 
     #[tokio::test]
-    async fn show_create_table() -> MysqlResult<()> {
+    async fn show_tables() -> MysqlResult<()> {
         let mut core_execution = create_execution().await?;
 
         let result = core_execution.execute_query("create schema test").await?;
-
         let mut count = 0;
         match result {
             CoreOutput::FinalCount(f) => count = f.affect_rows,
             _ => {}
         }
-
         assert_eq!(1, count);
+
+        let result = core_execution.set_default_schema("test").await?;
+        let mut count = 0;
+        match result {
+            CoreOutput::FinalCount(f) => count = f.affect_rows,
+            _ => {}
+        }
+        assert_eq!(1, count);
+
+        let result = core_execution.execute_query("create table user (id int, name varchar, PRIMARY KEY(id, name))").await?;
+        let mut count = 0;
+        match result {
+            CoreOutput::FinalCount(f) => count = f.affect_rows,
+            _ => {}
+        }
+        assert_eq!(1, count);
+
+        let result = core_execution.execute_query("show tables").await?;
+        let mut results: Vec<RecordBatch> = vec![];
+        match result {
+            CoreOutput::ResultSet(_, r) => results = r,
+            _ => {}
+        }
+        let expected = vec![
+            "+----------------+",
+            "| Tables_in_test |",
+            "+----------------+",
+            "| user           |",
+            "+----------------+",
+        ];
+        assert_batches_eq!(expected, &results);
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn insert_into() -> MysqlResult<()> {
+        let mut core_execution = create_execution().await?;
+
+        let result = core_execution.execute_query("create schema test").await?;
+        let mut count = 0;
+        match result {
+            CoreOutput::FinalCount(f) => count = f.affect_rows,
+            _ => {}
+        }
+        assert_eq!(1, count);
+
+        let result = core_execution.set_default_schema("test").await?;
+        let mut count = 0;
+        match result {
+            CoreOutput::FinalCount(f) => count = f.affect_rows,
+            _ => {}
+        }
+        assert_eq!(1, count);
+
+        let result = core_execution.execute_query("create table user (id int, name varchar, PRIMARY KEY(id, name))").await?;
+        let mut count = 0;
+        match result {
+            CoreOutput::FinalCount(f) => count = f.affect_rows,
+            _ => {}
+        }
+        assert_eq!(1, count);
+
+        let result = core_execution.execute_query("insert into user values (1, 'lucy')").await?;
+        let mut count = 0;
+        match result {
+            CoreOutput::FinalCount(f) => count = f.affect_rows,
+            _ => {}
+        }
+        assert_eq!(1, count);
+
+        let result = core_execution.execute_query("select * from user").await?;
+        let mut results: Vec<RecordBatch> = vec![];
+        match result {
+            CoreOutput::ResultSet(_, r) => results = r,
+            _ => {}
+        }
+        let expected = vec![
+            "+----+------+",
+            "| id | name |",
+            "+----+------+",
+            "| 1  | lucy |",
+            "+----+------+",
+        ];
+        assert_batches_eq!(expected, &results);
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn delete_from() -> MysqlResult<()> {
+        let mut core_execution = create_execution().await?;
+
+        let result = core_execution.execute_query("create schema test").await?;
+        let mut count = 0;
+        match result {
+            CoreOutput::FinalCount(f) => count = f.affect_rows,
+            _ => {}
+        }
+        assert_eq!(1, count);
+
+        let result = core_execution.set_default_schema("test").await?;
+        let mut count = 0;
+        match result {
+            CoreOutput::FinalCount(f) => count = f.affect_rows,
+            _ => {}
+        }
+        assert_eq!(1, count);
+
+        let result = core_execution.execute_query("create table user (id int, name varchar, PRIMARY KEY(id, name))").await?;
+        let mut count = 0;
+        match result {
+            CoreOutput::FinalCount(f) => count = f.affect_rows,
+            _ => {}
+        }
+        assert_eq!(1, count);
+        
+        let result = core_execution.execute_query("insert into user values (1, 'lucy')").await?;
+        let mut count = 0;
+        match result {
+            CoreOutput::FinalCount(f) => count = f.affect_rows,
+            _ => {}
+        }
+        assert_eq!(1, count);
+
+        let result = core_execution.execute_query("select * from user").await?;
+        let mut results: Vec<RecordBatch> = vec![];
+        match result {
+            CoreOutput::ResultSet(_, r) => results = r,
+            _ => {}
+        }
+        let expected = vec![
+            "+----+------+",
+            "| id | name |",
+            "+----+------+",
+            "| 1  | lucy |",
+            "+----+------+",
+        ];
+        assert_batches_eq!(expected, &results);
+
+        let result = core_execution.execute_query("delete from user").await?;
+        let mut count = 0;
+        match result {
+            CoreOutput::FinalCount(f) => count = f.affect_rows,
+            _ => {}
+        }
+        assert_eq!(1, count);
+
+        let result = core_execution.execute_query("select count(*) from user").await?;
+        let mut results: Vec<RecordBatch> = vec![];
+        match result {
+            CoreOutput::ResultSet(_, r) => results = r,
+            _ => {}
+        }
+        let expected = vec![
+            "+-----------------+",
+            "| COUNT(UInt8(1)) |",
+            "+-----------------+",
+            "| 0               |",
+            "+-----------------+",
+        ];
+        assert_batches_eq!(expected, &results);
 
         Ok(())
     }
