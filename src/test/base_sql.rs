@@ -160,7 +160,7 @@ mod tests {
             _ => {}
         }
         assert_eq!(1, count);
-        
+
         let result = core_execution.execute_query("insert into user values (1, 'lucy')").await?;
         let mut count = 0;
         match result {
