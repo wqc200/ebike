@@ -19,7 +19,7 @@ pub async fn create_execution() -> MysqlResult<Execution> {
         .to_simple()
         .encode_lower(&mut Uuid::encode_buffer())
         .to_string();
-    my_config.engine.sled.data_path = format!("./data/test/{}/sled", test_id);
+    my_config.engine.sled.data_path = format!("./data/test/sled/{}", test_id);
 
     let global_context = Arc::new(Mutex::new(GlobalContext::new_with_config(
         my_config.clone(),
@@ -27,13 +27,11 @@ pub async fn create_execution() -> MysqlResult<Execution> {
 
     let result = meta_util::init_meta(global_context.clone()).await;
     if let Err(mysql_error) = result {
-        log::error!("init meta error: {}", mysql_error);
         return Err(mysql_error);
     }
 
     let result = meta_util::load_global_variable(global_context.clone());
     if let Err(mysql_error) = result {
-        log::error!("load global variable error: {}", mysql_error);
         return Err(mysql_error);
     }
 
@@ -47,7 +45,6 @@ pub async fn create_execution() -> MysqlResult<Execution> {
                 .add_all_schema(schema_map);
         }
         Err(mysql_error) => {
-            log::error!("init meta schema error: {}", mysql_error);
             return Err(mysql_error);
         }
     }
@@ -63,7 +60,6 @@ pub async fn create_execution() -> MysqlResult<Execution> {
                 .add_all_table(table_def_map);
         }
         Err(mysql_error) => {
-            log::error!("init meta table error: {}", mysql_error);
             return Err(mysql_error);
         }
     }

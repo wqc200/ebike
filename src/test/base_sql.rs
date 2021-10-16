@@ -1,4 +1,3 @@
-
 #[cfg(test)]
 mod tests {
     use crate::core::output::{CoreOutput, FinalCount};
@@ -53,7 +52,19 @@ mod tests {
         }
         assert_eq!(1, count);
 
-        let result = core_execution.execute_query("create table user (id int, name varchar, PRIMARY KEY(id, name))").await?;
+        let result = core_execution
+            .execute_query("create table user (id int, name varchar, PRIMARY KEY(id, name))")
+            .await?;
+        let mut count = 0;
+        match result {
+            CoreOutput::FinalCount(f) => count = f.affect_rows,
+            _ => {}
+        }
+        assert_eq!(1, count);
+
+        let result = core_execution
+            .execute_query("create table user1 (id int, name varchar, PRIMARY KEY(id, name))")
+            .await?;
         let mut count = 0;
         match result {
             CoreOutput::FinalCount(f) => count = f.affect_rows,
@@ -72,6 +83,7 @@ mod tests {
             "| Tables_in_test |",
             "+----------------+",
             "| user           |",
+            "| user1          |",
             "+----------------+",
         ];
         assert_batches_eq!(expected, &results);
@@ -99,7 +111,9 @@ mod tests {
         }
         assert_eq!(1, count);
 
-        let result = core_execution.execute_query("create table user (id int, name varchar, PRIMARY KEY(id, name))").await?;
+        let result = core_execution
+            .execute_query("create table user (id int, name varchar, PRIMARY KEY(id, name))")
+            .await?;
         let mut count = 0;
         match result {
             CoreOutput::FinalCount(f) => count = f.affect_rows,
@@ -107,7 +121,9 @@ mod tests {
         }
         assert_eq!(1, count);
 
-        let result = core_execution.execute_query("insert into user values (1, 'lucy')").await?;
+        let result = core_execution
+            .execute_query("insert into user values (1, 'lucy')")
+            .await?;
         let mut count = 0;
         match result {
             CoreOutput::FinalCount(f) => count = f.affect_rows,
@@ -153,7 +169,9 @@ mod tests {
         }
         assert_eq!(1, count);
 
-        let result = core_execution.execute_query("create table user (id int, name varchar, PRIMARY KEY(id, name))").await?;
+        let result = core_execution
+            .execute_query("create table user (id int, name varchar, PRIMARY KEY(id, name))")
+            .await?;
         let mut count = 0;
         match result {
             CoreOutput::FinalCount(f) => count = f.affect_rows,
@@ -161,7 +179,9 @@ mod tests {
         }
         assert_eq!(1, count);
 
-        let result = core_execution.execute_query("insert into user values (1, 'lucy')").await?;
+        let result = core_execution
+            .execute_query("insert into user values (1, 'lucy')")
+            .await?;
         let mut count = 0;
         match result {
             CoreOutput::FinalCount(f) => count = f.affect_rows,
@@ -192,7 +212,9 @@ mod tests {
         }
         assert_eq!(1, count);
 
-        let result = core_execution.execute_query("select count(*) from user").await?;
+        let result = core_execution
+            .execute_query("select count(*) from user")
+            .await?;
         let mut results: Vec<RecordBatch> = vec![];
         match result {
             CoreOutput::ResultSet(_, r) => results = r,
