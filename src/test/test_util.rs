@@ -25,29 +25,6 @@ pub async fn create_execution() -> MysqlResult<Execution> {
         my_config.clone(),
     )));
 
-    let level = log::LevelFilter::Info;
-    let file_path = format!("./data/test/{}/log/log4rs.log", test_id);
-
-    // Build a stderr logger.
-    let stderr = ConsoleAppender::builder().target(Target::Stderr).build();
-    
-    // Log Trace level output to file where trace is the default level
-    // and the programmatically specified level to stderr.
-    let config = Config::builder()
-        .appender(
-            Appender::builder()
-                .filter(Box::new(ThresholdFilter::new(level)))
-                .build("stderr", Box::new(stderr)),
-        )
-        .build(
-            Root::builder()
-                .appender("stderr")
-                .build(LevelFilter::Trace),
-        )
-        .unwrap();
-
-    log4rs::init_config(config).unwrap();
-
     let result = meta_util::init_meta(global_context.clone()).await;
     if let Err(mysql_error) = result {
         log::error!("init meta error: {}", mysql_error);
