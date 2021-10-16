@@ -17,7 +17,7 @@ use datafusion::physical_plan::functions::make_scalar_function;
 use datafusion::sql::parser::{DFParser, Statement};
 use datafusion::sql::planner::{ContextProvider, SqlToRel};
 use datafusion::variable::VarType;
-use sqlparser::ast::{FunctionArg, Ident, ShowStatementFilter, ShowCreateObject};
+use sqlparser::ast::{FunctionArg, Ident, ShowStatementFilter, ShowCreateObject, OrderByExpr};
 use sqlparser::ast::{AlterTableOperation, ObjectName, ObjectType, Statement as SQLStatement};
 use sqlparser::ast::{
     BinaryOperator, Expr as SQLExpr, JoinConstraint, JoinOperator,
@@ -789,10 +789,21 @@ impl Execution {
                     let table_name = meta_util::convert_to_object_name(meta_const::FULL_TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_SCHEMATA);
                     let full_table_name = meta_util::fill_up_table_name(&mut self.session_context, table_name.clone()).unwrap();
 
+                    let projection_column = SQLExpr::Identifier(Ident { value: meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_SCHEMATA_SCHEMA_NAME.to_string(), quote_style: None });
+                    let projection_column_alias = Ident::new("Database");
+                    // from
                     let table_with_joins = core_util::build_table_with_joins(full_table_name.clone());
-                    let sql_expr = SQLExpr::Identifier(Ident { value: meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_SCHEMATA_SCHEMA_NAME.to_string(), quote_style: None });
-                    let ident = Ident::new("Database");
-                    let projection = vec![SelectItem::ExprWithAlias { expr: sql_expr, alias: ident }];
+                    // projection
+                    let projection = vec![SelectItem::ExprWithAlias { expr: projection_column, alias: projection_column_alias.clone() }];
+                    // order by
+                    let order_by_column = SQLExpr::Identifier(projection_column_alias);
+                    let order_by = OrderByExpr {
+                        expr: order_by_column,
+                        asc: None,
+                        nulls_first: None
+                    };
+
+                    // select
                     let select = Select {
                         distinct: false,
                         top: None,
@@ -806,7 +817,10 @@ impl Execution {
                         sort_by: vec![],
                         having: None,
                     };
+                    // create logical plan
                     let logical_plan = query_planner.select_to_plan(&select, &mut Default::default())?;
+                    let logical_plan = query_planner.order_by(logical_plan, &[order_by])?;
+
                     return Ok(CoreLogicalPlan::Select(logical_plan));
                 } else if first_variable.to_string().to_uppercase() == meta_const::SHOW_VARIABLE_GRANTS.to_uppercase() {
                     let user = variable.get(2).unwrap();

@@ -3,25 +3,27 @@ use crate::core::execution::Execution;
 use crate::core::global_context::GlobalContext;
 use crate::meta::{initial, meta_util};
 use crate::mysql::error::MysqlResult;
+use log::LevelFilter;
+use log4rs::append::console::{ConsoleAppender, Target};
+use log4rs::append::file::FileAppender;
+use log4rs::config::{Appender, Config, Root};
+use log4rs::encode::pattern::PatternEncoder;
+use log4rs::filter::threshold::ThresholdFilter;
 use std::sync::{Arc, Mutex};
 use tokio::net::TcpListener;
+use uuid::Uuid;
 
 pub async fn create_execution() -> MysqlResult<Execution> {
-    let global_context = Arc::new(Mutex::new(GlobalContext::new_with_config(
-        MyConfig::default(),
-    )));
+    let mut my_config = MyConfig::default();
+    let test_id = Uuid::new_v4()
+        .to_simple()
+        .encode_lower(&mut Uuid::encode_buffer())
+        .to_string();
+    my_config.engine.sled.data_path = format!("./data/test/{}/sled", test_id);
 
-    log4rs::init_file(
-        global_context
-            .lock()
-            .unwrap()
-            .my_config
-            .server
-            .log_file
-            .to_string(),
-        Default::default(),
-    )
-    .unwrap();
+    let global_context = Arc::new(Mutex::new(GlobalContext::new_with_config(
+        my_config.clone(),
+    )));
 
     let result = meta_util::init_meta(global_context.clone()).await;
     if let Err(mysql_error) = result {
@@ -74,43 +76,4 @@ pub async fn create_execution() -> MysqlResult<Execution> {
     }
 
     Ok(core_execution)
-}
-
-#[cfg(test)]
-mod tests {
-    use crate::core::output::CoreOutput;
-    use crate::core::output::CoreOutput::FinalCount;
-    use crate::mysql::error::MysqlResult;
-    use crate::mysql::{message, metadata};
-    use crate::test::test_util::create_execution;
-    use arrow::datatypes::{DataType, Field, Schema};
-    use arrow::record_batch::RecordBatch;
-    use datafusion::{assert_batches_eq, assert_batches_sorted_eq};
-    use std::sync::Arc;
-
-    #[tokio::test]
-    async fn show_databases() -> MysqlResult<()> {
-        let mut core_execution = create_execution().await?;
-
-        let result = core_execution.execute_query("show databases").await?;
-
-        let mut results: Vec<RecordBatch> = vec![];
-        match result {
-            CoreOutput::ResultSet(_, r) => results = r,
-            _ => {}
-        }
-
-        let expected = vec![
-            "+--------------------+",
-            "| Database           |",
-            "+--------------------+",
-            "| mysql              |",
-            "| performance_schema |",
-            "+--------------------+",
-        ];
-
-        assert_batches_eq!(expected, &results);
-
-        Ok(())
-    }
 }
