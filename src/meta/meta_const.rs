@@ -49,6 +49,7 @@ pub const MYSQL_DATA_TYPE_INT: &str = "int";
 pub const MYSQL_DATA_TYPE_BIGINT: &str = "bigint";
 pub const MYSQL_DATA_TYPE_DECIMAL: &str = "decimal";
 pub const MYSQL_DATA_TYPE_ENUM: &str = "enum";
+pub const MYSQL_DATA_TYPE_FLOAT: &str = "float";
 
 pub const MYSQL_ERROR_CODE_UNKNOWN_ERROR: u16 = 1105;
 
@@ -122,6 +123,10 @@ pub const COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_COLUMNS_IS_NULLABLE: &str = "is_
 pub const FULL_COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_COLUMNS_IS_NULLABLE: &str = "def.information_schema.columns.is_nullable";
 pub const COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_COLUMNS_DATA_TYPE: &str = "data_type";
 pub const FULL_COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_COLUMNS_DATA_TYPE: &str = "def.information_schema.columns.data_type";
+pub const COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_COLUMNS_CHARACTER_MAXIMUM_LENGTH: &str = "character_maximum_length";
+pub const COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_COLUMNS_CHARACTER_OCTET_LENGTH: &str = "character_octed_length";
+pub const COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_COLUMNS_NUMERIC_PRECISION: &str = "numeric_precision";
+pub const COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_COLUMNS_NUMERIC_SCALE: &str = "numeric_scale";
 // column of def.performance_schema.global_variables
 pub const COLUMN_NAME_OF_DEF_PERFORMANCE_SCHEMA_GLOBAL_VARIABLES_VARIABLE_NAME: &str = "variable_name";
 pub const FULL_COLUMN_NAME_OF_DEF_PERFORMANCE_SCHEMA_GLOBAL_VARIABLES_VARIABLE_NAME: &str = "def.performance_schema.global_variables.variable_name";

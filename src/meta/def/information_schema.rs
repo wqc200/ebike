@@ -6,6 +6,7 @@ use crate::core::global_context::GlobalContext;
 use crate::meta::{meta_const, meta_util};
 use crate::meta::meta_def::{TableDef};
 use crate::meta::initial::create_table;
+use crate::meta::meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_COLUMNS_CHARACTER_OCTET_LENGTH;
 
 pub fn columns(global_context: Arc<Mutex<GlobalContext>>) -> TableDef {
     let mut idents = vec![];
@@ -25,10 +26,10 @@ pub fn columns(global_context: Arc<Mutex<GlobalContext>>) -> TableDef {
         meta_util::create_sql_column("COLUMN_DEFAULT", SQLDataType::Varchar(Some(512)), ColumnOption::Null),
         meta_util::create_sql_column(meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_COLUMNS_IS_NULLABLE, SQLDataType::Varchar(Some(3)), ColumnOption::NotNull),
         meta_util::create_sql_column(meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_COLUMNS_DATA_TYPE, SQLDataType::Varchar(Some(512)), ColumnOption::NotNull),
-        meta_util::create_sql_column("CHARACTER_MAXIMUM_LENGTH", SQLDataType::Int(Some(11)), ColumnOption::Null),
-        meta_util::create_sql_column("CHARACTER_OCTET_LENGTH", SQLDataType::Int(Some(11)), ColumnOption::Null),
-        meta_util::create_sql_column("NUMERIC_PRECISION", SQLDataType::Int(Some(11)), ColumnOption::Null),
-        meta_util::create_sql_column("NUMERIC_SCALE", SQLDataType::Int(Some(11)), ColumnOption::Null),
+        meta_util::create_sql_column(meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_COLUMNS_CHARACTER_MAXIMUM_LENGTH, SQLDataType::Int(Some(11)), ColumnOption::Null),
+        meta_util::create_sql_column(meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_COLUMNS_CHARACTER_OCTET_LENGTH, SQLDataType::Int(Some(11)), ColumnOption::Null),
+        meta_util::create_sql_column(meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_COLUMNS_NUMERIC_PRECISION, SQLDataType::Int(Some(11)), ColumnOption::Null),
+        meta_util::create_sql_column(meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_COLUMNS_NUMERIC_SCALE, SQLDataType::Int(Some(11)), ColumnOption::Null),
         meta_util::create_sql_column("DATETIME_PRECISION", SQLDataType::Int(Some(11)), ColumnOption::Null),
         meta_util::create_sql_column("CHARACTER_SET_NAME", SQLDataType::Varchar(Some(512)), ColumnOption::Null),
         meta_util::create_sql_column("COLLATION_NAME", SQLDataType::Varchar(Some(512)), ColumnOption::Null),

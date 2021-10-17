@@ -377,6 +377,36 @@ pub fn text_to_sql_data_type(text: &str) -> Result<SQLDataType> {
     }
 }
 
+pub fn create_sql_data_type(data_type: &str, character_maximum_length: i32, character_octed_length: i32, numeric_precision: i32, numeric_scale: i32, ) -> Result<SQLDataType> {
+    match data_type {
+        meta_const::MYSQL_DATA_TYPE_SMALLINT => Ok(SQLDataType::SmallInt(Some(numeric_precision as u64))),
+        meta_const::MYSQL_DATA_TYPE_INT => Ok(SQLDataType::Int(Some(numeric_precision as u64))),
+        meta_const::MYSQL_DATA_TYPE_BIGINT => Ok(SQLDataType::BigInt(Some(numeric_precision as u64))),
+        meta_const::MYSQL_DATA_TYPE_DECIMAL => {
+            Ok(SQLDataType::Decimal(Some(numeric_precision as u64), Some(numeric_scale as u64)))
+        }
+        meta_const::MYSQL_DATA_TYPE_CHAR => {
+            Ok(SQLDataType::Char(Some(character_maximum_length as u64)))
+        }
+        meta_const::MYSQL_DATA_TYPE_VARCHAR => {
+            Ok(SQLDataType::Varchar(Some(character_maximum_length as u64)))
+        }
+        meta_const::MYSQL_DATA_TYPE_ENUM => {
+            Ok(SQLDataType::Varchar(Some(character_maximum_length as u64)))
+        }
+        meta_const::MYSQL_DATA_TYPE_FLOAT => {
+            Ok(SQLDataType::Float(Some(numeric_precision as u64)))
+        }
+        _ => {
+            Err(DataFusionError::Execution(format!(
+                "Unsupported data type: {:?}.",
+                data_type
+            )))
+        }
+    }
+}
+
+
 /// if the scalar value is number, add 0 before the number, until the number lenth is 19
 pub fn convert_scalar_value_to_string(scalar_value: ScalarValue) -> MysqlResult<Option<String>> {
     match scalar_value {
@@ -429,10 +459,100 @@ pub fn convert_sql_data_type_to_text(sql_type: &SQLDataType) -> MysqlResult<Stri
         SQLDataType::Custom(_) => {
             Ok(meta_const::MYSQL_DATA_TYPE_ENUM.to_string())
         }
+        SQLDataType::Float(_) => {
+            Ok(meta_const::MYSQL_DATA_TYPE_FLOAT.to_string())
+        }
         _ => Err(MysqlError::new_global_error(
             meta_const::MYSQL_ERROR_CODE_UNKNOWN_ERROR,
             format!("Unsupported convert sql data type: {:?} to text.", sql_type).as_str(),
         )),
+    }
+}
+
+pub fn get_numeric_precision(sql_type: &SQLDataType) -> ScalarValue {
+    match sql_type {
+        SQLDataType::BigInt(value) => {
+            match value {
+                None => ScalarValue::UInt64(Some(19)),
+                Some(num) => ScalarValue::UInt64(Some(num.clone())),
+            }
+        }
+        SQLDataType::Int(value) => {
+            match value {
+                None => ScalarValue::UInt64(Some(10)),
+                Some(num) => ScalarValue::UInt64(Some(num.clone())),
+            }
+        }
+        SQLDataType::SmallInt(value) => {
+            match value {
+                None => ScalarValue::UInt64(Some(5)),
+                Some(num) => ScalarValue::UInt64(Some(num.clone())),
+            }
+        }
+        SQLDataType::Float(value) => {
+            match value {
+                None => ScalarValue::UInt64(Some(12)),
+                Some(num) => ScalarValue::UInt64(Some(num.clone())),
+            }
+        }
+        SQLDataType::Decimal(precision, _) => {
+            match precision {
+                None => ScalarValue::UInt64(Some(12)),
+                Some(num) => ScalarValue::UInt64(Some(num.clone())),
+            }
+        }
+        _ => ScalarValue::Utf8(None),
+    }
+}
+
+pub fn get_numeric_scale(sql_type: &SQLDataType) -> ScalarValue {
+    match sql_type {
+        SQLDataType::Float(_) => ScalarValue::Utf8(None),
+        SQLDataType::Decimal(_, _scale) => {
+            match _scale {
+                None => ScalarValue::UInt64(Some(0)),
+                Some(num) => ScalarValue::UInt64(Some(num.clone())),
+            }
+        }
+        _ => ScalarValue::Utf8(None),
+    }
+}
+
+pub fn get_character_maximum_length(sql_type: &SQLDataType) -> ScalarValue {
+    match sql_type {
+        SQLDataType::Char(value) => {
+            match value {
+                None => ScalarValue::UInt64(Some(1)),
+                Some(num) => ScalarValue::UInt64(Some(num.clone())),
+            }
+        }
+        SQLDataType::Varchar(value) => {
+            match value {
+                None => ScalarValue::UInt64(Some(255)),
+                Some(num) => ScalarValue::UInt64(Some(num.clone())),
+            }
+        }
+        SQLDataType::Text => ScalarValue::UInt64(Some(65535)),
+        _ => ScalarValue::Utf8(None),
+    }
+}
+
+pub fn get_character_octed_length(sql_type: &SQLDataType) -> ScalarValue {
+    match sql_type {
+        SQLDataType::Char(value) => {
+            match value {
+                None => ScalarValue::UInt64(Some(1*4)),
+                Some(num) => ScalarValue::UInt64(Some(num.clone())),
+            }
+        }
+        SQLDataType::Varchar(value) => {
+            match value {
+                None => ScalarValue::UInt64(Some(255*4)),
+                Some(num) => ScalarValue::UInt64(Some(num.clone())),
+            }
+        }
+        SQLDataType::Text => ScalarValue::UInt64(Some(65535)),
+        _ => ScalarValue::Utf8(None),
     }
 }
 
