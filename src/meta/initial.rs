@@ -366,7 +366,7 @@ pub fn add_information_schema_columns(global_context: Arc<Mutex<GlobalContext>>,
             }
         }
 
-        let data_type = meta_util::convert_sql_data_type_to_text(&sparrow_column.sql_column.data_type).unwrap();
+        let data_type = meta_util::convert_sql_data_type(&sparrow_column.sql_column.data_type).unwrap();
         let numeric_precision = meta_util::get_numeric_precision(&sparrow_column.sql_column.data_type);
         let numeric_scale = meta_util::get_numeric_scale(&sparrow_column.sql_column.data_type);
         let character_maximum_length = meta_util::get_character_maximum_length(&sparrow_column.sql_column.data_type);
@@ -675,7 +675,6 @@ pub fn read_information_schema_columns(global_context: Arc<Mutex<GlobalContext>>
     let column_index_of_is_nullable = projection_schema.index_of(meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_COLUMNS_IS_NULLABLE).unwrap();
     let column_index_of_data_type = projection_schema.index_of(meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_COLUMNS_DATA_TYPE).unwrap();
     let column_index_of_character_maximum_length = projection_schema.index_of(meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_COLUMNS_CHARACTER_MAXIMUM_LENGTH).unwrap();
-    let column_index_of_character_octed_length = projection_schema.index_of(meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_COLUMNS_CHARACTER_OCTET_LENGTH).unwrap();
     let column_index_of_numeric_precision = projection_schema.index_of(meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_COLUMNS_NUMERIC_PRECISION).unwrap();
     let column_index_of_numeric_scale = projection_schema.index_of(meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_COLUMNS_NUMERIC_SCALE).unwrap();
 
@@ -693,7 +692,6 @@ pub fn read_information_schema_columns(global_context: Arc<Mutex<GlobalContext>>
                         let column_of_is_nullable: &StringArray = as_string_array(record_batch.column(column_index_of_is_nullable));
                         let column_of_data_type: &StringArray = as_string_array(record_batch.column(column_index_of_data_type));
                         let column_of_character_maximum_length: &Int32Array = as_primitive_array(record_batch.column(column_index_of_character_maximum_length));
-                        let column_of_character_octed_length: &Int32Array = as_primitive_array(record_batch.column(column_index_of_character_octed_length));
                         let column_of_numeric_precision: &Int32Array = as_primitive_array(record_batch.column(column_index_of_numeric_precision));
                         let column_of_numeric_scale: &Int32Array = as_primitive_array(record_batch.column(column_index_of_numeric_scale));
 
@@ -706,13 +704,12 @@ pub fn read_information_schema_columns(global_context: Arc<Mutex<GlobalContext>>
                             let is_nullable = column_of_is_nullable.value(row_index).to_string();
                             let data_type = column_of_data_type.value(row_index).to_string();
                             let character_maximum_length = column_of_character_maximum_length.value(row_index);
-                            let character_octed_length = column_of_character_octed_length.value(row_index);
                             let numeric_precision = column_of_numeric_precision.value(row_index);
                             let numeric_scale = column_of_numeric_scale.value(row_index);
 
                             let full_table_name = meta_util::create_full_table_name(meta_const::CATALOG_NAME, db_name.as_str(), table_name.as_str());
 
-                            let sql_data_type = meta_util::create_sql_data_type(data_type.as_str(), character_maximum_length, character_octed_length, numeric_precision, numeric_scale).unwrap();
+                            let sql_data_type = meta_util::create_sql_data_type(data_type.as_str(), character_maximum_length, numeric_precision, numeric_scale).unwrap();
                             let nullable = meta_util::text_to_null(is_nullable.as_str()).unwrap();
 
                             let sql_column = meta_util::create_sql_column(column_name.as_str(), sql_data_type, nullable);

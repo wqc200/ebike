@@ -47,9 +47,10 @@ pub const MYSQL_DATA_TYPE_MEDIUMINT: &str = "mediumint";
 pub const MYSQL_DATA_TYPE_SMALLINT: &str = "smallint";
 pub const MYSQL_DATA_TYPE_INT: &str = "int";
 pub const MYSQL_DATA_TYPE_BIGINT: &str = "bigint";
-pub const MYSQL_DATA_TYPE_DECIMAL: &str = "decimal";
 pub const MYSQL_DATA_TYPE_ENUM: &str = "enum";
 pub const MYSQL_DATA_TYPE_FLOAT: &str = "float";
+pub const MYSQL_DATA_TYPE_DOUBLE: &str = "double";
+pub const MYSQL_DATA_TYPE_DECIMAL: &str = "decimal";
 
 pub const MYSQL_ERROR_CODE_UNKNOWN_ERROR: u16 = 1105;
 

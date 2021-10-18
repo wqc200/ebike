@@ -1,23 +1,24 @@
 use bstr::ByteSlice;
 use std::sync::{Arc, Mutex};
 
-use arrow::error::{ArrowError, Result};
 use arrow::array::StructBuilder;
-use arrow::array::{Int32Builder, Int64Builder, StringBuilder};
-use arrow::datatypes::{Field, Schema, DataType, SchemaRef};
+use arrow::array::{Int32Builder, Int64Builder, Float32Builder, Float64Builder, StringBuilder};
+use arrow::datatypes::{DataType, Field, Schema, SchemaRef};
+use arrow::error::{ArrowError, Result};
 use arrow::record_batch::RecordBatch;
 use datafusion::logical_plan::Expr;
 use sled::Iter as SledIter;
+use sqlparser::ast::DataType as SQLDataType;
+use std::cmp::Ordering;
 
 use crate::core::global_context::GlobalContext;
-use crate::meta::{meta_const};
-use crate::util;
-use crate::store::reader::reader_util::{SeekType, PointType};
-use std::cmp::Ordering;
-use crate::util::dbkey::CreateScanKey;
-use crate::util::convert::{ToIdent};
+use crate::meta::meta_const;
 use crate::meta::meta_def::TableDef;
 use crate::store::reader::reader_util;
+use crate::store::reader::reader_util::{PointType, SeekType};
+use crate::util;
+use crate::util::convert::ToIdent;
+use crate::util::dbkey::CreateScanKey;
 
 pub struct Seek {
     iter: SledIter,
@@ -56,23 +57,35 @@ impl SledReader {
             None => schema_ref.clone(),
         };
 
-        let table_index_prefix = reader_util::get_seek_prefix(global_context.clone(), full_table_name.clone(), table.clone(), filters.clone()).unwrap();
+        let table_index_prefix = reader_util::get_seek_prefix(
+            global_context.clone(),
+            full_table_name.clone(),
+            table.clone(),
+            filters.clone(),
+        )
+            .unwrap();
         let seek = match table_index_prefix {
-            SeekType::FullTableScan { start, end} => {
-                let iter = global_context.lock().unwrap().engine.sled_db.as_ref().unwrap().scan_prefix(start.key.clone());
-                Seek {
-                    iter,
-                    start,
-                    end,
-                }
+            SeekType::FullTableScan { start, end } => {
+                let iter = global_context
+                    .lock()
+                    .unwrap()
+                    .engine
+                    .sled_db
+                    .as_ref()
+                    .unwrap()
+                    .scan_prefix(start.key.clone());
+                Seek { iter, start, end }
             }
-            SeekType::UsingTheIndex { start, end, ..} => {
-                let iter = global_context.lock().unwrap().engine.sled_db.as_ref().unwrap().scan_prefix(start.key.clone());
-                Seek {
-                    iter,
-                    start,
-                    end,
-                }
+            SeekType::UsingTheIndex { start, end, .. } => {
+                let iter = global_context
+                    .lock()
+                    .unwrap()
+                    .engine
+                    .sled_db
+                    .as_ref()
+                    .unwrap()
+                    .scan_prefix(start.key.clone());
+                Seek { iter, start, end }
             }
         };
 
@@ -103,19 +116,15 @@ impl Iterator for SledReader {
         loop {
             let result = self.seek.iter.next();
             let (key, value) = match result {
-                Some(item) => {
-                    match item {
-                        Ok((key, value)) => {
-                            (key, value)
-                        }
-                        Err(error) => {
-                            return Some(Err(ArrowError::IoError(format!(
-                                "Error iter from sled: '{:?}'",
-                                error
-                            ))));
-                        }
+                Some(item) => match item {
+                    Ok((key, value)) => (key, value),
+                    Err(error) => {
+                        return Some(Err(ArrowError::IoError(format!(
+                            "Error iter from sled: '{:?}'",
+                            error
+                        ))));
                     }
-                }
+                },
                 _ => break,
             };
 
@@ -140,13 +149,11 @@ impl Iterator for SledReader {
             if !key.starts_with(self.seek.end.key().as_str()) {
                 match key.as_str().partial_cmp(self.seek.end.key().as_str()) {
                     None => break,
-                    Some(a) => {
-                        match a {
-                            Ordering::Less => {}
-                            Ordering::Equal => {}
-                            Ordering::Greater => break,
-                        }
-                    }
+                    Some(a) => match a {
+                        Ordering::Less => {}
+                        Ordering::Equal => {}
+                        Ordering::Greater => break,
+                    },
                 }
             }
 
@@ -163,7 +170,10 @@ impl Iterator for SledReader {
             return None;
         }
 
-        let mut struct_builder = StructBuilder::from_fields(self.projected_schema.clone().fields().clone(), rowids.len());
+        let mut struct_builder = StructBuilder::from_fields(
+            self.projected_schema.clone().fields().clone(),
+            rowids.len(),
+        );
         for _ in rowids.clone() {
             let result = struct_builder.append(true);
             if let Err(e) = result {
@@ -174,11 +184,19 @@ impl Iterator for SledReader {
         for i in 0..self.projected_schema.clone().fields().len() {
             let field = Arc::from(self.projected_schema.field(i).clone());
             let field_name = field.name();
-            let field_data_type = field.data_type();
+            let sparrow_column = self
+                .table
+                .column
+                .get_sparrow_column(field_name.to_ident())
+                .unwrap();
+            let sql_data_type = sparrow_column.sql_column.data_type;
 
             if field_name.contains(meta_const::COLUMN_ROWID) {
                 for rowid in rowids.clone() {
-                    let result = struct_builder.field_builder::<StringBuilder>(i).unwrap().append_value(rowid);
+                    let result = struct_builder
+                        .field_builder::<StringBuilder>(i)
+                        .unwrap()
+                        .append_value(rowid);
                     if let Err(e) = result {
                         return Some(Err(e));
                     }
@@ -188,88 +206,157 @@ impl Iterator for SledReader {
                 let sparrow_column = table_column.get_sparrow_column(column_name).unwrap();
 
                 for rowid in rowids.clone() {
-                    let db_key = util::dbkey::create_column_key(self.table.option.full_table_name.clone(), sparrow_column.store_id, rowid.as_str());
+                    let db_key = util::dbkey::create_column_key(
+                        self.table.option.full_table_name.clone(),
+                        sparrow_column.store_id,
+                        rowid.as_str(),
+                    );
                     let db_value = sled_db.get(db_key.clone());
 
                     match db_value {
-                        Ok(value) => {
-                            match value {
-                                Some(value) => {
-                                    match field_data_type {
-                                        DataType::Utf8 => {
-                                            match std::str::from_utf8(value.as_ref()) {
-                                                Ok(value) => {
-                                                    let result = struct_builder.field_builder::<StringBuilder>(i).unwrap().append_value(value);
-                                                    if let Err(e) = result {
-                                                        return Some(Err(e));
-                                                    }
-                                                }
-                                                Err(error) => {
-                                                    return Some(Err(ArrowError::CastError(format!(
-                                                        "Error parsing '{:?}' as utf8: {:?}",
-                                                        value,
-                                                        error
-                                                    ))));
-                                                }
-                                            }
-                                        }
-                                        DataType::Int32 => {
-                                            let value = lexical::parse::<i32, _>(value.as_bytes()).unwrap();
-                                            let result = struct_builder.field_builder::<Int32Builder>(i).unwrap().append_value(value);
-                                            if let Err(e) = result {
-                                                return Some(Err(e));
-                                            }
-                                        }
-                                        DataType::Int64 => {
-                                            let value = lexical::parse::<i64, _>(value.as_bytes()).unwrap();
-                                            let result = struct_builder.field_builder::<Int64Builder>(i).unwrap().append_value(value);
-                                            if let Err(e) = result {
-                                                return Some(Err(e));
-                                            }
-                                        }
-                                        _ => {
-                                            return Some(Err(ArrowError::CastError(format!(
-                                                "Unsupported data type: {:?}",
-                                                field_data_type,
-                                            ))));
+                        Ok(value) => match value {
+                            Some(value) => match sql_data_type {
+                                SQLDataType::Text | SQLDataType::Varchar(_) | SQLDataType::Char(_) => match std::str::from_utf8(value.as_ref()) {
+                                    Ok(value) => {
+                                        let result = struct_builder
+                                            .field_builder::<StringBuilder>(i)
+                                            .unwrap()
+                                            .append_value(value);
+                                        if let Err(e) = result {
+                                            return Some(Err(e));
                                         }
                                     }
-                                }
-                                None => {
-                                    match field.data_type() {
-                                        DataType::Utf8 => {
-                                            let result = struct_builder.field_builder::<StringBuilder>(i).unwrap().append_null();
-                                            if let Err(e) = result {
-                                                return Some(Err(e));
-                                            }
-                                        }
-                                        DataType::Int32 => {
-                                            let result = struct_builder.field_builder::<Int32Builder>(i).unwrap().append_null();
-                                            if let Err(e) = result {
-                                                return Some(Err(e));
-                                            }
-                                        }
-                                        DataType::Int64 => {
-                                            let result = struct_builder.field_builder::<Int64Builder>(i).unwrap().append_null();
-                                            if let Err(e) = result {
-                                                return Some(Err(e));
-                                            }
-                                        }
-                                        _ => {
-                                            return Some(Err(ArrowError::CastError(format!(
-                                                "Unsupported data type: {:?}",
-                                                field_data_type,
-                                            ))));
-                                        }
+                                    Err(error) => {
+                                        return Some(Err(ArrowError::CastError(format!(
+                                            "Error parsing '{:?}' as utf8: {:?}",
+                                            value, error
+                                        ))));
+                                    }
+                                },
+                                SQLDataType::Int(_) => {
+                                    let value = lexical::parse::<i32, _>(value.as_bytes()).unwrap();
+                                    let result = struct_builder
+                                        .field_builder::<Int32Builder>(i)
+                                        .unwrap()
+                                        .append_value(value);
+                                    if let Err(e) = result {
+                                        return Some(Err(e));
                                     }
                                 }
-                            }
-                        }
+                                SQLDataType::BigInt(_) => {
+                                    let value = lexical::parse::<i64, _>(value.as_bytes()).unwrap();
+                                    let result = struct_builder
+                                        .field_builder::<Int64Builder>(i)
+                                        .unwrap()
+                                        .append_value(value);
+                                    if let Err(e) = result {
+                                        return Some(Err(e));
+                                    }
+                                }
+                                SQLDataType::Float(_) => {
+                                    let value = lexical::parse::<f32, _>(value.as_bytes()).unwrap();
+                                    let result = struct_builder
+                                        .field_builder::<Float32Builder>(i)
+                                        .unwrap()
+                                        .append_value(value);
+                                    if let Err(e) = result {
+                                        return Some(Err(e));
+                                    }
+                                }
+                                SQLDataType::Double => {
+                                    let value = lexical::parse::<f64, _>(value.as_bytes()).unwrap();
+                                    let result = struct_builder
+                                        .field_builder::<Float64Builder>(i)
+                                        .unwrap()
+                                        .append_value(value);
+                                    if let Err(e) = result {
+                                        return Some(Err(e));
+                                    }
+                                }
+                                SQLDataType::Decimal(_, _) => {
+                                    let value = lexical::parse::<f64, _>(value.as_bytes()).unwrap();
+                                    let result = struct_builder
+                                        .field_builder::<Float64Builder>(i)
+                                        .unwrap()
+                                        .append_value(value);
+                                    if let Err(e) = result {
+                                        return Some(Err(e));
+                                    }
+                                }
+                                _ => {
+                                    return Some(Err(ArrowError::CastError(format!(
+                                        "Unsupported sql data type: {:?}",
+                                        sql_data_type,
+                                    ))));
+                                }
+                            },
+                            None => match sql_data_type {
+                                SQLDataType::Text | SQLDataType::Varchar(_) | SQLDataType::Char(_) => {
+                                    let result = struct_builder
+                                        .field_builder::<StringBuilder>(i)
+                                        .unwrap()
+                                        .append_null();
+                                    if let Err(e) = result {
+                                        return Some(Err(e));
+                                    }
+                                }
+                                SQLDataType::Int(_) => {
+                                    let result = struct_builder
+                                        .field_builder::<Int32Builder>(i)
+                                        .unwrap()
+                                        .append_null();
+                                    if let Err(e) = result {
+                                        return Some(Err(e));
+                                    }
+                                }
+                                SQLDataType::BigInt(_) => {
+                                    let result = struct_builder
+                                        .field_builder::<Int64Builder>(i)
+                                        .unwrap()
+                                        .append_null();
+                                    if let Err(e) = result {
+                                        return Some(Err(e));
+                                    }
+                                }
+                                SQLDataType::Float(_) => {
+                                    let result = struct_builder
+                                        .field_builder::<Float32Builder>(i)
+                                        .unwrap()
+                                        .append_null();
+                                    if let Err(e) = result {
+                                        return Some(Err(e));
+                                    }
+                                }
+                                SQLDataType::Double => {
+                                    let result = struct_builder
+                                        .field_builder::<Float64Builder>(i)
+                                        .unwrap()
+                                        .append_null();
+                                    if let Err(e) = result {
+                                        return Some(Err(e));
+                                    }
+                                }
+                                SQLDataType::Decimal(_, _) => {
+                                    let result = struct_builder
+                                        .field_builder::<Float64Builder>(i)
+                                        .unwrap()
+                                        .append_null();
+                                    if let Err(e) = result {
+                                        return Some(Err(e));
+                                    }
+                                }
+                                _ => {
+                                    return Some(Err(ArrowError::CastError(format!(
+                                        "Unsupported sql data type: {:?}",
+                                        sql_data_type,
+                                    ))));
+                                }
+                            },
+                        },
                         Err(error) => {
                             return Some(Err(ArrowError::IoError(format!(
                                 "Error get key from sled, key: {:?}, error: {:?}",
-                                db_key,
-                                error
+                                db_key, error
                             ))));
                         }
                     }
