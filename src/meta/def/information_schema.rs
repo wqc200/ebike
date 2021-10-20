@@ -9,13 +9,6 @@ use crate::meta::initial::create_table;
 use crate::meta::meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_COLUMNS_CHARACTER_OCTET_LENGTH;
 
 pub fn columns(global_context: Arc<Mutex<GlobalContext>>) -> TableDef {
-    let mut idents = vec![];
-    idents.push(Ident::new(""));
-    idents.push(Ident::new("PRI"));
-    idents.push(Ident::new("UNI"));
-    idents.push(Ident::new("MUL"));
-    let object_name = ObjectName(idents);
-
     let sql_column_list = vec![
         meta_util::create_sql_column(meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_COLUMNS_TABLE_CATALOG, SQLDataType::Varchar(Some(64)), ColumnOption::NotNull),
         meta_util::create_sql_column(meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_COLUMNS_TABLE_SCHEMA, SQLDataType::Varchar(Some(64)), ColumnOption::NotNull),
@@ -34,7 +27,7 @@ pub fn columns(global_context: Arc<Mutex<GlobalContext>>) -> TableDef {
         meta_util::create_sql_column("CHARACTER_SET_NAME", SQLDataType::Varchar(Some(512)), ColumnOption::Null),
         meta_util::create_sql_column("COLLATION_NAME", SQLDataType::Varchar(Some(512)), ColumnOption::Null),
         meta_util::create_sql_column("COLUMN_TYPE", SQLDataType::Varchar(Some(512)), ColumnOption::NotNull),
-        meta_util::create_sql_column("COLUMN_KEY", SQLDataType::Custom(object_name), ColumnOption::NotNull),
+        meta_util::create_sql_column("COLUMN_KEY", SQLDataType::Varchar(Some(512)), ColumnOption::NotNull),
         meta_util::create_sql_column("EXTRA", SQLDataType::Varchar(Some(512)), ColumnOption::Null),
         meta_util::create_sql_column("PRIVILEGES", SQLDataType::Varchar(Some(512)), ColumnOption::Null),
         meta_util::create_sql_column("COLUMN_COMMENT", SQLDataType::Varchar(Some(512)), ColumnOption::NotNull),

@@ -349,6 +349,7 @@ pub fn add_information_schema_columns(global_context: Arc<Mutex<GlobalContext>>,
 
     let mut column_value_map_list: Vec<HashMap<Ident, ScalarValue>> = vec![];
     for sparrow_column in sparrow_column_list {
+        let mut column_key = "".to_string();
         let column_name = sparrow_column.sql_column.name.to_string();
         for x in sparrow_column.sql_column.options.clone() {
             match x.option {
@@ -357,8 +358,10 @@ pub fn add_information_schema_columns(global_context: Arc<Mutex<GlobalContext>>,
                         if table_has_primary_key {
                             return Err(MysqlError::new_server_error(1068, "42000", "Multiple primary key defined"));
                         }
+                        column_key = meta_const::COLUMN_KEY_OF_PRIMARY.to_string();
                         create_statistics.add_row(meta_const::NAME_OF_PRIMARY, 1, column_name.as_str())
                     } else {
+                        column_key = meta_const::COLUMN_KEY_OF_UNIQUE.to_string();
                         create_statistics.add_row(column_name.as_str(), 1, column_name.as_str())
                     }
                 }
@@ -416,15 +419,15 @@ pub fn add_information_schema_columns(global_context: Arc<Mutex<GlobalContext>>,
         // COLUMN_TYPE
         column_value_map.insert("COLUMN_TYPE".to_ident(), ScalarValue::Utf8(None));
         // COLUMN_KEY
-        column_value_map.insert("COLUMN_KEY".to_ident(), ScalarValue::Utf8(None));
+        column_value_map.insert("COLUMN_KEY".to_ident(), ScalarValue::Utf8(Some(column_key)));
         // EXTRA
-        column_value_map.insert("EXTRA".to_ident(), ScalarValue::Utf8(None));
+        column_value_map.insert("EXTRA".to_ident(), ScalarValue::Utf8(Some("".to_string())));
         // PRIVILEGES
         column_value_map.insert("PRIVILEGES".to_ident(), ScalarValue::Utf8(None));
         // COLUMN_COMMENT
-        column_value_map.insert("COLUMN_COMMENT".to_ident(), ScalarValue::Utf8(None));
+        column_value_map.insert("COLUMN_COMMENT".to_ident(), ScalarValue::Utf8(Some("".to_string())));
         // GENERATION_EXPRESSION
-        column_value_map.insert("GENERATION_EXPRESSION".to_ident(), ScalarValue::Utf8(None));
+        column_value_map.insert("GENERATION_EXPRESSION".to_ident(), ScalarValue::Utf8(Some("".to_string())));
         // SRS_ID
         column_value_map.insert("SRS_ID".to_ident(), ScalarValue::Int32(None));
         column_value_map_list.push(column_value_map);

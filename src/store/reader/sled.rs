@@ -184,12 +184,6 @@ impl Iterator for SledReader {
         for i in 0..self.projected_schema.clone().fields().len() {
             let field = Arc::from(self.projected_schema.field(i).clone());
             let field_name = field.name();
-            let sparrow_column = self
-                .table
-                .column
-                .get_sparrow_column(field_name.to_ident())
-                .unwrap();
-            let sql_data_type = sparrow_column.sql_column.data_type;
 
             if field_name.contains(meta_const::COLUMN_ROWID) {
                 for rowid in rowids.clone() {
@@ -204,6 +198,7 @@ impl Iterator for SledReader {
             } else {
                 let column_name = field_name.to_ident();
                 let sparrow_column = table_column.get_sparrow_column(column_name).unwrap();
+                let sql_data_type = sparrow_column.sql_column.data_type;
 
                 for rowid in rowids.clone() {
                     let db_key = util::dbkey::create_column_key(

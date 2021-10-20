@@ -39,6 +39,8 @@ pub const FULL_TABLE_NAME_OF_DEF_PERFORMANCE_SCHEMA_GLOBAL_VARIABLES: &str = "de
 pub const NAME_OF_PRIMARY: &str = "PRIMARY";
 pub const CONSTRAINT_TYPE_PRIMARY: &str = "PRIMARY KEY";
 pub const CONSTRAINT_TYPE_UNIQUE: &str = "UNIQUE";
+pub const COLUMN_KEY_OF_PRIMARY: &str = "PRI";
+pub const COLUMN_KEY_OF_UNIQUE: &str = "UNI";
 
 pub const MYSQL_DATA_TYPE_CHAR: &str = "char";
 pub const MYSQL_DATA_TYPE_VARCHAR: &str = "varchar";
