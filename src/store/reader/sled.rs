@@ -211,7 +211,7 @@ impl Iterator for SledReader {
                     match db_value {
                         Ok(value) => match value {
                             Some(value) => match sql_data_type {
-                                SQLDataType::Text | SQLDataType::Varchar(_) | SQLDataType::Char(_) => match std::str::from_utf8(value.as_ref()) {
+                                SQLDataType::Text => match std::str::from_utf8(value.as_ref()) {
                                     Ok(value) => {
                                         let result = struct_builder
                                             .field_builder::<StringBuilder>(i)
@@ -229,16 +229,6 @@ impl Iterator for SledReader {
                                     }
                                 },
                                 SQLDataType::Int(_) => {
-                                    let value = lexical::parse::<i32, _>(value.as_bytes()).unwrap();
-                                    let result = struct_builder
-                                        .field_builder::<Int32Builder>(i)
-                                        .unwrap()
-                                        .append_value(value);
-                                    if let Err(e) = result {
-                                        return Some(Err(e));
-                                    }
-                                }
-                                SQLDataType::BigInt(_) => {
                                     let value = lexical::parse::<i64, _>(value.as_bytes()).unwrap();
                                     let result = struct_builder
                                         .field_builder::<Int64Builder>(i)
@@ -249,26 +239,6 @@ impl Iterator for SledReader {
                                     }
                                 }
                                 SQLDataType::Float(_) => {
-                                    let value = lexical::parse::<f32, _>(value.as_bytes()).unwrap();
-                                    let result = struct_builder
-                                        .field_builder::<Float32Builder>(i)
-                                        .unwrap()
-                                        .append_value(value);
-                                    if let Err(e) = result {
-                                        return Some(Err(e));
-                                    }
-                                }
-                                SQLDataType::Double => {
-                                    let value = lexical::parse::<f64, _>(value.as_bytes()).unwrap();
-                                    let result = struct_builder
-                                        .field_builder::<Float64Builder>(i)
-                                        .unwrap()
-                                        .append_value(value);
-                                    if let Err(e) = result {
-                                        return Some(Err(e));
-                                    }
-                                }
-                                SQLDataType::Decimal(_, _) => {
                                     let value = lexical::parse::<f64, _>(value.as_bytes()).unwrap();
                                     let result = struct_builder
                                         .field_builder::<Float64Builder>(i)
@@ -286,7 +256,7 @@ impl Iterator for SledReader {
                                 }
                             },
                             None => match sql_data_type {
-                                SQLDataType::Text | SQLDataType::Varchar(_) | SQLDataType::Char(_) => {
+                                SQLDataType::Text => {
                                     let result = struct_builder
                                         .field_builder::<StringBuilder>(i)
                                         .unwrap()
@@ -297,15 +267,6 @@ impl Iterator for SledReader {
                                 }
                                 SQLDataType::Int(_) => {
                                     let result = struct_builder
-                                        .field_builder::<Int32Builder>(i)
-                                        .unwrap()
-                                        .append_null();
-                                    if let Err(e) = result {
-                                        return Some(Err(e));
-                                    }
-                                }
-                                SQLDataType::BigInt(_) => {
-                                    let result = struct_builder
                                         .field_builder::<Int64Builder>(i)
                                         .unwrap()
                                         .append_null();
@@ -314,24 +275,6 @@ impl Iterator for SledReader {
                                     }
                                 }
                                 SQLDataType::Float(_) => {
-                                    let result = struct_builder
-                                        .field_builder::<Float32Builder>(i)
-                                        .unwrap()
-                                        .append_null();
-                                    if let Err(e) = result {
-                                        return Some(Err(e));
-                                    }
-                                }
-                                SQLDataType::Double => {
-                                    let result = struct_builder
-                                        .field_builder::<Float64Builder>(i)
-                                        .unwrap()
-                                        .append_null();
-                                    if let Err(e) = result {
-                                        return Some(Err(e));
-                                    }
-                                }
-                                SQLDataType::Decimal(_, _) => {
                                     let result = struct_builder
                                         .field_builder::<Float64Builder>(i)
                                         .unwrap()

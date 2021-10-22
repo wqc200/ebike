@@ -96,15 +96,15 @@ impl SchemaOptionDef {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SparrowColumnDef {
-    pub store_id: i32,
-    pub ordinal_position: i32,
+    pub store_id: i64,
+    pub ordinal_position: i64,
     pub sql_column: SQLColumnDef,
 }
 
 impl SparrowColumnDef {
     pub fn new(
-        store_id: i32,
-        ordinal_position: i32,
+        store_id: i64,
+        ordinal_position: i64,
         sql_column: SQLColumnDef,
     ) -> Self {
         Self {
@@ -195,7 +195,7 @@ impl TableColumnDef {
         }
     }
 
-    pub fn get_max_store_id(&self) -> i32 {
+    pub fn get_max_store_id(&self) -> i64 {
         let mut max_store_id = 0;
 
         for sparrow_column in self.sparrow_column_list.clone() {
@@ -238,7 +238,7 @@ pub struct TableOptionDef {
     pub table_name: String,
     pub full_table_name: ObjectName,
     pub engine: String,
-    pub column_max_store_id: i32,
+    pub column_max_store_id: i64,
     pub table_type: String,
 }
 
@@ -303,7 +303,7 @@ impl TableOptionDef {
         self.engine = engine.to_string()
     }
 
-    pub fn with_column_max_store_id(&mut self, column_max_store_id: i32) {
+    pub fn with_column_max_store_id(&mut self, column_max_store_id: i64) {
         self.column_max_store_id = column_max_store_id
     }
 

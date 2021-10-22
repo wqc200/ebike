@@ -8,8 +8,8 @@ use crate::meta::initial::create_table;
 
 pub fn global_variables(global_context: Arc<Mutex<GlobalContext>>) -> meta_def::TableDef {
     let sql_column_list = vec![
-        meta_util::create_sql_column(meta_const::COLUMN_NAME_OF_DEF_PERFORMANCE_SCHEMA_GLOBAL_VARIABLES_VARIABLE_NAME, SQLDataType::Varchar(Some(512)), ColumnOption::NotNull),
-        meta_util::create_sql_column(meta_const::COLUMN_NAME_OF_DEF_PERFORMANCE_SCHEMA_GLOBAL_VARIABLES_VARIABLE_VALUE, SQLDataType::Varchar(Some(512)), ColumnOption::Null),
+        meta_util::create_sql_column(meta_const::COLUMN_NAME_OF_DEF_PERFORMANCE_SCHEMA_GLOBAL_VARIABLES_VARIABLE_NAME, SQLDataType::Text, ColumnOption::NotNull),
+        meta_util::create_sql_column(meta_const::COLUMN_NAME_OF_DEF_PERFORMANCE_SCHEMA_GLOBAL_VARIABLES_VARIABLE_VALUE, SQLDataType::Text, ColumnOption::Null),
     ];
 
     let mut columns = vec![];

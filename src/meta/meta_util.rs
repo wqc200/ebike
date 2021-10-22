@@ -79,8 +79,8 @@ pub fn get_table_index_list(
 }
 
 pub fn create_sparrow_column(
-    store_id: i32,
-    ordinal_position: i32,
+    store_id: i64,
+    ordinal_position: i64,
     sql_column: SQLColumnDef,
 ) -> SparrowColumnDef {
     SparrowColumnDef {
@@ -474,34 +474,14 @@ pub fn text_to_sql_data_type(text: &str) -> Result<SQLDataType> {
 
 pub fn create_sql_data_type(
     text_data_type: &str,
-    character_maximum_length: i32,
-    numeric_precision: i32,
-    numeric_scale: i32,
+    character_maximum_length: i64,
+    numeric_precision: i64,
+    numeric_scale: i64,
 ) -> Result<SQLDataType> {
     match text_data_type {
-        meta_const::MYSQL_DATA_TYPE_SMALLINT => {
-            Ok(SQLDataType::SmallInt(Some(numeric_precision as u64)))
-        }
-        meta_const::MYSQL_DATA_TYPE_INT => Ok(SQLDataType::Int(Some(numeric_precision as u64))),
-        meta_const::MYSQL_DATA_TYPE_BIGINT => {
-            Ok(SQLDataType::BigInt(Some(numeric_precision as u64)))
-        }
-        meta_const::MYSQL_DATA_TYPE_FLOAT => Ok(SQLDataType::Float(Some(numeric_precision as u64))),
-        meta_const::MYSQL_DATA_TYPE_DOUBLE => Ok(SQLDataType::Double),
-        meta_const::MYSQL_DATA_TYPE_DECIMAL => Ok(SQLDataType::Decimal(
-            Some(numeric_precision as u64),
-            Some(numeric_scale as u64),
-        )),
-        meta_const::MYSQL_DATA_TYPE_CHAR => {
-            Ok(SQLDataType::Char(Some(character_maximum_length as u64)))
-        }
-        meta_const::MYSQL_DATA_TYPE_VARCHAR => {
-            Ok(SQLDataType::Varchar(Some(character_maximum_length as u64)))
-        }
+        meta_const::MYSQL_DATA_TYPE_INT => Ok(SQLDataType::Int(None)),
+        meta_const::MYSQL_DATA_TYPE_FLOAT => Ok(SQLDataType::Float(None)),
         meta_const::MYSQL_DATA_TYPE_TEXT => Ok(SQLDataType::Text),
-        meta_const::MYSQL_DATA_TYPE_ENUM => {
-            Ok(SQLDataType::Varchar(Some(character_maximum_length as u64)))
-        }
         _ => Err(DataFusionError::Execution(format!(
             "Unsupported text data type: {:?}.",
             text_data_type
@@ -549,15 +529,8 @@ pub fn convert_scalar_value_to_string(scalar_value: ScalarValue) -> MysqlResult<
 pub fn convert_sql_data_type(sql_type: &SQLDataType) -> MysqlResult<String> {
     match sql_type {
         SQLDataType::Int(_) => Ok(meta_const::MYSQL_DATA_TYPE_INT.to_string()),
-        SQLDataType::SmallInt(_) => Ok(meta_const::MYSQL_DATA_TYPE_SMALLINT.to_string()),
-        SQLDataType::BigInt(_) => Ok(meta_const::MYSQL_DATA_TYPE_BIGINT.to_string()),
         SQLDataType::Float(_) => Ok(meta_const::MYSQL_DATA_TYPE_FLOAT.to_string()),
-        SQLDataType::Double => Ok(meta_const::MYSQL_DATA_TYPE_DOUBLE.to_string()),
-        SQLDataType::Decimal(_, _) => Ok(meta_const::MYSQL_DATA_TYPE_DECIMAL.to_string()),
-        SQLDataType::Char(_) => Ok(meta_const::MYSQL_DATA_TYPE_CHAR.to_string()),
-        SQLDataType::Varchar(_) => Ok(meta_const::MYSQL_DATA_TYPE_VARCHAR.to_string()),
         SQLDataType::Text => Ok(meta_const::MYSQL_DATA_TYPE_TEXT.to_string()),
-        SQLDataType::Custom(_) => Ok(meta_const::MYSQL_DATA_TYPE_ENUM.to_string()),
         _ => Err(MysqlError::new_global_error(
             meta_const::MYSQL_ERROR_CODE_UNKNOWN_ERROR,
             format!("Unsupported convert sql data type: {:?} to text.", sql_type).as_str(),
@@ -567,84 +540,39 @@ pub fn convert_sql_data_type(sql_type: &SQLDataType) -> MysqlResult<String> {
 
 pub fn get_numeric_precision(sql_type: &SQLDataType) -> ScalarValue {
     match sql_type {
-        SQLDataType::BigInt(value) => match value {
-            None => ScalarValue::UInt64(Some(19)),
-            Some(num) => ScalarValue::UInt64(Some(num.clone())),
-        },
-        SQLDataType::Int(value) => match value {
-            None => ScalarValue::UInt64(Some(10)),
-            Some(num) => ScalarValue::UInt64(Some(num.clone())),
-        },
-        SQLDataType::SmallInt(value) => match value {
-            None => ScalarValue::UInt64(Some(5)),
-            Some(num) => ScalarValue::UInt64(Some(num.clone())),
-        },
-        SQLDataType::Float(value) => match value {
-            None => ScalarValue::UInt64(Some(12)),
-            Some(num) => ScalarValue::UInt64(Some(num.clone())),
-        },
-        SQLDataType::Decimal(precision, _) => match precision {
-            None => ScalarValue::UInt64(Some(12)),
-            Some(num) => ScalarValue::UInt64(Some(num.clone())),
-        },
+        SQLDataType::Int(_) => ScalarValue::Int64(Some(10)),
+        SQLDataType::Float(_) => ScalarValue::Int64(Some(12)),
         _ => ScalarValue::Utf8(None),
     }
 }
 
 pub fn get_numeric_scale(sql_type: &SQLDataType) -> ScalarValue {
     match sql_type {
+        SQLDataType::Int(_) => ScalarValue::Int64(Some(0)),
         SQLDataType::Float(_) => ScalarValue::Utf8(None),
-        SQLDataType::Decimal(_, _scale) => match _scale {
-            None => ScalarValue::UInt64(Some(0)),
-            Some(num) => ScalarValue::UInt64(Some(num.clone())),
-        },
         _ => ScalarValue::Utf8(None),
     }
 }
 
 pub fn get_character_maximum_length(sql_type: &SQLDataType) -> ScalarValue {
     match sql_type {
-        SQLDataType::Char(value) => match value {
-            None => ScalarValue::UInt64(Some(1)),
-            Some(num) => ScalarValue::UInt64(Some(num.clone())),
-        },
-        SQLDataType::Varchar(value) => match value {
-            None => ScalarValue::UInt64(Some(255)),
-            Some(num) => ScalarValue::UInt64(Some(num.clone())),
-        },
-        SQLDataType::Text => ScalarValue::UInt64(Some(65535)),
+        SQLDataType::Text => ScalarValue::Int64(Some(65535)),
         _ => ScalarValue::Utf8(None),
     }
 }
 
 pub fn get_character_octed_length(sql_type: &SQLDataType) -> ScalarValue {
     match sql_type {
-        SQLDataType::Char(value) => match value {
-            None => ScalarValue::UInt64(Some(1 * 4)),
-            Some(num) => ScalarValue::UInt64(Some(num.clone())),
-        },
-        SQLDataType::Varchar(value) => match value {
-            None => ScalarValue::UInt64(Some(255 * 4)),
-            Some(num) => ScalarValue::UInt64(Some(num.clone())),
-        },
-        SQLDataType::Text => ScalarValue::UInt64(Some(65535)),
+        SQLDataType::Text=> ScalarValue::Int64(Some(65535)),
         _ => ScalarValue::Utf8(None),
     }
 }
 
 pub fn convert_sql_data_type_to_arrow_data_type(sql_type: &SQLDataType) -> MysqlResult<DataType> {
     match sql_type {
-        SQLDataType::BigInt(_) => Ok(DataType::Int64),
-        SQLDataType::Int(_) => Ok(DataType::Int32),
-        SQLDataType::SmallInt(_) => Ok(DataType::Int16),
-        SQLDataType::Char(_)
-        | SQLDataType::Varchar(_)
-        | SQLDataType::Text
-        | SQLDataType::Custom(_) => Ok(DataType::Utf8),
-        SQLDataType::Decimal(_, _) => Ok(DataType::Float64),
-        SQLDataType::Float(_) => Ok(DataType::Float32),
-        SQLDataType::Real | SQLDataType::Double => Ok(DataType::Float64),
-        SQLDataType::Boolean => Ok(DataType::Boolean),
+        SQLDataType::Int(_) => Ok(DataType::Int64),
+        SQLDataType::Float(_) => Ok(DataType::Float64),
+        SQLDataType::Text => Ok(DataType::Utf8),
         _ => Err(MysqlError::new_global_error(
             meta_const::MYSQL_ERROR_CODE_UNKNOWN_ERROR,
             format!(
