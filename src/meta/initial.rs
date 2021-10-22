@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
-use arrow::array::{as_primitive_array, as_string_array, Int32Array, StringArray};
+use arrow::array::{as_primitive_array, as_string_array, StringArray, Int64Array};
 use datafusion::scalar::ScalarValue;
 use sqlparser::ast::{ColumnDef as SQLColumnDef, ColumnOption, Ident, ObjectName, TableConstraint};
 
@@ -145,7 +145,7 @@ impl SaveKeyColumnUsage {
         }
     }
 
-    pub fn add_row(&mut self, constraint_name: &str, seq_in_index: i32, column_name: &str) {
+    pub fn add_row(&mut self, constraint_name: &str, seq_in_index: i64, column_name: &str) {
         let mut column_value_map = HashMap::new();
         column_value_map.insert("constraint_catalog".to_ident(), ScalarValue::Utf8(Some(self.catalog_name.clone())));
         column_value_map.insert("constraint_schema".to_ident(), ScalarValue::Utf8(Some(self.schema_name.clone())));
@@ -154,9 +154,9 @@ impl SaveKeyColumnUsage {
         column_value_map.insert("table_schema".to_ident(), ScalarValue::Utf8(Some(self.schema_name.clone())));
         column_value_map.insert("table_name".to_ident(), ScalarValue::Utf8(Some(self.table_name.clone())));
         column_value_map.insert("column_name".to_ident(), ScalarValue::Utf8(Some(column_name.to_string())));
-        column_value_map.insert("ordinal_position".to_ident(), ScalarValue::Int32(Some(seq_in_index)));
+        column_value_map.insert("ordinal_position".to_ident(), ScalarValue::Int64(Some(seq_in_index)));
         // POSITION_IN_UNIQUE_CONSTRAINT, it is null if constraints is primary or unique
-        column_value_map.insert("position_in_unique_constraint".to_ident(), ScalarValue::Int32(None));
+        column_value_map.insert("position_in_unique_constraint".to_ident(), ScalarValue::Int64(None));
         column_value_map.insert("referenced_table_schema".to_ident(), ScalarValue::Utf8(None));
         column_value_map.insert("referenced_table_name".to_ident(), ScalarValue::Utf8(None));
         column_value_map.insert("referenced_column_name".to_ident(), ScalarValue::Utf8(None));
@@ -203,14 +203,14 @@ impl SaveStatistics {
         }
     }
 
-    pub fn add_row(&mut self, index_name: &str, seq_in_index: i32, column_name: &str) {
+    pub fn add_row(&mut self, index_name: &str, seq_in_index: i64, column_name: &str) {
         let mut column_value_map = HashMap::new();
         column_value_map.insert(meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_STATISTICS_TABLE_CATALOG.to_ident(), ScalarValue::Utf8(Some(self.catalog_name.clone())));
         column_value_map.insert(meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_STATISTICS_TABLE_SCHEMA.to_ident(), ScalarValue::Utf8(Some(self.schema_name.clone())));
         column_value_map.insert(meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_STATISTICS_TABLE_NAME.to_ident(), ScalarValue::Utf8(Some(self.table_name.clone())));
-        column_value_map.insert(meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_STATISTICS_NON_UNIQUE.to_ident(), ScalarValue::Int32(Some(0)));
+        column_value_map.insert(meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_STATISTICS_NON_UNIQUE.to_ident(), ScalarValue::Int64(Some(0)));
         column_value_map.insert(meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_STATISTICS_INDEX_NAME.to_ident(), ScalarValue::Utf8(Some(index_name.to_string())));
-        column_value_map.insert(meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_STATISTICS_SEQ_IN_INDEX.to_ident(), ScalarValue::Int32(Some(seq_in_index)));
+        column_value_map.insert(meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_STATISTICS_SEQ_IN_INDEX.to_ident(), ScalarValue::Int64(Some(seq_in_index)));
         column_value_map.insert(meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_STATISTICS_COLUMN_NAME.to_ident(), ScalarValue::Utf8(Some(column_name.to_string())));
         self.column_value_map_list.push(column_value_map);
     }
@@ -312,11 +312,11 @@ pub fn add_information_schema_tables(global_context: Arc<Mutex<GlobalContext>>, 
     column_value_map.insert(meta_const::COLUMN_INFORMATION_SCHEMA_TABLE_NAME.to_ident(), ScalarValue::Utf8(Some(table_name.to_string())));
     column_value_map.insert(meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_TABLES_TABLE_TYPE.to_ident(), ScalarValue::Utf8(Some(table_type.to_string())));
     column_value_map.insert(meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_TABLES_ENGINE.to_ident(), ScalarValue::Utf8(Some(engine.to_string())));
-    column_value_map.insert(meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_TABLES_VERSION.to_ident(), ScalarValue::Int32(Some(0)));
-    column_value_map.insert(meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_TABLES_DATA_LENGTH.to_ident(), ScalarValue::Int32(Some(0)));
-    column_value_map.insert(meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_TABLES_INDEX_LENGTH.to_ident(), ScalarValue::Int32(Some(0)));
-    column_value_map.insert(meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_TABLES_AUTO_INCREMENT.to_ident(), ScalarValue::Int32(Some(0)));
-    column_value_map.insert(meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_TABLES_COLUMN_MAX_STORE_ID.to_ident(), ScalarValue::Int32(Some(column_max_store_id)));
+    column_value_map.insert(meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_TABLES_VERSION.to_ident(), ScalarValue::Int64(Some(0)));
+    column_value_map.insert(meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_TABLES_DATA_LENGTH.to_ident(), ScalarValue::Int64(Some(0)));
+    column_value_map.insert(meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_TABLES_INDEX_LENGTH.to_ident(), ScalarValue::Int64(Some(0)));
+    column_value_map.insert(meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_TABLES_AUTO_INCREMENT.to_ident(), ScalarValue::Int64(Some(0)));
+    column_value_map.insert(meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_TABLES_COLUMN_MAX_STORE_ID.to_ident(), ScalarValue::Int64(Some(column_max_store_id)));
     column_value_map_list.push(column_value_map);
 
     let insert = physical_plan::insert::PhysicalPlanInsert::new(
@@ -349,6 +349,7 @@ pub fn add_information_schema_columns(global_context: Arc<Mutex<GlobalContext>>,
 
     let mut column_value_map_list: Vec<HashMap<Ident, ScalarValue>> = vec![];
     for sparrow_column in sparrow_column_list {
+        let mut column_key = "".to_string();
         let column_name = sparrow_column.sql_column.name.to_string();
         for x in sparrow_column.sql_column.options.clone() {
             match x.option {
@@ -357,8 +358,10 @@ pub fn add_information_schema_columns(global_context: Arc<Mutex<GlobalContext>>,
                         if table_has_primary_key {
                             return Err(MysqlError::new_server_error(1068, "42000", "Multiple primary key defined"));
                         }
+                        column_key = meta_const::COLUMN_KEY_OF_PRIMARY.to_string();
                         create_statistics.add_row(meta_const::NAME_OF_PRIMARY, 1, column_name.as_str())
                     } else {
+                        column_key = meta_const::COLUMN_KEY_OF_UNIQUE.to_string();
                         create_statistics.add_row(column_name.as_str(), 1, column_name.as_str())
                     }
                 }
@@ -366,7 +369,11 @@ pub fn add_information_schema_columns(global_context: Arc<Mutex<GlobalContext>>,
             }
         }
 
-        let data_type = meta_util::convert_sql_data_type_to_text(&sparrow_column.sql_column.data_type).unwrap();
+        let data_type = meta_util::convert_sql_data_type(&sparrow_column.sql_column.data_type).unwrap();
+        let numeric_precision = meta_util::get_numeric_precision(&sparrow_column.sql_column.data_type);
+        let numeric_scale = meta_util::get_numeric_scale(&sparrow_column.sql_column.data_type);
+        let character_maximum_length = meta_util::get_character_maximum_length(&sparrow_column.sql_column.data_type);
+        let character_octed_length = meta_util::get_character_octed_length(&sparrow_column.sql_column.data_type);
 
         let allow_null = sparrow_column.sql_column.options.clone()
             .iter()
@@ -386,9 +393,9 @@ pub fn add_information_schema_columns(global_context: Arc<Mutex<GlobalContext>>,
         // COLUMN_NAME
         column_value_map.insert("column_name".to_ident(), ScalarValue::Utf8(Some(column_name.clone())));
         // ORDINAL_POSITION
-        column_value_map.insert("store_id".to_ident(), ScalarValue::Int32(Some(sparrow_column.store_id)));
+        column_value_map.insert("store_id".to_ident(), ScalarValue::Int64(Some(sparrow_column.store_id)));
         // ORDINAL_POSITION
-        column_value_map.insert("ordinal_position".to_ident(), ScalarValue::Int32(Some(sparrow_column.ordinal_position)));
+        column_value_map.insert("ordinal_position".to_ident(), ScalarValue::Int64(Some(sparrow_column.ordinal_position)));
         // COLUMN_DEFAULT
         column_value_map.insert("COLUMN_DEFAULT".to_ident(), ScalarValue::Utf8(None));
         // IS_NULLABLE
@@ -396,15 +403,15 @@ pub fn add_information_schema_columns(global_context: Arc<Mutex<GlobalContext>>,
         // DATA_TYPE
         column_value_map.insert("data_type".to_ident(), ScalarValue::Utf8(Some(data_type)));
         // CHARACTER_MAXIMUM_LENGTH
-        column_value_map.insert("CHARACTER_MAXIMUM_LENGTH".to_ident(), ScalarValue::Int32(None));
+        column_value_map.insert(meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_COLUMNS_CHARACTER_MAXIMUM_LENGTH.to_ident(), character_maximum_length);
         // CHARACTER_OCTET_LENGTH
-        column_value_map.insert("CHARACTER_OCTET_LENGTH".to_ident(), ScalarValue::Int32(None));
+        column_value_map.insert(meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_COLUMNS_CHARACTER_OCTET_LENGTH.to_ident(), character_octed_length);
         // NUMERIC_PRECISION
-        column_value_map.insert("NUMERIC_PRECISION".to_ident(), ScalarValue::Int32(None));
+        column_value_map.insert(meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_COLUMNS_NUMERIC_PRECISION.to_ident(), numeric_precision);
         // NUMERIC_SCALE
-        column_value_map.insert("NUMERIC_SCALE".to_ident(), ScalarValue::Int32(None));
+        column_value_map.insert(meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_COLUMNS_NUMERIC_SCALE.to_ident(), numeric_scale);
         // DATETIME_PRECISION
-        column_value_map.insert("DATETIME_PRECISION".to_ident(), ScalarValue::Int32(None));
+        column_value_map.insert("DATETIME_PRECISION".to_ident(), ScalarValue::Int64(None));
         // CHARACTER_SET_NAME
         column_value_map.insert("CHARACTER_SET_NAME".to_ident(), ScalarValue::Utf8(None));
         // COLLATION_NAME
@@ -412,17 +419,17 @@ pub fn add_information_schema_columns(global_context: Arc<Mutex<GlobalContext>>,
         // COLUMN_TYPE
         column_value_map.insert("COLUMN_TYPE".to_ident(), ScalarValue::Utf8(None));
         // COLUMN_KEY
-        column_value_map.insert("COLUMN_KEY".to_ident(), ScalarValue::Utf8(None));
+        column_value_map.insert("COLUMN_KEY".to_ident(), ScalarValue::Utf8(Some(column_key)));
         // EXTRA
-        column_value_map.insert("EXTRA".to_ident(), ScalarValue::Utf8(None));
+        column_value_map.insert("EXTRA".to_ident(), ScalarValue::Utf8(Some("".to_string())));
         // PRIVILEGES
         column_value_map.insert("PRIVILEGES".to_ident(), ScalarValue::Utf8(None));
         // COLUMN_COMMENT
-        column_value_map.insert("COLUMN_COMMENT".to_ident(), ScalarValue::Utf8(None));
+        column_value_map.insert("COLUMN_COMMENT".to_ident(), ScalarValue::Utf8(Some("".to_string())));
         // GENERATION_EXPRESSION
-        column_value_map.insert("GENERATION_EXPRESSION".to_ident(), ScalarValue::Utf8(None));
+        column_value_map.insert("GENERATION_EXPRESSION".to_ident(), ScalarValue::Utf8(Some("".to_string())));
         // SRS_ID
-        column_value_map.insert("SRS_ID".to_ident(), ScalarValue::Int32(None));
+        column_value_map.insert("SRS_ID".to_ident(), ScalarValue::Int64(None));
         column_value_map_list.push(column_value_map);
     }
 
@@ -501,7 +508,7 @@ pub fn read_information_schema_tables(global_context: Arc<Mutex<GlobalContext>>)
                         let table_name_row: &StringArray = as_string_array(record_batch.column(column_index_of_table_name));
                         let table_type_row: &StringArray = as_string_array(record_batch.column(column_index_of_table_type));
                         let engine_row: &StringArray = as_string_array(record_batch.column(column_index_of_engine));
-                        let column_store_id_row: &Int32Array = as_primitive_array(record_batch.column(projection_index_of_column_store_id));
+                        let column_store_id_row: &Int64Array = as_primitive_array(record_batch.column(projection_index_of_column_store_id));
 
                         for row_index in 0..record_batch.num_rows() {
                             let schema_name = db_name_row.value(row_index).to_string();
@@ -601,7 +608,7 @@ pub fn read_information_schema_statistics(global_context: Arc<Mutex<GlobalContex
                         let column_of_db_name: &StringArray = as_string_array(record_batch.column(column_index_of_db_name));
                         let column_of_table_name: &StringArray = as_string_array(record_batch.column(column_index_of_table_name));
                         let column_of_index_name: &StringArray = as_string_array(record_batch.column(column_index_of_index_name));
-                        let column_of_seq_in_index: &Int32Array = as_primitive_array(record_batch.column(column_index_of_seq_in_index));
+                        let column_of_seq_in_index: &Int64Array = as_primitive_array(record_batch.column(column_index_of_seq_in_index));
                         let column_of_column_name: &StringArray = as_string_array(record_batch.column(column_index_of_column_name));
 
                         for row_index in 0..record_batch.num_rows() {
@@ -670,6 +677,9 @@ pub fn read_information_schema_columns(global_context: Arc<Mutex<GlobalContext>>
     let column_index_of_ordinal_position = projection_schema.index_of(meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_COLUMNS_ORDINAL_POSITION).unwrap();
     let column_index_of_is_nullable = projection_schema.index_of(meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_COLUMNS_IS_NULLABLE).unwrap();
     let column_index_of_data_type = projection_schema.index_of(meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_COLUMNS_DATA_TYPE).unwrap();
+    let column_index_of_character_maximum_length = projection_schema.index_of(meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_COLUMNS_CHARACTER_MAXIMUM_LENGTH).unwrap();
+    let column_index_of_numeric_precision = projection_schema.index_of(meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_COLUMNS_NUMERIC_PRECISION).unwrap();
+    let column_index_of_numeric_scale = projection_schema.index_of(meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_COLUMNS_NUMERIC_SCALE).unwrap();
 
     let mut schema_column: HashMap<ObjectName, Vec<SparrowColumnDef>> = HashMap::new();
     loop {
@@ -680,10 +690,13 @@ pub fn read_information_schema_columns(global_context: Arc<Mutex<GlobalContext>>
                         let column_of_db_name: &StringArray = as_string_array(record_batch.column(column_index_of_db_name));
                         let column_of_table_name: &StringArray = as_string_array(record_batch.column(column_index_of_table_name));
                         let column_of_column_name: &StringArray = as_string_array(record_batch.column(column_index_of_column_name));
-                        let store_id_row: &Int32Array = as_primitive_array(record_batch.column(projection_index_of_store_id));
-                        let column_of_ordinal_position: &Int32Array = as_primitive_array(record_batch.column(column_index_of_ordinal_position));
+                        let store_id_row: &Int64Array = as_primitive_array(record_batch.column(projection_index_of_store_id));
+                        let column_of_ordinal_position: &Int64Array = as_primitive_array(record_batch.column(column_index_of_ordinal_position));
                         let column_of_is_nullable: &StringArray = as_string_array(record_batch.column(column_index_of_is_nullable));
                         let column_of_data_type: &StringArray = as_string_array(record_batch.column(column_index_of_data_type));
+                        let column_of_character_maximum_length: &Int64Array = as_primitive_array(record_batch.column(column_index_of_character_maximum_length));
+                        let column_of_numeric_precision: &Int64Array = as_primitive_array(record_batch.column(column_index_of_numeric_precision));
+                        let column_of_numeric_scale: &Int64Array = as_primitive_array(record_batch.column(column_index_of_numeric_scale));
 
                         for row_index in 0..record_batch.num_rows() {
                             let db_name = column_of_db_name.value(row_index).to_string();
@@ -693,10 +706,13 @@ pub fn read_information_schema_columns(global_context: Arc<Mutex<GlobalContext>>
                             let ordinal_position = column_of_ordinal_position.value(row_index);
                             let is_nullable = column_of_is_nullable.value(row_index).to_string();
                             let data_type = column_of_data_type.value(row_index).to_string();
+                            let character_maximum_length = column_of_character_maximum_length.value(row_index);
+                            let numeric_precision = column_of_numeric_precision.value(row_index);
+                            let numeric_scale = column_of_numeric_scale.value(row_index);
 
                             let full_table_name = meta_util::create_full_table_name(meta_const::CATALOG_NAME, db_name.as_str(), table_name.as_str());
 
-                            let sql_data_type = meta_util::text_to_sql_data_type(data_type.as_str()).unwrap();
+                            let sql_data_type = meta_util::create_sql_data_type(data_type.as_str(), character_maximum_length, numeric_precision, numeric_scale).unwrap();
                             let nullable = meta_util::text_to_null(is_nullable.as_str()).unwrap();
 
                             let sql_column = meta_util::create_sql_column(column_name.as_str(), sql_data_type, nullable);
@@ -833,13 +849,13 @@ pub fn add_def_mysql_users(global_context: Arc<Mutex<GlobalContext>>) -> MysqlRe
     // x509_subject
     column_value_map.insert("x509_subject".to_ident(), ScalarValue::Utf8(None));
     // max_questions
-    column_value_map.insert("max_questions".to_ident(), ScalarValue::UInt64(Some(0)));
+    column_value_map.insert("max_questions".to_ident(), ScalarValue::Int64(Some(0)));
     // max_updates
-    column_value_map.insert("max_updates".to_ident(), ScalarValue::UInt64(Some(0)));
+    column_value_map.insert("max_updates".to_ident(), ScalarValue::Int64(Some(0)));
     // max_connections
-    column_value_map.insert("max_connections".to_ident(), ScalarValue::UInt64(Some(0)));
+    column_value_map.insert("max_connections".to_ident(), ScalarValue::Int64(Some(0)));
     // max_user_connections
-    column_value_map.insert("max_user_connections".to_ident(), ScalarValue::UInt64(Some(0)));
+    column_value_map.insert("max_user_connections".to_ident(), ScalarValue::Int64(Some(0)));
     // plugin
     column_value_map.insert("plugin".to_ident(), ScalarValue::Utf8(Some("mysql_native_password".to_string())));
     // authentication_string

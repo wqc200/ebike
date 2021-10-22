@@ -24,13 +24,6 @@ impl ResponsePayload {
                         self.dump_length_encoded_null()
                     }
                 }
-                ScalarValue::Int32(item) => {
-                    if let Some(value) = item {
-                        self.dump_length_encoded_string(value.to_string().as_ref());
-                    } else {
-                        self.dump_length_encoded_null()
-                    }
-                }
                 ScalarValue::Int64(item) => {
                     if let Some(value) = item {
                         self.dump_length_encoded_string(value.to_string().as_ref());
@@ -38,7 +31,7 @@ impl ResponsePayload {
                         self.dump_length_encoded_null()
                     }
                 }
-                ScalarValue::UInt64(item) => {
+                ScalarValue::Float64(item) => {
                     if let Some(value) = item {
                         self.dump_length_encoded_string(value.to_string().as_ref());
                     } else {

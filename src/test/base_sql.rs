@@ -53,7 +53,7 @@ mod tests {
         assert_eq!(1, count);
 
         let result = core_execution
-            .execute_query("create table user (id int, name varchar, PRIMARY KEY(id, name))")
+            .execute_query("create table user (id int, name text, PRIMARY KEY(id, name))")
             .await?;
         let mut count = 0;
         match result {
@@ -63,7 +63,7 @@ mod tests {
         assert_eq!(1, count);
 
         let result = core_execution
-            .execute_query("create table user1 (id int, name varchar, PRIMARY KEY(id, name))")
+            .execute_query("create table user1 (id int, name text, PRIMARY KEY(id, name))")
             .await?;
         let mut count = 0;
         match result {
@@ -112,7 +112,7 @@ mod tests {
         assert_eq!(1, count);
 
         let result = core_execution
-            .execute_query("create table user (id int, name varchar, PRIMARY KEY(id, name))")
+            .execute_query("create table user (id int, name text, PRIMARY KEY(id, name))")
             .await?;
         let mut count = 0;
         match result {
@@ -170,7 +170,7 @@ mod tests {
         assert_eq!(1, count);
 
         let result = core_execution
-            .execute_query("create table user (id int, name varchar, PRIMARY KEY(id, name))")
+            .execute_query("create table user (id int, name text, PRIMARY KEY(id, name))")
             .await?;
         let mut count = 0;
         match result {

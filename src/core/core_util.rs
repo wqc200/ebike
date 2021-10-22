@@ -2,7 +2,7 @@ use std::collections::{HashMap};
 use std::sync::Arc;
 use std::sync::Mutex;
 
-use arrow::array::{Array, as_primitive_array, as_string_array};
+use arrow::array::{Array, as_primitive_array, as_string_array, Float64Array};
 use arrow::array::{
     Int32Array,
     Int64Array,
@@ -146,24 +146,6 @@ pub fn convert_record_to_scalar_value(record_batch: RecordBatch) -> Vec<Vec<Scal
                     }
                 }
             }
-            DataType::Int32 => {
-                let column: &Int32Array = as_primitive_array(record_batch.column(column_index));
-
-                for row_index in 0..record_batch.num_rows() {
-                    let mut value = None;
-                    if !column.is_null(row_index) {
-                        value = Some(column.value(row_index));
-                    }
-
-                    if let Some(row) = rows.get_mut(row_index) {
-                        row.insert(column_index, ScalarValue::Int32(value));
-                    } else {
-                        let mut row = vec![];
-                        row.insert(column_index, ScalarValue::Int32(value));
-                        rows.insert(row_index, row);
-                    }
-                }
-            }
             DataType::Int64 => {
                 let column: &Int64Array = as_primitive_array(record_batch.column(column_index));
 
@@ -182,8 +164,8 @@ pub fn convert_record_to_scalar_value(record_batch: RecordBatch) -> Vec<Vec<Scal
                     }
                 }
             }
-            DataType::UInt64 => {
-                let column: &UInt64Array = as_primitive_array(record_batch.column(column_index));
+            DataType::Float64 => {
+                let column: &Float64Array = as_primitive_array(record_batch.column(column_index));
 
                 for row_index in 0..record_batch.num_rows() {
                     let mut value = None;
@@ -192,10 +174,10 @@ pub fn convert_record_to_scalar_value(record_batch: RecordBatch) -> Vec<Vec<Scal
                     }
 
                     if let Some(row) = rows.get_mut(row_index) {
-                        row.insert(column_index, ScalarValue::UInt64(value));
+                        row.insert(column_index, ScalarValue::Float64(value));
                     } else {
                         let mut row = vec![];
-                        row.insert(column_index, ScalarValue::UInt64(value));
+                        row.insert(column_index, ScalarValue::Float64(value));
                         rows.insert(row_index, row);
                     }
                 }
@@ -505,13 +487,6 @@ pub fn get_real_value(expr: Expr) -> Result<Option<String>> {
 
 pub fn convert_scalar_value(scalar_value: ScalarValue) -> MysqlResult<Option<String>> {
     match scalar_value {
-        ScalarValue::Int32(limit) => {
-            if let Some(value) = limit {
-                Ok(Some(value.to_string()))
-            } else {
-                Ok(None)
-            }
-        }
         ScalarValue::Int64(limit) => {
             if let Some(value) = limit {
                 Ok(Some(value.to_string()))
@@ -519,7 +494,7 @@ pub fn convert_scalar_value(scalar_value: ScalarValue) -> MysqlResult<Option<Str
                 Ok(None)
             }
         }
-        ScalarValue::UInt64(limit) => {
+        ScalarValue::Float64(limit) => {
             if let Some(value) = limit {
                 Ok(Some(value.to_string()))
             } else {
@@ -609,7 +584,7 @@ pub fn build_find_table_sqlwhere(catalog_name: &str, schema_name: &str, table_na
     selection
 }
 
-pub fn build_find_column_ordinal_position_sqlwhere(catalog_name: &str, schema_name: &str, table_name: &str, ordinal_position: i32) -> SQLExpr {
+pub fn build_find_column_ordinal_position_sqlwhere(catalog_name: &str, schema_name: &str, table_name: &str, ordinal_position: i64) -> SQLExpr {
     let selection_catalog = SQLExpr::BinaryOp {
         left: Box::new(SQLExpr::Identifier(Ident::new(meta_const::COLUMN_INFORMATION_SCHEMA_TABLE_CATALOG))),
         op: BinaryOperator::Eq,

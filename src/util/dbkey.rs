@@ -89,7 +89,7 @@ pub fn create_column_rowid_key(full_table_name: ObjectName, uuid: &str) -> Strin
     k
 }
 
-pub fn create_column_key(full_table_name: ObjectName, orm_id: i32, uuid: &str) -> String {
+pub fn create_column_key(full_table_name: ObjectName, orm_id: i64, uuid: &str) -> String {
     let mut k = String::from("/Table/index/column");
 
     k.push_str("/");
