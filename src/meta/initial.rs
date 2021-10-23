@@ -421,7 +421,7 @@ pub fn add_information_schema_columns(global_context: Arc<Mutex<GlobalContext>>,
         // COLUMN_KEY
         column_value_map.insert("COLUMN_KEY".to_ident(), ScalarValue::Utf8(Some(column_key)));
         // EXTRA
-        column_value_map.insert("EXTRA".to_ident(), ScalarValue::Utf8(Some("".to_string())));
+        column_value_map.insert("EXTRA".to_ident(), ScalarValue::Utf8(Some("aaa".to_string())));
         // PRIVILEGES
         column_value_map.insert("PRIVILEGES".to_ident(), ScalarValue::Utf8(None));
         // COLUMN_COMMENT
