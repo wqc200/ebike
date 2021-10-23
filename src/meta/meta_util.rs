@@ -443,48 +443,14 @@ pub fn text_to_null(is_nullable: &str) -> Result<ColumnOption> {
     }
 }
 
-pub fn text_to_sql_data_type(text: &str) -> Result<SQLDataType> {
-    match text {
-        meta_const::MYSQL_DATA_TYPE_SMALLINT => Ok(SQLDataType::SmallInt(Some(11))),
-        meta_const::MYSQL_DATA_TYPE_INT => Ok(SQLDataType::Int(Some(11))),
-        meta_const::MYSQL_DATA_TYPE_BIGINT => Ok(SQLDataType::BigInt(Some(11))),
-        meta_const::MYSQL_DATA_TYPE_DECIMAL => {
-            let numeric_precision = Some(10);
-            let numeric_scale = Some(2);
-            Ok(SQLDataType::Decimal(numeric_precision, numeric_scale))
-        }
-        meta_const::MYSQL_DATA_TYPE_CHAR => {
-            let character_maximum_length = Some(255);
-            Ok(SQLDataType::Char(character_maximum_length))
-        }
-        meta_const::MYSQL_DATA_TYPE_VARCHAR => {
-            let character_maximum_length = Some(255);
-            Ok(SQLDataType::Varchar(character_maximum_length))
-        }
-        meta_const::MYSQL_DATA_TYPE_ENUM => {
-            let character_maximum_length = Some(255);
-            Ok(SQLDataType::Varchar(character_maximum_length))
-        }
-        _ => Err(DataFusionError::Execution(format!(
-            "Unsupported data type: {:?}.",
-            text
-        ))),
-    }
-}
-
-pub fn create_sql_data_type(
-    text_data_type: &str,
-    character_maximum_length: i64,
-    numeric_precision: i64,
-    numeric_scale: i64,
-) -> Result<SQLDataType> {
-    match text_data_type {
+pub fn create_sql_data_type(data_type: &str) -> Result<SQLDataType> {
+    match data_type {
         meta_const::MYSQL_DATA_TYPE_INT => Ok(SQLDataType::Int(None)),
         meta_const::MYSQL_DATA_TYPE_FLOAT => Ok(SQLDataType::Float(None)),
         meta_const::MYSQL_DATA_TYPE_TEXT => Ok(SQLDataType::Text),
         _ => Err(DataFusionError::Execution(format!(
             "Unsupported text data type: {:?}.",
-            text_data_type
+            data_type
         ))),
     }
 }
@@ -563,7 +529,7 @@ pub fn get_character_maximum_length(sql_type: &SQLDataType) -> ScalarValue {
 
 pub fn get_character_octed_length(sql_type: &SQLDataType) -> ScalarValue {
     match sql_type {
-        SQLDataType::Text=> ScalarValue::Int64(Some(65535)),
+        SQLDataType::Text => ScalarValue::Int64(Some(65535)),
         _ => ScalarValue::Utf8(None),
     }
 }

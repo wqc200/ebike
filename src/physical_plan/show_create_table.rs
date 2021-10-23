@@ -48,8 +48,8 @@ impl ShowCreateTable {
             let column_name = scalar_value::to_utf8(value.clone()).unwrap();
             // data type
             let value = row.get(column_index_of_data_type).unwrap();
-            let text_data_type = scalar_value::to_utf8(value.clone()).unwrap();
-            let sql_data_type = meta_util::text_to_sql_data_type(text_data_type.as_str()).unwrap();
+            let data_type = scalar_value::to_utf8(value.clone()).unwrap();
+            let sql_data_type = meta_util::create_sql_data_type(data_type.as_str()).unwrap();
             // nullable
             let value = row.get(column_index_of_is_nullable).unwrap();
             let text_is_nullable = scalar_value::to_utf8(value.clone()).unwrap();

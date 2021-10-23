@@ -712,7 +712,7 @@ pub fn read_information_schema_columns(global_context: Arc<Mutex<GlobalContext>>
 
                             let full_table_name = meta_util::create_full_table_name(meta_const::CATALOG_NAME, db_name.as_str(), table_name.as_str());
 
-                            let sql_data_type = meta_util::create_sql_data_type(data_type.as_str(), character_maximum_length, numeric_precision, numeric_scale).unwrap();
+                            let sql_data_type = meta_util::create_sql_data_type(data_type.as_str()).unwrap();
                             let nullable = meta_util::text_to_null(is_nullable.as_str()).unwrap();
 
                             let sql_column = meta_util::create_sql_column(column_name.as_str(), sql_data_type, nullable);
