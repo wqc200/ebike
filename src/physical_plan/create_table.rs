@@ -65,11 +65,6 @@ impl CreateTable {
             table_option.with_engine(mutex_guard_global_context.my_config.server.engines.first().unwrap())
         }
 
-        let result = initial::add_information_schema_tables(self.global_context.clone(), table_option.clone());
-        if let Err(e) = result {
-            return Err(e);
-        }
-
         let result = initial::add_information_schema_columns(self.global_context.clone(), table_option.clone(), sparrow_column_list);
         if let Err(e) = result {
             return Err(e);
@@ -78,6 +73,11 @@ impl CreateTable {
         let result = meta_util::save_table_constraint(self.global_context.clone(), table_option.clone(), self.constraints.clone());
         if let Err(mysql_error) = result {
             return Err(mysql_error);
+        }
+
+        let result = initial::add_information_schema_tables(self.global_context.clone(), table_option.clone());
+        if let Err(e) = result {
+            return Err(e);
         }
 
         let result = load_all_table(self.global_context.clone());
