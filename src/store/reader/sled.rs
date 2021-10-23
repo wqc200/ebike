@@ -206,96 +206,110 @@ impl Iterator for SledReader {
                         sparrow_column.store_id,
                         rowid.as_str(),
                     );
-                    let db_value = sled_db.get(db_key.clone());
+                    let result = sled_db.get(db_key.clone());
 
-                    match db_value {
-                        Ok(value) => match value {
-                            Some(value) => match sql_data_type {
-                                SQLDataType::Text => match std::str::from_utf8(value.as_ref()) {
-                                    Ok(value) => {
-                                        let result = struct_builder
-                                            .field_builder::<StringBuilder>(i)
-                                            .unwrap()
-                                            .append_value(value);
-                                        if let Err(e) = result {
-                                            return Some(Err(e));
-                                        }
-                                    }
-                                    Err(error) => {
-                                        return Some(Err(ArrowError::CastError(format!(
-                                            "Error parsing '{:?}' as utf8: {:?}",
-                                            value, error
-                                        ))));
-                                    }
-                                },
-                                SQLDataType::Int(_) => {
-                                    let value = lexical::parse::<i64, _>(value.as_bytes()).unwrap();
-                                    let result = struct_builder
-                                        .field_builder::<Int64Builder>(i)
-                                        .unwrap()
-                                        .append_value(value);
-                                    if let Err(e) = result {
-                                        return Some(Err(e));
-                                    }
+                    let mut db_value;
+                    match result {
+                        Ok(get_value) => match get_value {
+                            Some(store_value) => {
+                                let bytes = store_value.as_ref().to_vec();
+                                // value is null
+                                if bytes.len() == 1 && bytes[0] == 0x00 {
+                                    db_value = None;
+                                } else {
+                                    db_value = Some(bytes)
                                 }
-                                SQLDataType::Float(_) => {
-                                    let value = lexical::parse::<f64, _>(value.as_bytes()).unwrap();
-                                    let result = struct_builder
-                                        .field_builder::<Float64Builder>(i)
-                                        .unwrap()
-                                        .append_value(value);
-                                    if let Err(e) = result {
-                                        return Some(Err(e));
-                                    }
-                                }
-                                _ => {
-                                    return Some(Err(ArrowError::CastError(format!(
-                                        "Unsupported sql data type: {:?}",
-                                        sql_data_type,
-                                    ))));
-                                }
-                            },
-                            None => match sql_data_type {
-                                SQLDataType::Text => {
-                                    let result = struct_builder
-                                        .field_builder::<StringBuilder>(i)
-                                        .unwrap()
-                                        .append_null();
-                                    if let Err(e) = result {
-                                        return Some(Err(e));
-                                    }
-                                }
-                                SQLDataType::Int(_) => {
-                                    let result = struct_builder
-                                        .field_builder::<Int64Builder>(i)
-                                        .unwrap()
-                                        .append_null();
-                                    if let Err(e) = result {
-                                        return Some(Err(e));
-                                    }
-                                }
-                                SQLDataType::Float(_) => {
-                                    let result = struct_builder
-                                        .field_builder::<Float64Builder>(i)
-                                        .unwrap()
-                                        .append_null();
-                                    if let Err(e) = result {
-                                        return Some(Err(e));
-                                    }
-                                }
-                                _ => {
-                                    return Some(Err(ArrowError::CastError(format!(
-                                        "Unsupported sql data type: {:?}",
-                                        sql_data_type,
-                                    ))));
-                                }
-                            },
+                            }
+                            None => db_value = None
                         },
                         Err(error) => {
                             return Some(Err(ArrowError::IoError(format!(
                                 "Error get key from sled, key: {:?}, error: {:?}",
                                 db_key, error
                             ))));
+                        }
+                    }
+
+                    match db_value {
+                        Some(value) => match sql_data_type {
+                            SQLDataType::Text => match std::str::from_utf8(value.as_ref()) {
+                                Ok(value) => {
+                                    let result = struct_builder
+                                        .field_builder::<StringBuilder>(i)
+                                        .unwrap()
+                                        .append_value(value);
+                                    if let Err(e) = result {
+                                        return Some(Err(e));
+                                    }
+                                }
+                                Err(error) => {
+                                    return Some(Err(ArrowError::CastError(format!(
+                                        "Error parsing '{:?}' as utf8: {:?}",
+                                        value, error
+                                    ))));
+                                }
+                            },
+                            SQLDataType::Int(_) => {
+                                let value = lexical::parse::<i64, _>(value.as_bytes()).unwrap();
+                                let result = struct_builder
+                                    .field_builder::<Int64Builder>(i)
+                                    .unwrap()
+                                    .append_value(value);
+                                if let Err(e) = result {
+                                    return Some(Err(e));
+                                }
+                            }
+                            SQLDataType::Float(_) => {
+                                let value = lexical::parse::<f64, _>(value.as_bytes()).unwrap();
+                                let result = struct_builder
+                                    .field_builder::<Float64Builder>(i)
+                                    .unwrap()
+                                    .append_value(value);
+                                if let Err(e) = result {
+                                    return Some(Err(e));
+                                }
+                            }
+                            _ => {
+                                return Some(Err(ArrowError::CastError(format!(
+                                    "Unsupported sql data type: {:?}",
+                                    sql_data_type,
+                                ))));
+                            }
+                        }
+                        None => match sql_data_type {
+                            SQLDataType::Text => {
+                                let result = struct_builder
+                                    .field_builder::<StringBuilder>(i)
+                                    .unwrap()
+                                    .append_null();
+                                if let Err(e) = result {
+                                    return Some(Err(e));
+                                }
+                            }
+                            SQLDataType::Int(_) => {
+                                let result = struct_builder
+                                    .field_builder::<Int64Builder>(i)
+                                    .unwrap()
+                                    .append_null();
+                                if let Err(e) = result {
+                                    return Some(Err(e));
+                                }
+                            }
+                            SQLDataType::Float(_) => {
+                                let result = struct_builder
+                                    .field_builder::<Float64Builder>(i)
+                                    .unwrap()
+                                    .append_null();
+                                if let Err(e) = result {
+                                    return Some(Err(e));
+                                }
+                            }
+                            _ => {
+                                return Some(Err(ArrowError::CastError(format!(
+                                    "Unsupported sql data type: {:?}",
+                                    sql_data_type,
+                                ))));
+                            }
                         }
                     }
                 }

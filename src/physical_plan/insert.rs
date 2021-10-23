@@ -1,3 +1,4 @@
+use bytes::{Bytes, Buf};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
@@ -90,11 +91,17 @@ impl PhysicalPlanInsert {
                 log::debug!("column_key: {:?}", column_key);
                 let result = core_util::convert_scalar_value(column_value.clone()).unwrap();
                 log::debug!("column_value: {:?}", result);
-                if let Some(value) = result {
-                    let result = store_engine.put_key(column_key, value.as_bytes());
-                    if let Err(e) = result {
-                        return Err(e);
-                    }
+
+                let mut payload: Vec<u8> = Vec::new();
+                match result {
+                    None => payload.push(0x00),
+                    Some(v) => payload.extend_from_slice(v.as_bytes()),
+                }
+                let mem = Bytes::from(payload);
+
+                let result = store_engine.put_key(column_key, mem.bytes());
+                if let Err(e) = result {
+                    return Err(e);
                 }
             }
         }
