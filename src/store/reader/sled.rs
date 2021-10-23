@@ -185,7 +185,7 @@ impl Iterator for SledReader {
             let field = Arc::from(self.projected_schema.field(i).clone());
             let field_name = field.name();
 
-            if field_name.contains(meta_const::COLUMN_ROWID) {
+            if field_name.eq(meta_const::COLUMN_ROWID) {
                 for rowid in rowids.clone() {
                     let result = struct_builder
                         .field_builder::<StringBuilder>(i)
