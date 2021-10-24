@@ -31,6 +31,7 @@ impl ShowCreateTable {
 
     pub fn execute(&self, columns_record: Vec<RecordBatch>, statistics_record: Vec<RecordBatch>, tables_record: Vec<RecordBatch>) -> MysqlResult<(SchemaRef, Vec<RecordBatch>)> {
         let table_name = self.table.option.table_name.clone();
+        let table_constraints = self.table.constraints.clone();
 
         let schema_of_columns = def::information_schema::columns(self.global_context.clone()).to_schema_ref();
 
@@ -68,7 +69,7 @@ impl ShowCreateTable {
             if_not_exists: false,
             name: object_name,
             columns,
-            constraints: vec![],
+            constraints: table_constraints,
             hive_distribution: HiveDistributionStyle::NONE,
             hive_formats: None,
             table_properties: vec![],
