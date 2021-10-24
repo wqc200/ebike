@@ -10,28 +10,28 @@ use crate::meta::meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_COLUMNS_CHARA
 
 pub fn columns(global_context: Arc<Mutex<GlobalContext>>) -> TableDef {
     let sql_column_list = vec![
-        meta_util::create_sql_column(meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_COLUMNS_TABLE_CATALOG, SQLDataType::Text, ColumnOption::NotNull),
-        meta_util::create_sql_column(meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_COLUMNS_TABLE_SCHEMA, SQLDataType::Text, ColumnOption::NotNull),
-        meta_util::create_sql_column(meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_COLUMNS_TABLE_NAME, SQLDataType::Text, ColumnOption::NotNull),
-        meta_util::create_sql_column(meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_COLUMNS_COLUMN_NAME, SQLDataType::Text, ColumnOption::NotNull),
+        meta_util::create_sql_column(meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_COLUMNS_TABLE_CATALOG, SQLDataType::Char(None), ColumnOption::NotNull),
+        meta_util::create_sql_column(meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_COLUMNS_TABLE_SCHEMA, SQLDataType::Char(None), ColumnOption::NotNull),
+        meta_util::create_sql_column(meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_COLUMNS_TABLE_NAME, SQLDataType::Char(None), ColumnOption::NotNull),
+        meta_util::create_sql_column(meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_COLUMNS_COLUMN_NAME, SQLDataType::Char(None), ColumnOption::NotNull),
         meta_util::create_sql_column(meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_COLUMNS_STORE_ID, SQLDataType::Int(None), ColumnOption::NotNull),
         meta_util::create_sql_column(meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_COLUMNS_ORDINAL_POSITION, SQLDataType::Int(None), ColumnOption::NotNull),
-        meta_util::create_sql_column("COLUMN_DEFAULT", SQLDataType::Text, ColumnOption::Null),
-        meta_util::create_sql_column(meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_COLUMNS_IS_NULLABLE, SQLDataType::Text, ColumnOption::NotNull),
-        meta_util::create_sql_column(meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_COLUMNS_DATA_TYPE, SQLDataType::Text, ColumnOption::NotNull),
+        meta_util::create_sql_column("COLUMN_DEFAULT", SQLDataType::Char(None), ColumnOption::Null),
+        meta_util::create_sql_column(meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_COLUMNS_IS_NULLABLE, SQLDataType::Char(None), ColumnOption::NotNull),
+        meta_util::create_sql_column(meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_COLUMNS_DATA_TYPE, SQLDataType::Char(None), ColumnOption::NotNull),
         meta_util::create_sql_column(meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_COLUMNS_CHARACTER_MAXIMUM_LENGTH, SQLDataType::Int(None), ColumnOption::Null),
         meta_util::create_sql_column(meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_COLUMNS_CHARACTER_OCTET_LENGTH, SQLDataType::Int(None), ColumnOption::Null),
         meta_util::create_sql_column(meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_COLUMNS_NUMERIC_PRECISION, SQLDataType::Int(None), ColumnOption::Null),
         meta_util::create_sql_column(meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_COLUMNS_NUMERIC_SCALE, SQLDataType::Int(None), ColumnOption::Null),
         meta_util::create_sql_column("DATETIME_PRECISION", SQLDataType::Int(None), ColumnOption::Null),
-        meta_util::create_sql_column("CHARACTER_SET_NAME", SQLDataType::Text, ColumnOption::Null),
-        meta_util::create_sql_column("COLLATION_NAME", SQLDataType::Text, ColumnOption::Null),
-        meta_util::create_sql_column("COLUMN_TYPE", SQLDataType::Text, ColumnOption::NotNull),
-        meta_util::create_sql_column("COLUMN_KEY", SQLDataType::Text, ColumnOption::NotNull),
-        meta_util::create_sql_column("EXTRA", SQLDataType::Text, ColumnOption::Null),
-        meta_util::create_sql_column("PRIVILEGES", SQLDataType::Text, ColumnOption::Null),
-        meta_util::create_sql_column("COLUMN_COMMENT", SQLDataType::Text, ColumnOption::NotNull),
-        meta_util::create_sql_column("GENERATION_EXPRESSION", SQLDataType::Text, ColumnOption::NotNull),
+        meta_util::create_sql_column("CHARACTER_SET_NAME", SQLDataType::Char(None), ColumnOption::Null),
+        meta_util::create_sql_column("COLLATION_NAME", SQLDataType::Char(None), ColumnOption::Null),
+        meta_util::create_sql_column("COLUMN_TYPE", SQLDataType::Char(None), ColumnOption::NotNull),
+        meta_util::create_sql_column("COLUMN_KEY", SQLDataType::Char(None), ColumnOption::NotNull),
+        meta_util::create_sql_column("EXTRA", SQLDataType::Char(None), ColumnOption::Null),
+        meta_util::create_sql_column("PRIVILEGES", SQLDataType::Char(None), ColumnOption::Null),
+        meta_util::create_sql_column("COLUMN_COMMENT", SQLDataType::Char(None), ColumnOption::NotNull),
+        meta_util::create_sql_column("GENERATION_EXPRESSION", SQLDataType::Char(None), ColumnOption::NotNull),
         meta_util::create_sql_column("SRS_ID", SQLDataType::Int(None), ColumnOption::Null),
     ];
     let constraints = vec![];
@@ -47,11 +47,11 @@ pub fn columns(global_context: Arc<Mutex<GlobalContext>>) -> TableDef {
 
 pub fn tables(global_context: Arc<Mutex<GlobalContext>>) -> TableDef {
     let sql_column_list = vec![
-        meta_util::create_sql_column(meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_TABLES_TABLE_CATALOG, SQLDataType::Text, ColumnOption::NotNull),
-        meta_util::create_sql_column(meta_const::COLUMN_INFORMATION_SCHEMA_TABLE_SCHEMA, SQLDataType::Text, ColumnOption::NotNull),
-        meta_util::create_sql_column(meta_const::COLUMN_INFORMATION_SCHEMA_TABLE_NAME, SQLDataType::Text, ColumnOption::NotNull),
-        meta_util::create_sql_column(meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_TABLES_TABLE_TYPE, SQLDataType::Text, ColumnOption::NotNull),
-        meta_util::create_sql_column(meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_TABLES_ENGINE, SQLDataType::Text, ColumnOption::NotNull),
+        meta_util::create_sql_column(meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_TABLES_TABLE_CATALOG, SQLDataType::Char(None), ColumnOption::NotNull),
+        meta_util::create_sql_column(meta_const::COLUMN_INFORMATION_SCHEMA_TABLE_SCHEMA, SQLDataType::Char(None), ColumnOption::NotNull),
+        meta_util::create_sql_column(meta_const::COLUMN_INFORMATION_SCHEMA_TABLE_NAME, SQLDataType::Char(None), ColumnOption::NotNull),
+        meta_util::create_sql_column(meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_TABLES_TABLE_TYPE, SQLDataType::Char(None), ColumnOption::NotNull),
+        meta_util::create_sql_column(meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_TABLES_ENGINE, SQLDataType::Char(None), ColumnOption::NotNull),
         meta_util::create_sql_column(meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_TABLES_VERSION, SQLDataType::Int(None), ColumnOption::NotNull),
         meta_util::create_sql_column(meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_TABLES_DATA_LENGTH, SQLDataType::Int(None), ColumnOption::NotNull),
         meta_util::create_sql_column(meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_TABLES_INDEX_LENGTH, SQLDataType::Int(None), ColumnOption::NotNull),
@@ -71,12 +71,12 @@ pub fn tables(global_context: Arc<Mutex<GlobalContext>>) -> TableDef {
 
 pub fn schemata(global_context: Arc<Mutex<GlobalContext>>) -> TableDef {
     let sql_column_list = vec![
-        meta_util::create_sql_column(meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_SCHEMATA_CATALOG_NAME, SQLDataType::Text, ColumnOption::NotNull),
-        meta_util::create_sql_column(meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_SCHEMATA_SCHEMA_NAME, SQLDataType::Text, ColumnOption::NotNull),
-        meta_util::create_sql_column(meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_SCHEMATA_DEFAULT_CHARACTER_SET_NAME, SQLDataType::Text, ColumnOption::NotNull),
-        meta_util::create_sql_column(meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_SCHEMATA_DEFAULT_COLLATION_NAME, SQLDataType::Text, ColumnOption::NotNull),
-        meta_util::create_sql_column("SQL_PATH", SQLDataType::Text, ColumnOption::NotNull),
-        meta_util::create_sql_column("DEFAULT_ENCRYPTION", SQLDataType::Text, ColumnOption::NotNull),
+        meta_util::create_sql_column(meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_SCHEMATA_CATALOG_NAME, SQLDataType::Char(None), ColumnOption::NotNull),
+        meta_util::create_sql_column(meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_SCHEMATA_SCHEMA_NAME, SQLDataType::Char(None), ColumnOption::NotNull),
+        meta_util::create_sql_column(meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_SCHEMATA_DEFAULT_CHARACTER_SET_NAME, SQLDataType::Char(None), ColumnOption::NotNull),
+        meta_util::create_sql_column(meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_SCHEMATA_DEFAULT_COLLATION_NAME, SQLDataType::Char(None), ColumnOption::NotNull),
+        meta_util::create_sql_column("SQL_PATH", SQLDataType::Char(None), ColumnOption::NotNull),
+        meta_util::create_sql_column("DEFAULT_ENCRYPTION", SQLDataType::Char(None), ColumnOption::NotNull),
     ];
     let constraints = vec![];
 
@@ -91,13 +91,13 @@ pub fn schemata(global_context: Arc<Mutex<GlobalContext>>) -> TableDef {
 
 pub fn statistics(global_context: Arc<Mutex<GlobalContext>>) -> TableDef {
     let sql_column_list = vec![
-        meta_util::create_sql_column(meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_STATISTICS_TABLE_CATALOG, SQLDataType::Text, ColumnOption::NotNull),
-        meta_util::create_sql_column(meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_STATISTICS_TABLE_SCHEMA, SQLDataType::Text, ColumnOption::NotNull),
-        meta_util::create_sql_column(meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_STATISTICS_TABLE_NAME, SQLDataType::Text, ColumnOption::NotNull),
+        meta_util::create_sql_column(meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_STATISTICS_TABLE_CATALOG, SQLDataType::Char(None), ColumnOption::NotNull),
+        meta_util::create_sql_column(meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_STATISTICS_TABLE_SCHEMA, SQLDataType::Char(None), ColumnOption::NotNull),
+        meta_util::create_sql_column(meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_STATISTICS_TABLE_NAME, SQLDataType::Char(None), ColumnOption::NotNull),
         meta_util::create_sql_column(meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_STATISTICS_NON_UNIQUE, SQLDataType::Int(None), ColumnOption::NotNull),
-        meta_util::create_sql_column(meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_STATISTICS_INDEX_NAME, SQLDataType::Text, ColumnOption::NotNull),
+        meta_util::create_sql_column(meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_STATISTICS_INDEX_NAME, SQLDataType::Char(None), ColumnOption::NotNull),
         meta_util::create_sql_column(meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_STATISTICS_SEQ_IN_INDEX, SQLDataType::Int(None), ColumnOption::NotNull),
-        meta_util::create_sql_column(meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_STATISTICS_COLUMN_NAME, SQLDataType::Text, ColumnOption::NotNull),
+        meta_util::create_sql_column(meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_STATISTICS_COLUMN_NAME, SQLDataType::Char(None), ColumnOption::NotNull),
     ];
     let constraints = vec![];
 
@@ -112,18 +112,18 @@ pub fn statistics(global_context: Arc<Mutex<GlobalContext>>) -> TableDef {
 
 pub fn key_column_usage(global_context: Arc<Mutex<GlobalContext>>) -> TableDef {
     let sql_column_list = vec![
-        meta_util::create_sql_column("constraint_catalog", SQLDataType::Text, ColumnOption::NotNull),
-        meta_util::create_sql_column("constraint_schema", SQLDataType::Text, ColumnOption::NotNull),
-        meta_util::create_sql_column("constraint_name", SQLDataType::Text, ColumnOption::NotNull),
-        meta_util::create_sql_column("table_catalog", SQLDataType::Text, ColumnOption::NotNull),
-        meta_util::create_sql_column("table_schema", SQLDataType::Text, ColumnOption::NotNull),
-        meta_util::create_sql_column("table_name", SQLDataType::Text, ColumnOption::NotNull),
-        meta_util::create_sql_column("column_name", SQLDataType::Text, ColumnOption::NotNull),
+        meta_util::create_sql_column("constraint_catalog", SQLDataType::Char(None), ColumnOption::NotNull),
+        meta_util::create_sql_column("constraint_schema", SQLDataType::Char(None), ColumnOption::NotNull),
+        meta_util::create_sql_column("constraint_name", SQLDataType::Char(None), ColumnOption::NotNull),
+        meta_util::create_sql_column("table_catalog", SQLDataType::Char(None), ColumnOption::NotNull),
+        meta_util::create_sql_column("table_schema", SQLDataType::Char(None), ColumnOption::NotNull),
+        meta_util::create_sql_column("table_name", SQLDataType::Char(None), ColumnOption::NotNull),
+        meta_util::create_sql_column("column_name", SQLDataType::Char(None), ColumnOption::NotNull),
         meta_util::create_sql_column("ordinal_position", SQLDataType::Int(None), ColumnOption::NotNull),
         meta_util::create_sql_column("position_in_unique_constraint", SQLDataType::Int(None), ColumnOption::Null),
-        meta_util::create_sql_column("referenced_table_schema", SQLDataType::Text, ColumnOption::Null),
-        meta_util::create_sql_column("referenced_table_name", SQLDataType::Text, ColumnOption::Null),
-        meta_util::create_sql_column("referenced_column_name", SQLDataType::Text, ColumnOption::Null),
+        meta_util::create_sql_column("referenced_table_schema", SQLDataType::Char(None), ColumnOption::Null),
+        meta_util::create_sql_column("referenced_table_name", SQLDataType::Char(None), ColumnOption::Null),
+        meta_util::create_sql_column("referenced_column_name", SQLDataType::Char(None), ColumnOption::Null),
     ];
     let constraints = vec![];
 
@@ -138,13 +138,13 @@ pub fn key_column_usage(global_context: Arc<Mutex<GlobalContext>>) -> TableDef {
 
 pub fn table_constraints(global_context: Arc<Mutex<GlobalContext>>) -> TableDef {
     let sql_column_list = vec![
-        meta_util::create_sql_column("constraint_catalog", SQLDataType::Text, ColumnOption::NotNull),
-        meta_util::create_sql_column("constraint_schema", SQLDataType::Text, ColumnOption::NotNull),
-        meta_util::create_sql_column("constraint_name", SQLDataType::Text, ColumnOption::NotNull),
-        meta_util::create_sql_column("table_schema", SQLDataType::Text, ColumnOption::NotNull),
-        meta_util::create_sql_column("table_name", SQLDataType::Text, ColumnOption::NotNull),
-        meta_util::create_sql_column("constraint_type", SQLDataType::Text, ColumnOption::NotNull),
-        meta_util::create_sql_column("enforced", SQLDataType::Text, ColumnOption::NotNull),
+        meta_util::create_sql_column("constraint_catalog", SQLDataType::Char(None), ColumnOption::NotNull),
+        meta_util::create_sql_column("constraint_schema", SQLDataType::Char(None), ColumnOption::NotNull),
+        meta_util::create_sql_column("constraint_name", SQLDataType::Char(None), ColumnOption::NotNull),
+        meta_util::create_sql_column("table_schema", SQLDataType::Char(None), ColumnOption::NotNull),
+        meta_util::create_sql_column("table_name", SQLDataType::Char(None), ColumnOption::NotNull),
+        meta_util::create_sql_column("constraint_type", SQLDataType::Char(None), ColumnOption::NotNull),
+        meta_util::create_sql_column("enforced", SQLDataType::Char(None), ColumnOption::NotNull),
     ];
     let constraints = vec![];
 

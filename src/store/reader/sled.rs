@@ -232,7 +232,7 @@ impl Iterator for SledReader {
 
                     match db_value {
                         Some(value) => match sql_data_type {
-                            SQLDataType::Text => match std::str::from_utf8(value.as_ref()) {
+                            SQLDataType::Char(_) => match std::str::from_utf8(value.as_ref()) {
                                 Ok(value) => {
                                     let result = struct_builder
                                         .field_builder::<StringBuilder>(i)
@@ -277,7 +277,7 @@ impl Iterator for SledReader {
                             }
                         }
                         None => match sql_data_type {
-                            SQLDataType::Text => {
+                            SQLDataType::Char(_) => {
                                 let result = struct_builder
                                     .field_builder::<StringBuilder>(i)
                                     .unwrap()

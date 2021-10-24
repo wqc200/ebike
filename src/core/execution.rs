@@ -1042,8 +1042,16 @@ impl Execution {
                             .to_object_name(),
                         Some(selection.clone()),
                     );
+                    // order by
+                    let order_by = OrderByExpr {
+                        expr: SQLExpr::Identifier(Ident::new(meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_COLUMNS_ORDINAL_POSITION)),
+                        asc: None,
+                        nulls_first: None,
+                    };
+                    // create logical plan
                     let logical_plan =
                         query_planner.select_to_plan(&select, &mut Default::default())?;
+                    let logical_plan = query_planner.order_by(logical_plan, &[order_by])?;
                     let select_from_columns = CoreSelectFrom::new(
                         meta_const::FULL_TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_COLUMNS,
                         logical_plan,

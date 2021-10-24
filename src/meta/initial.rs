@@ -373,7 +373,7 @@ pub fn add_information_schema_columns(global_context: Arc<Mutex<GlobalContext>>,
         let numeric_precision = meta_util::get_numeric_precision(&sparrow_column.sql_column.data_type);
         let numeric_scale = meta_util::get_numeric_scale(&sparrow_column.sql_column.data_type);
         let character_maximum_length = meta_util::get_character_maximum_length(&sparrow_column.sql_column.data_type);
-        let character_octed_length = meta_util::get_character_octed_length(&sparrow_column.sql_column.data_type);
+        let character_octed_length = meta_util::get_character_octed_length();
 
         let allow_null = sparrow_column.sql_column.options.clone()
             .iter()

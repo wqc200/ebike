@@ -447,7 +447,7 @@ pub fn create_sql_data_type(data_type: &str) -> Result<SQLDataType> {
     match data_type {
         meta_const::MYSQL_DATA_TYPE_INT => Ok(SQLDataType::Int(None)),
         meta_const::MYSQL_DATA_TYPE_FLOAT => Ok(SQLDataType::Float(None)),
-        meta_const::MYSQL_DATA_TYPE_TEXT => Ok(SQLDataType::Text),
+        meta_const::MYSQL_DATA_TYPE_CHAR => Ok(SQLDataType::Char(None)),
         _ => Err(DataFusionError::Execution(format!(
             "Unsupported text data type: {:?}.",
             data_type
@@ -496,7 +496,7 @@ pub fn convert_sql_data_type(sql_type: &SQLDataType) -> MysqlResult<String> {
     match sql_type {
         SQLDataType::Int(_) => Ok(meta_const::MYSQL_DATA_TYPE_INT.to_string()),
         SQLDataType::Float(_) => Ok(meta_const::MYSQL_DATA_TYPE_FLOAT.to_string()),
-        SQLDataType::Text => Ok(meta_const::MYSQL_DATA_TYPE_TEXT.to_string()),
+        SQLDataType::Char(_) => Ok(meta_const::MYSQL_DATA_TYPE_CHAR.to_string()),
         _ => Err(MysqlError::new_global_error(
             meta_const::MYSQL_ERROR_CODE_UNKNOWN_ERROR,
             format!("Unsupported convert sql data type: {:?} to text.", sql_type).as_str(),
@@ -506,7 +506,7 @@ pub fn convert_sql_data_type(sql_type: &SQLDataType) -> MysqlResult<String> {
 
 pub fn get_numeric_precision(sql_type: &SQLDataType) -> ScalarValue {
     match sql_type {
-        SQLDataType::Int(_) => ScalarValue::Int64(Some(10)),
+        SQLDataType::Int(_) => ScalarValue::Int64(Some(19)),
         SQLDataType::Float(_) => ScalarValue::Int64(Some(12)),
         _ => ScalarValue::Utf8(None),
     }
@@ -522,23 +522,20 @@ pub fn get_numeric_scale(sql_type: &SQLDataType) -> ScalarValue {
 
 pub fn get_character_maximum_length(sql_type: &SQLDataType) -> ScalarValue {
     match sql_type {
-        SQLDataType::Text => ScalarValue::Int64(Some(65535)),
+        SQLDataType::Char(_) => ScalarValue::Int64(Some(4294967295)),
         _ => ScalarValue::Utf8(None),
     }
 }
 
-pub fn get_character_octed_length(sql_type: &SQLDataType) -> ScalarValue {
-    match sql_type {
-        SQLDataType::Text => ScalarValue::Int64(Some(65535)),
-        _ => ScalarValue::Utf8(None),
-    }
+pub fn get_character_octed_length() -> ScalarValue {
+    ScalarValue::Utf8(None)
 }
 
 pub fn convert_sql_data_type_to_arrow_data_type(sql_type: &SQLDataType) -> MysqlResult<DataType> {
     match sql_type {
         SQLDataType::Int(_) => Ok(DataType::Int64),
         SQLDataType::Float(_) => Ok(DataType::Float64),
-        SQLDataType::Text => Ok(DataType::Utf8),
+        SQLDataType::Char(_) => Ok(DataType::Utf8),
         _ => Err(MysqlError::new_global_error(
             meta_const::MYSQL_ERROR_CODE_UNKNOWN_ERROR,
             format!(

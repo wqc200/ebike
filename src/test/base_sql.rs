@@ -53,7 +53,7 @@ mod tests {
         assert_eq!(1, count);
 
         let result = core_execution
-            .execute_query("create table user (id int, name text, PRIMARY KEY(id, name))")
+            .execute_query("create table user (id int, name char, PRIMARY KEY(id, name))")
             .await?;
         let mut count = 0;
         match result {
@@ -63,7 +63,7 @@ mod tests {
         assert_eq!(1, count);
 
         let result = core_execution
-            .execute_query("create table user1 (id int, name text, PRIMARY KEY(id, name))")
+            .execute_query("create table user1 (id int, name char, PRIMARY KEY(id, name))")
             .await?;
         let mut count = 0;
         match result {
@@ -112,7 +112,7 @@ mod tests {
         assert_eq!(1, count);
 
         let result = core_execution
-            .execute_query("create table user (id int, name text, PRIMARY KEY(id, name))")
+            .execute_query("create table user (id int, name char, PRIMARY KEY(id, name))")
             .await?;
         let mut count = 0;
         match result {
@@ -170,7 +170,7 @@ mod tests {
         assert_eq!(1, count);
 
         let result = core_execution
-            .execute_query("create table user (id int, name text, PRIMARY KEY(id, name))")
+            .execute_query("create table user (id int, name char, PRIMARY KEY(id, name))")
             .await?;
         let mut count = 0;
         match result {
@@ -226,6 +226,54 @@ mod tests {
             "+-----------------+",
             "| 0               |",
             "+-----------------+",
+        ];
+        assert_batches_eq!(expected, &results);
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn show_create_table() -> MysqlResult<()> {
+        let mut core_execution = create_execution().await?;
+
+        let result = core_execution.execute_query("create schema test").await?;
+        let mut count = 0;
+        match result {
+            CoreOutput::FinalCount(f) => count = f.affect_rows,
+            _ => {}
+        }
+        assert_eq!(1, count);
+
+        let result = core_execution.set_default_schema("test").await?;
+        let mut count = 0;
+        match result {
+            CoreOutput::FinalCount(f) => count = f.affect_rows,
+            _ => {}
+        }
+        assert_eq!(1, count);
+
+        let result = core_execution
+            .execute_query("create table user (id int, name char, stature float, PRIMARY KEY(id, name))")
+            .await?;
+        let mut count = 0;
+        match result {
+            CoreOutput::FinalCount(f) => count = f.affect_rows,
+            _ => {}
+        }
+        assert_eq!(1, count);
+
+        let result = core_execution.execute_query("show create table user").await?;
+        let mut results: Vec<RecordBatch> = vec![];
+        match result {
+            CoreOutput::ResultSet(_, r) => results = r,
+            _ => {}
+        }
+        let expected = vec![
+            "+-------+---------------------------------------------------------------------------------------------------------------------------------------------+",
+            "| Table | Create Table                                                                                                                                |",
+            "+-------+---------------------------------------------------------------------------------------------------------------------------------------------+",
+            "| user  | CREATE TABLE user (id INT CONSTRAINT nullable NOT NULL, name CHAR CONSTRAINT nullable NOT NULL, stature FLOAT CONSTRAINT nullable NOT NULL) |",
+            "+-------+---------------------------------------------------------------------------------------------------------------------------------------------+",
         ];
         assert_batches_eq!(expected, &results);
 
