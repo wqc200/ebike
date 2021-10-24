@@ -29,7 +29,7 @@ mysql -uroot -h127.0.0.1 -P3307 -p
 ## Support column data type
 1. int
 2. float
-3. text
+3. char
 ```shell
-create table user (id int not null, name text, stature float);
+create table user (id int not null, name char, stature float);
 ```
