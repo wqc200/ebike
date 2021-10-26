@@ -16,8 +16,8 @@ use datafusion::physical_plan::functions::make_scalar_function;
 use datafusion::sql::parser::{DFParser, Statement};
 use datafusion::sql::planner::{ContextProvider, SqlToRel};
 use datafusion::variable::VarType;
-use sqlparser::ast::{AlterTableOperation, ObjectName, ObjectType, Statement as SQLStatement, Query};
 use sqlparser::ast::{
+    AlterTableOperation, ObjectName, ObjectType, Statement as SQLStatement, Query, Assignment,
     BinaryOperator, Expr as SQLExpr, JoinConstraint, JoinOperator, Select, SelectItem, SetExpr,
     TableFactor, Value,
 };
@@ -47,6 +47,7 @@ use crate::variable::user_defined::UserDefinedVar;
 use crate::execute::drop_column::DropColumn;
 use crate::execute::select_from::SelectFrom;
 use crate::execute::delete_record::DeleteRecord;
+use crate::execute::update_record::UpdateRecord;
 
 /// Execution context for registering data sources and executing queries
 pub struct Execution {
@@ -1625,27 +1626,61 @@ impl Execution {
             table.option.table_name.as_str(),
             ordinal_position,
         );
-        let select = core_util::build_update_sqlselect(
-            meta_util::convert_to_object_name(
-                meta_const::FULL_TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_COLUMNS,
-            ),
-            assignments.clone(),
-            Some(selection),
-        );
-        let logical_plan =
-            query_planner.select_to_plan(&select, &mut Default::default())?;
-        let select_from_columns_for_update = CoreSelectFromWithAssignment::new(
-            meta_const::FULL_TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_COLUMNS,
-            assignments,
-            logical_plan,
-        );
+        let result = self.update_set(meta_util::create_full_table_name(
+            meta_const::CATALOG_NAME,
+            meta_const::SCHEMA_NAME_OF_DEF_INFORMATION_SCHEMA,
+            meta_const::TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_COLUMNS,
+        ), assignments.clone(), Some(selection)).unwrap();
 
-        Ok(CoreLogicalPlan::AlterTableDropColumn {
-            table,
-            operation,
-            delete_columns: select_from_columns_for_delete,
-            update_columns: select_from_columns_for_update,
-        })
+        
+    }
+
+    pub fn update_set(&mut self, table_name: ObjectName, assignments: Vec<Assignment>, selection: Option<SQLExpr>) -> MysqlResult<u64> {
+        let full_table_name =
+            meta_util::fill_up_table_name(&mut self.session_context, table_name.clone())
+                .unwrap();
+
+        let table_map = self
+            .global_context
+            .lock()
+            .unwrap()
+            .meta_data
+            .get_table_map();
+        let table = match table_map.get(&full_table_name) {
+            None => {
+                let message = format!("Table '{}' doesn't exist", table_name.to_string());
+                log::error!("{}", message);
+                return Err(MysqlError::new_server_error(
+                    1146,
+                    "42S02",
+                    message.as_str(),
+                ));
+            }
+            Some(table) => table.clone(),
+        };
+
+        let select = core_util::build_update_sqlselect(
+            table_name.clone(),
+            assignments.clone(),
+            selection,
+        );
+        let query = Box::new(Query {
+            with: None,
+            body: SetExpr::Select(select.clone()),
+            order_by: vec![],
+            limit: None,
+            offset: None,
+            fetch: None
+        });
+        let result = self.select_from(&query);
+        match result {
+            Ok((schema_ref, records)) => {
+                let update_record = UpdateRecord::new(self.global_context.clone(), table, assignments.clone());
+                let result = update_record.execute(&mut self.session_context, records);
+                return result;
+            },
+            Err(mysql_error) => Err(mysql_error),
+        }
     }
 
     pub fn delete_from(&mut self, table_name: ObjectName, selection: Option<SQLExpr>) -> MysqlResult<u64> {
