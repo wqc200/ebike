@@ -8,12 +8,12 @@ use crate::core::global_context::GlobalContext;
 
 use crate::mysql::error::{MysqlError, MysqlResult};
 
-pub struct Select {
+pub struct PhysicalPlanSelect {
     core_context: Arc<Mutex<GlobalContext>>,
     execution_plan: Arc<dyn ExecutionPlan>,
 }
 
-impl Select {
+impl PhysicalPlanSelect {
     pub fn new(
         core_context: Arc<Mutex<GlobalContext>>,
         execution_plan: Arc<dyn ExecutionPlan>,

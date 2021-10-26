@@ -30,6 +30,7 @@ pub mod store;
 pub mod util;
 pub mod test;
 pub mod variable;
+pub mod execute;
 
 #[tokio::main]
 async fn main() {

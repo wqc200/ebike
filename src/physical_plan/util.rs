@@ -6,7 +6,7 @@ use crate::physical_plan::delete::PhysicalPlanDelete;
 use crate::physical_plan::drop_db::DropDB;
 use crate::physical_plan::drop_table::PhysicalPlanDropTable;
 use crate::physical_plan::insert::PhysicalPlanInsert;
-use crate::physical_plan::select::Select;
+use crate::physical_plan::select::PhysicalPlanSelect;
 use crate::physical_plan::set_default_schema::SetDefaultSchema;
 use crate::physical_plan::set_variable::SetVariable;
 use crate::physical_plan::show_charset::ShowCharset;
@@ -28,11 +28,11 @@ pub enum CorePhysicalPlan {
     DropDB(DropDB),
     Delete(PhysicalPlanDelete),
     Insert(PhysicalPlanInsert),
-    Select(Select),
+    Select(PhysicalPlanSelect),
     Update(Update),
     SetVariable(SetVariable),
-    ShowCreateTable(ShowCreateTable, Select, Select, Select),
-    ShowColumnsFrom(ShowColumnsFrom, Select, Select),
+    ShowCreateTable(ShowCreateTable, PhysicalPlanSelect, PhysicalPlanSelect, PhysicalPlanSelect),
+    ShowColumnsFrom(ShowColumnsFrom, PhysicalPlanSelect, PhysicalPlanSelect),
     ShowGrants(ShowGrants),
     ShowPrivileges(ShowPrivileges),
     ShowEngines(ShowEngines),
