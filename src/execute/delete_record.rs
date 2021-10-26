@@ -16,49 +16,38 @@ use crate::util;
 use crate::core::session_context::SessionContext;
 use crate::meta::meta_def::TableDef;
 
-pub struct PhysicalPlanDelete {
+pub struct DeleteRecord {
     global_context: Arc<Mutex<GlobalContext>>,
     table: TableDef,
-    execution_plan: Arc<dyn ExecutionPlan>,
 }
 
-impl PhysicalPlanDelete {
+impl DeleteRecord {
     pub fn new(
         global_context: Arc<Mutex<GlobalContext>>,
         table: TableDef,
-        execution_plan: Arc<dyn ExecutionPlan>,
     ) -> Self {
         Self {
             global_context,
             table,
-            execution_plan,
         }
     }
 
-    pub async fn execute(&self, session_context: &mut SessionContext) -> MysqlResult<u64> {
-        let result = collect(self.execution_plan.clone()).await;
-        match result {
-            Ok(records) => {
-                let mut total = 0;
-                for record in records {
-                    let result = self.delete_record(session_context, record);
-                    match result {
-                        Ok(count) => total += count,
-                        Err(mysql_error) => return Err(mysql_error),
-                    }
-                }
-                Ok(total)
-            }
-            Err(datafusion_error) => {
-                Err(MysqlError::from(datafusion_error))
+    pub fn execute(&self, session_context: &mut SessionContext, records: Vec<RecordBatch>) -> MysqlResult<u64> {
+        let mut total = 0;
+        for record in records {
+            let result = self.delete_record(session_context, record);
+            match result {
+                Ok(count) => total += count,
+                Err(mysql_error) => return Err(mysql_error),
             }
         }
+        Ok(total)
     }
 
-    pub fn delete_record(&self, session_context: &mut SessionContext, batch: RecordBatch) -> MysqlResult<u64> {
+    fn delete_record(&self, session_context: &mut SessionContext, record: RecordBatch) -> MysqlResult<u64> {
         let store_engine = StoreEngineFactory::try_new_with_table(self.global_context.clone(), self.table.clone()).unwrap();
 
-        let rowid_array = batch
+        let rowid_array = record
             .column(0)
             .as_any()
             .downcast_ref::<StringArray>()

@@ -40,12 +40,13 @@ use crate::logical_plan::insert::LogicalPlanInsert;
 use crate::physical_plan::delete::PhysicalPlanDelete;
 use crate::physical_plan::drop_table::PhysicalPlanDropTable;
 use crate::physical_plan::insert::PhysicalPlanInsert;
-use crate::util::convert::{convert_ident_to_lowercase, ToLowercase, ToObjectName};
+use crate::util::convert::{convert_ident_to_lowercase, ToLowercase, ToObjectName, ToIdent};
 use crate::variable::system::SystemVar;
 use crate::variable::user_defined::UserDefinedVar;
 
 use crate::execute::drop_column::DropColumn;
 use crate::execute::select_from::SelectFrom;
+use crate::execute::delete_record::DeleteRecord;
 
 /// Execution context for registering data sources and executing queries
 pub struct Execution {
@@ -1609,57 +1610,11 @@ impl Execution {
             table.option.table_name.as_str(),
             column_name.to_string().as_str(),
         );
-        let select = core_util::build_select_rowid_sqlselect(
-            meta_util::create_full_table_name(
-                meta_const::CATALOG_NAME,
-                meta_const::SCHEMA_NAME_OF_DEF_INFORMATION_SCHEMA,
-                meta_const::TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_COLUMNS,
-            ),
-            Some(selection),
-        );
-        let query = Box::new(Query {
-            with: None,
-            body: SetExpr::Select(select.clone()),
-            order_by: vec![],
-            limit: None,
-            offset: None,
-            fetch: None
-        });
-        let result = self.select_from(&query);
-        match result {
-            Ok((schema_ref, records)) => Ok(CoreOutput::ResultSet(schema_ref, records)),
-            Err(mysql_error) => Err(mysql_error),
-        }
-
-        let full_table_name_of_def_information_schema_columns =
-            meta_util::create_full_table_name(
-                meta_const::CATALOG_NAME,
-                meta_const::SCHEMA_NAME_OF_DEF_INFORMATION_SCHEMA,
-                meta_const::TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_COLUMNS,
-            );
-        let table_of_def_information_schema_columns = meta_util::get_table(
-            self.global_context.clone(),
-            full_table_name_of_def_information_schema_columns,
-        )
-            .unwrap();
-
-        let execution_plan = self
-            .datafusion_context
-            .create_physical_plan(for_delete.logical_plan())
-            .unwrap();
-        let physical_plan_delete_from_columns =
-            physical_plan::delete::PhysicalPlanDelete::new(
-                self.global_context.clone(),
-                table_of_def_information_schema_columns.clone(),
-                execution_plan,
-            );
-
-        let logical_plan =
-            query_planner.select_to_plan(&select, &mut Default::default())?;
-        let select_from_columns_for_delete = CoreSelectFrom::new(
-            meta_const::FULL_TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_COLUMNS,
-            logical_plan,
-        );
+        let result = self.delete_from(meta_util::create_full_table_name(
+            meta_const::CATALOG_NAME,
+            meta_const::SCHEMA_NAME_OF_DEF_INFORMATION_SCHEMA,
+            meta_const::TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_COLUMNS,
+        ), Some(selection)).unwrap();
 
         // update ordinal_position from information_schema.columns
         let ordinal_position = sparrow_column.ordinal_position;
@@ -1691,6 +1646,51 @@ impl Execution {
             delete_columns: select_from_columns_for_delete,
             update_columns: select_from_columns_for_update,
         })
+    }
+
+    pub fn delete_from(&mut self, table_name: ObjectName, selection: Option<SQLExpr>) -> MysqlResult<u64> {
+        let full_table_name =
+            meta_util::fill_up_table_name(&mut self.session_context, table_name.clone())
+                .unwrap();
+
+        let table_map = self
+            .global_context
+            .lock()
+            .unwrap()
+            .meta_data
+            .get_table_map();
+        let table = match table_map.get(&full_table_name) {
+            None => {
+                let message = format!("Table '{}' doesn't exist", table_name.to_string());
+                log::error!("{}", message);
+                return Err(MysqlError::new_server_error(
+                    1146,
+                    "42S02",
+                    message.as_str(),
+                ));
+            }
+            Some(table) => table.clone(),
+        };
+
+        let select =
+            core_util::build_select_rowid_sqlselect(full_table_name.clone(), selection);
+        let query = Box::new(Query {
+            with: None,
+            body: SetExpr::Select(select.clone()),
+            order_by: vec![],
+            limit: None,
+            offset: None,
+            fetch: None
+        });
+        let result = self.select_from(&query);
+        match result {
+            Ok((schema_ref, records)) => {
+                let delete_record = DeleteRecord::new(self.global_context.clone(), table);
+                let result = delete_record.execute(&mut self.session_context, records);
+                return result;
+            },
+            Err(mysql_error) => Err(mysql_error),
+        }
     }
 
     pub fn select_from(&mut self, query: &Query) -> MysqlResult<(SchemaRef, Vec<RecordBatch>)> {
