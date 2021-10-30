@@ -10,6 +10,7 @@ use crate::core::global_context::GlobalContext;
 use crate::core::core_util;
 use crate::meta::{meta_util, scalar_value};
 use crate::mysql::error::{MysqlResult};
+use crate::core::output::ResultSet;
 
 pub struct ShowColumnsFrom {
     global_context: Arc<Mutex<GlobalContext>>,
@@ -24,7 +25,7 @@ impl ShowColumnsFrom {
         }
     }
 
-    pub fn execute(&self, columns_record: Vec<RecordBatch>, statistics_record: Vec<RecordBatch>) -> MysqlResult<(SchemaRef, Vec<RecordBatch>)> {
+    pub fn execute(&self, columns_record: Vec<RecordBatch>, statistics_record: Vec<RecordBatch>) -> MysqlResult<ResultSet> {
         let mut statistics_map: HashMap<String, String> = HashMap::new();
 
         if statistics_record.len() > 0 {
@@ -104,6 +105,6 @@ impl ShowColumnsFrom {
             Arc::new(column_keys),
         ]).unwrap();
 
-        Ok((schema.clone(), vec![record_batch]))
+        Ok(ResultSet::new(schema, vec![record_batch]))
     }
 }

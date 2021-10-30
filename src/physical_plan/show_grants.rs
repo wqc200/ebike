@@ -8,6 +8,7 @@ use sqlparser::ast::{Ident};
 
 use crate::core::global_context::GlobalContext;
 use crate::mysql::error::{MysqlResult};
+use crate::core::output::ResultSet;
 
 pub struct ShowGrants {
     global_context: Arc<Mutex<GlobalContext>>,
@@ -25,7 +26,7 @@ impl ShowGrants {
         }
     }
 
-    pub fn execute(&self) -> MysqlResult<(SchemaRef, Vec<RecordBatch>)> {
+    pub fn execute(&self) -> MysqlResult<ResultSet> {
         let schema = SchemaRef::new(Schema::new(vec![
             Field::new("Grants for root@%", DataType::Utf8, false),
         ]));
@@ -35,6 +36,6 @@ impl ShowGrants {
         ]);
         let record_batch = RecordBatch::try_new(schema.clone(), vec![Arc::new(column_values)]).unwrap();
 
-        Ok((schema.clone(), vec![record_batch]))
+        Ok(ResultSet::new(schema, vec![record_batch]))
     }
 }

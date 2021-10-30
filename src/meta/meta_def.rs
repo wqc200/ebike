@@ -405,29 +405,6 @@ impl TableDef {
         Arc::new(self.to_schema())
     }
 
-
-    pub fn to_datafusion_dfschema2(&self) -> error::Result<DFSchema> {
-        let mut dffields = vec![];
-        for sql_column in self.column.sql_column_list.clone() {
-            let field_name = sql_column.name.to_string();
-            let data_type = meta_util::convert_sql_data_type_to_arrow_data_type(&sql_column.data_type).unwrap();
-            let nullable = sql_column.options
-                .iter()
-                .any(|x| x.option == ColumnOption::Null);
-            dffields.push(DFField::new(Some(self.option.full_table_name.to_string().as_str()), field_name.as_ref(), data_type, nullable));
-        }
-
-        DFSchema::new(dffields)
-    }
-
-    pub fn to_schema2(&self) -> Schema {
-        self.to_datafusion_dfschema2().unwrap().into()
-    }
-
-    pub fn to_schema_ref2(&self) -> SchemaRef {
-        Arc::new(self.to_schema2())
-    }
-
     pub fn get_engine(&self) -> String {
         let engine = self.option.engine.clone();
         engine

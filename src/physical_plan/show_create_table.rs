@@ -12,6 +12,7 @@ use crate::mysql::error::{MysqlResult};
 
 use crate::core::core_util;
 use crate::meta::meta_def::TableDef;
+use crate::core::output::ResultSet;
 
 pub struct ShowCreateTable {
     global_context: Arc<Mutex<GlobalContext>>,
@@ -29,7 +30,7 @@ impl ShowCreateTable {
         }
     }
 
-    pub fn execute(&self, columns_record: Vec<RecordBatch>, statistics_record: Vec<RecordBatch>, tables_record: Vec<RecordBatch>) -> MysqlResult<(SchemaRef, Vec<RecordBatch>)> {
+    pub fn execute(&self, columns_record: Vec<RecordBatch>, statistics_record: Vec<RecordBatch>, tables_record: Vec<RecordBatch>) -> MysqlResult<ResultSet> {
         let table_name = self.table.option.table_name.clone();
         let table_constraints = self.table.constraints.clone();
 
@@ -90,6 +91,6 @@ impl ShowCreateTable {
         let column_create_table = StringArray::from(vec![create_table.to_string().as_str()]);
         let record_batch = RecordBatch::try_new(schema.clone(), vec![Arc::new(column_table_name), Arc::new(column_create_table)]).unwrap();
 
-        Ok((schema.clone(), vec![record_batch]))
+        Ok(ResultSet::new(schema, vec![record_batch]))
     }
 }

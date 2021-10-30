@@ -7,6 +7,7 @@ use arrow::record_batch::RecordBatch;
 
 use crate::core::global_context::GlobalContext;
 use crate::mysql::error::{MysqlResult};
+use crate::core::output::ResultSet;
 
 pub struct ShowCollation {
     global_context: Arc<Mutex<GlobalContext>>,
@@ -21,7 +22,7 @@ impl ShowCollation {
         }
     }
 
-    pub fn execute(&self) -> MysqlResult<(SchemaRef, Vec<RecordBatch>)> {
+    pub fn execute(&self) -> MysqlResult<ResultSet> {
         let schema = SchemaRef::new(Schema::new(vec![
             Field::new("Collation", DataType::Utf8, false),
             Field::new("Charset", DataType::Utf8, false),
@@ -64,6 +65,6 @@ impl ShowCollation {
             Arc::new(column_values_of_pad_attribute),
         ]).unwrap();
 
-        Ok((schema.clone(), vec![record_batch]))
+        Ok(ResultSet::new(schema, vec![record_batch]))
     }
 }

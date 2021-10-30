@@ -196,7 +196,10 @@ impl Handle {
                 let ok_message = message::ok_message(affect_rows, last_insert_id, metadata::StatusFlags::SERVER_STATUS_AUTOCOMMIT, 0, message);
                 self.write_packet(ok_message).await;
             }
-            CoreOutput::ResultSet(schema_ref, results) => {
+            CoreOutput::ResultSet(result_set) => {
+                let schema_ref = result_set.schema_ref;
+                let batches = result_set.batches;
+
                 let payload = message::column_count_message(schema_ref.fields().len());
                 self.write_packet(payload).await;
                 for field in schema_ref.fields() {
@@ -206,7 +209,7 @@ impl Handle {
                 }
                 self.write_packet(message::eof_message(0, 0)).await;
 
-                for record_batch in results {
+                for record_batch in batches {
                     let rows = core_util::convert_record_to_scalar_value(record_batch.clone());
                     for row_index in 0..record_batch.num_rows() {
                         let payload = message::row_message(rows.get(row_index).unwrap().clone());

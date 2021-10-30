@@ -7,6 +7,7 @@ use arrow::record_batch::RecordBatch;
 
 use crate::core::global_context::GlobalContext;
 use crate::mysql::error::{MysqlResult};
+use crate::core::output::ResultSet;
 
 pub struct ShowPrivileges {
     global_context: Arc<Mutex<GlobalContext>>,
@@ -21,7 +22,7 @@ impl ShowPrivileges {
         }
     }
 
-    pub fn execute(&self) -> MysqlResult<(SchemaRef, Vec<RecordBatch>)> {
+    pub fn execute(&self) -> MysqlResult<ResultSet> {
         let schema = SchemaRef::new(Schema::new(vec![
             Field::new("Privilege", DataType::Utf8, false),
             Field::new("Context", DataType::Utf8, false),
@@ -46,6 +47,6 @@ impl ShowPrivileges {
             Arc::new(column_values2),
         ]).unwrap();
 
-        Ok((schema.clone(), vec![record_batch]))
+        Ok(ResultSet::new(schema, vec![record_batch]))
     }
 }
