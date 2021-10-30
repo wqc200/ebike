@@ -1773,11 +1773,6 @@ impl Execution {
     }
 
     pub async fn select_from(&mut self, query: &Query) -> MysqlResult<ResultSet> {
-        let result = self.check_table_exists(query);
-        if let Err(mysql_error) = result {
-            return Err(mysql_error);
-        }
-
         let mut select_from = SelectFrom::new(
             self.global_context.clone(),
             self.session_context.clone(),

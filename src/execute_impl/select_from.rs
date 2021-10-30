@@ -9,7 +9,7 @@ use datafusion::sql::planner::{ContextProvider, SqlToRel};
 use sqlparser::ast::{AlterTableOperation, Query};
 
 use crate::core::core_util;
-use crate::core::core_util::register_all_table;
+use crate::core::core_util::{register_all_table, check_table_exists};
 use crate::core::global_context::GlobalContext;
 use crate::core::session_context::SessionContext;
 use crate::meta::initial;
@@ -23,7 +23,7 @@ use crate::core::output::ResultSet;
 pub struct SelectFrom {
     global_context: Arc<Mutex<GlobalContext>>,
     session_context: SessionContext,
-    datafusion_context: ExecutionContext,
+    execution_context: ExecutionContext,
 }
 
 impl SelectFrom {
@@ -35,11 +35,16 @@ impl SelectFrom {
         Self {
             global_context,
             session_context,
-            datafusion_context,
+            execution_context: datafusion_context,
         }
     }
 
     pub async fn execute(&mut self, query: &Query) -> MysqlResult<ResultSet> {
+        let result = check_table_exists(self.global_context.clone(), &mut self.session_context, &mut self.execution_context, query);
+        if let Err(mysql_error) = result {
+            return Err(mysql_error);
+        }
+
         let result = self.query_to_plan(query);
         let logical_plan = match result {
             Ok(logical_plan) => logical_plan,
@@ -48,7 +53,7 @@ impl SelectFrom {
             }
         };
 
-        let result = self.datafusion_context.optimize(&logical_plan);
+        let result = self.execution_context.optimize(&logical_plan);
         let logical_plan = match result {
             Ok(logical_plan) => logical_plan,
             Err(error) => {
@@ -56,7 +61,7 @@ impl SelectFrom {
             }
         };
 
-        let result = self.datafusion_context.create_physical_plan(&logical_plan);
+        let result = self.execution_context.create_physical_plan(&logical_plan);
         let execution_plan = match result {
             Ok(execution_plan) => execution_plan,
             Err(error) => {
@@ -78,7 +83,7 @@ impl SelectFrom {
     }
 
     fn query_to_plan(&mut self, query: &Query) -> MysqlResult<LogicalPlan> {
-        let state = self.datafusion_context.state.lock().unwrap().clone();
+        let state = self.execution_context.state.lock().unwrap().clone();
         let query_planner = SqlToRel::new(&state);
 
         let result = query_planner.query_to_plan(query);
