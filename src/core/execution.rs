@@ -5,7 +5,7 @@ use std::sync::{Arc, Mutex};
 
 use arrow::array::{ArrayRef, StringArray};
 use arrow::datatypes::DataType;
-use arrow::datatypes::{SchemaRef};
+use arrow::datatypes::SchemaRef;
 use arrow::record_batch::RecordBatch;
 
 use datafusion::execution::context::{ExecutionConfig, ExecutionContext};
@@ -17,9 +17,9 @@ use datafusion::sql::parser::{DFParser, Statement};
 use datafusion::sql::planner::{ContextProvider, SqlToRel};
 use datafusion::variable::VarType;
 use sqlparser::ast::{
-    AlterTableOperation, ObjectName, ObjectType, Statement as SQLStatement, Query, Assignment,
-    BinaryOperator, Expr as SQLExpr, JoinConstraint, JoinOperator, Select, SelectItem, SetExpr,
-    TableFactor, Value,
+    AlterTableOperation, Assignment, BinaryOperator, ColumnDef, Expr as SQLExpr, JoinConstraint,
+    JoinOperator, ObjectName, ObjectType, Query, Select, SelectItem, SetExpr,
+    Statement as SQLStatement, TableFactor, Value,
 };
 use sqlparser::ast::{FunctionArg, Ident, OrderByExpr, ShowCreateObject, ShowStatementFilter};
 use sqlparser::dialect::GenericDialect;
@@ -27,27 +27,28 @@ use uuid::Uuid;
 
 use crate::core::core_util;
 use crate::core::core_util as CoreUtil;
+use crate::core::core_util::register_all_table;
 use crate::core::global_context::GlobalContext;
 use crate::core::logical_plan::{CoreLogicalPlan, CoreSelectFrom, CoreSelectFromWithAssignment};
 use crate::core::output::{CoreOutput, FinalCount};
 use crate::core::session_context::SessionContext;
+use crate::execute::add_column::AddColumn;
+use crate::execute::delete_record::DeleteRecord;
+use crate::execute::drop_column::DropColumn;
+use crate::execute::select_from::SelectFrom;
+use crate::execute::update_record::UpdateRecord;
+use crate::logical_plan::insert::LogicalPlanInsert;
+use crate::meta::meta_util::load_all_table;
 use crate::meta::{meta_const, meta_util};
 use crate::mysql::error::{MysqlError, MysqlResult};
 use crate::physical_plan;
-use crate::physical_plan::util::CorePhysicalPlan;
-
-use crate::logical_plan::insert::LogicalPlanInsert;
 use crate::physical_plan::delete::PhysicalPlanDelete;
 use crate::physical_plan::drop_table::PhysicalPlanDropTable;
 use crate::physical_plan::insert::PhysicalPlanInsert;
-use crate::util::convert::{convert_ident_to_lowercase, ToLowercase, ToObjectName, ToIdent};
+use crate::physical_plan::util::CorePhysicalPlan;
+use crate::util::convert::{convert_ident_to_lowercase, ToIdent, ToLowercase, ToObjectName};
 use crate::variable::system::SystemVar;
 use crate::variable::user_defined::UserDefinedVar;
-
-use crate::execute::drop_column::DropColumn;
-use crate::execute::select_from::SelectFrom;
-use crate::execute::delete_record::DeleteRecord;
-use crate::execute::update_record::UpdateRecord;
 
 /// Execution context for registering data sources and executing queries
 pub struct Execution {
@@ -730,6 +731,32 @@ impl Execution {
             return Err(mysql_error);
         }
 
+        Ok(())
+    }
+
+    pub fn check_table_exists(&mut self, query: &Query) -> MysqlResult<()> {
+        match &query.body {
+            SetExpr::Select(select) => {
+                for from in &select.from {
+                    match from.relation.clone() {
+                        TableFactor::Table { name, .. } => {
+                            return self.check_table_exists_with_name(&name);
+                        }
+                        _ => {}
+                    }
+
+                    for i in 0..from.joins.clone().len() {
+                        match from.joins[i].relation.clone() {
+                            TableFactor::Table { name, .. } => {
+                                return self.check_table_exists_with_name(&name);
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+            }
+            _ => {}
+        }
         Ok(())
     }
 
@@ -1580,7 +1607,35 @@ impl Execution {
         }
     }
 
-    pub fn drop_column(&mut self, table_name: ObjectName, column_name: Ident) -> MysqlResult<u64> {
+    pub fn add_column(&mut self, table_name: ObjectName, column: ColumnDef) -> MysqlResult<u64> {
+        let full_table_name =
+            meta_util::fill_up_table_name(&mut self.session_context, table_name.clone()).unwrap();
+
+        let table_map = self
+            .global_context
+            .lock()
+            .unwrap()
+            .meta_data
+            .get_table_map();
+        let table = match table_map.get(&full_table_name) {
+            None => {
+                return Err(meta_util::error_of_table_doesnt_exists(
+                    full_table_name.clone(),
+                ))
+            }
+            Some(table) => table.clone(),
+        };
+
+        let drop_column = DropColumn::new(self.global_context.clone(), table);
+        let result = drop_column.execute(&mut self.datafusion_context);
+        if let Err(mysql_error) = result {
+            return Err(mysql_error);
+        }
+
+        Ok(1)
+    }
+
+    pub async fn drop_column(&mut self, table_name: ObjectName, column_name: Ident) -> MysqlResult<u64> {
         let full_table_name =
             meta_util::fill_up_table_name(&mut self.session_context, table_name.clone()).unwrap();
 
@@ -1611,11 +1666,14 @@ impl Execution {
             table.option.table_name.as_str(),
             column_name.to_string().as_str(),
         );
-        let result = self.delete_from(meta_util::create_full_table_name(
-            meta_const::CATALOG_NAME,
-            meta_const::SCHEMA_NAME_OF_DEF_INFORMATION_SCHEMA,
-            meta_const::TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_COLUMNS,
-        ), Some(selection)).unwrap();
+        let result = self.delete_from(
+            meta_util::create_full_table_name(
+                meta_const::CATALOG_NAME,
+                meta_const::SCHEMA_NAME_OF_DEF_INFORMATION_SCHEMA,
+                meta_const::TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_COLUMNS,
+            ),
+            Some(selection),
+        ).await;
 
         // update ordinal_position from information_schema.columns
         let ordinal_position = sparrow_column.ordinal_position;
@@ -1626,67 +1684,33 @@ impl Execution {
             table.option.table_name.as_str(),
             ordinal_position,
         );
-        let result = self.update_set(meta_util::create_full_table_name(
-            meta_const::CATALOG_NAME,
-            meta_const::SCHEMA_NAME_OF_DEF_INFORMATION_SCHEMA,
-            meta_const::TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_COLUMNS,
-        ), assignments.clone(), Some(selection)).unwrap();
-
-        
-    }
-
-    pub fn update_set(&mut self, table_name: ObjectName, assignments: Vec<Assignment>, selection: Option<SQLExpr>) -> MysqlResult<u64> {
-        let full_table_name =
-            meta_util::fill_up_table_name(&mut self.session_context, table_name.clone())
-                .unwrap();
-
-        let table_map = self
-            .global_context
-            .lock()
-            .unwrap()
-            .meta_data
-            .get_table_map();
-        let table = match table_map.get(&full_table_name) {
-            None => {
-                let message = format!("Table '{}' doesn't exist", table_name.to_string());
-                log::error!("{}", message);
-                return Err(MysqlError::new_server_error(
-                    1146,
-                    "42S02",
-                    message.as_str(),
-                ));
-            }
-            Some(table) => table.clone(),
-        };
-
-        let select = core_util::build_update_sqlselect(
-            table_name.clone(),
+        let result = self.update_set(
+            meta_util::create_full_table_name(
+                meta_const::CATALOG_NAME,
+                meta_const::SCHEMA_NAME_OF_DEF_INFORMATION_SCHEMA,
+                meta_const::TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_COLUMNS,
+            ),
             assignments.clone(),
-            selection,
-        );
-        let query = Box::new(Query {
-            with: None,
-            body: SetExpr::Select(select.clone()),
-            order_by: vec![],
-            limit: None,
-            offset: None,
-            fetch: None
-        });
-        let result = self.select_from(&query);
-        match result {
-            Ok((schema_ref, records)) => {
-                let update_record = UpdateRecord::new(self.global_context.clone(), table, assignments.clone());
-                let result = update_record.execute(&mut self.session_context, records);
-                return result;
-            },
-            Err(mysql_error) => Err(mysql_error),
+            Some(selection),
+        ).await;
+
+        let drop_column = DropColumn::new(self.global_context.clone(), table);
+        let result = drop_column.execute(&mut self.datafusion_context);
+        if let Err(mysql_error) = result {
+            return Err(mysql_error);
         }
+
+        Ok(1)
     }
 
-    pub fn delete_from(&mut self, table_name: ObjectName, selection: Option<SQLExpr>) -> MysqlResult<u64> {
+    pub async fn update_set(
+        &mut self,
+        table_name: ObjectName,
+        assignments: Vec<Assignment>,
+        selection: Option<SQLExpr>,
+    ) -> MysqlResult<u64> {
         let full_table_name =
-            meta_util::fill_up_table_name(&mut self.session_context, table_name.clone())
-                .unwrap();
+            meta_util::fill_up_table_name(&mut self.session_context, table_name.clone()).unwrap();
 
         let table_map = self
             .global_context
@@ -1708,32 +1732,75 @@ impl Execution {
         };
 
         let select =
-            core_util::build_select_rowid_sqlselect(full_table_name.clone(), selection);
+            core_util::build_update_sqlselect(table_name.clone(), assignments.clone(), selection);
         let query = Box::new(Query {
             with: None,
-            body: SetExpr::Select(select.clone()),
+            body: SetExpr::Select(Box::new(select)),
             order_by: vec![],
             limit: None,
             offset: None,
-            fetch: None
+            fetch: None,
         });
-        let result = self.select_from(&query);
+        let result = self.select_from(&query).await;
+        match result {
+            Ok((schema_ref, records)) => {
+                let update_record =
+                    UpdateRecord::new(self.global_context.clone(), table, assignments.clone());
+                let result = update_record.execute(&mut self.session_context, records);
+                return result;
+            }
+            Err(mysql_error) => Err(mysql_error),
+        }
+    }
+
+    pub async fn delete_from(
+        &mut self,
+        table_name: ObjectName,
+        selection: Option<SQLExpr>,
+    ) -> MysqlResult<u64> {
+        let full_table_name =
+            meta_util::fill_up_table_name(&mut self.session_context, table_name.clone()).unwrap();
+
+        let table_map = self
+            .global_context
+            .lock()
+            .unwrap()
+            .meta_data
+            .get_table_map();
+        let table = match table_map.get(&full_table_name) {
+            None => {
+                let message = format!("Table '{}' doesn't exist", table_name.to_string());
+                log::error!("{}", message);
+                return Err(MysqlError::new_server_error(
+                    1146,
+                    "42S02",
+                    message.as_str(),
+                ));
+            }
+            Some(table) => table.clone(),
+        };
+
+        let select = core_util::build_select_rowid_sqlselect(full_table_name.clone(), selection);
+        let query = Box::new(Query {
+            with: None,
+            body: SetExpr::Select(Box::new(select)),
+            order_by: vec![],
+            limit: None,
+            offset: None,
+            fetch: None,
+        });
+        let result = self.select_from(&query).await;
         match result {
             Ok((schema_ref, records)) => {
                 let delete_record = DeleteRecord::new(self.global_context.clone(), table);
                 let result = delete_record.execute(&mut self.session_context, records);
                 return result;
-            },
+            }
             Err(mysql_error) => Err(mysql_error),
         }
     }
 
-    pub fn select_from(&mut self, query: &Query) -> MysqlResult<(SchemaRef, Vec<RecordBatch>)> {
-        let result = self.check_table_exists_in_statement(&statement);
-        if let Err(mysql_error) = result {
-            return Err(mysql_error);
-        }
-
+    pub fn create_logical_plan2(&mut self, query: &Query) -> MysqlResult<LogicalPlan> {
         let state = self.datafusion_context.state.lock().unwrap().clone();
         let query_planner = SqlToRel::new(&state);
 
@@ -1745,10 +1812,21 @@ impl Execution {
             }
         };
 
-        let has_rowid = self.query_projection_has_rowid(query);
-        if !has_rowid {
-            logical_plan = core_util::remove_rowid_from_projection(&logical_plan);
+        // let has_rowid = self.query_projection_has_rowid(query);
+        // if !has_rowid {
+        //     logical_plan = core_util::remove_rowid_from_projection(&logical_plan);
+        // }
+
+        return Ok(logical_plan)
+    }
+
+    pub async fn select_from(&mut self, query: &Query) -> MysqlResult<(SchemaRef, Vec<RecordBatch>)> {
+        let result = self.check_table_exists(query);
+        if let Err(mysql_error) = result {
+            return Err(mysql_error);
         }
+
+        let logical_plan = self.create_logical_plan2(query).unwrap();
 
         let result = self.datafusion_context.create_physical_plan(&logical_plan);
         let execution_plan = match result {
@@ -1758,10 +1836,25 @@ impl Execution {
             }
         };
 
-        let physical_plan_select = physical_plan::select::PhysicalPlanSelect::new(self.global_context.clone(), execution_plan);
+        let physical_plan_select = physical_plan::select::PhysicalPlanSelect::new(
+            self.global_context.clone(),
+            execution_plan,
+        );
         let result = physical_plan_select.execute().await;
 
         result
+    }
+
+    pub async fn execute_query3(&mut self, sql: &str) -> MysqlResult<CoreOutput> {
+        let mut new_sql = sql;
+        if sql.starts_with("SET NAMES") {
+            new_sql = "SET NAMES = utf8mb4"
+        }
+        let core_logical_plan = self.create_logical_plan(new_sql)?;
+        let core_logical_plan = self.optimize(&core_logical_plan)?;
+        let core_physical_plan = self.create_physical_plan(&core_logical_plan)?;
+        let core_output = self.execution(&core_physical_plan).await;
+        core_output
     }
 
     pub async fn execute_query(&mut self, sql: &str) -> MysqlResult<CoreOutput> {
@@ -1769,72 +1862,68 @@ impl Execution {
         if sql.starts_with("SET NAMES") {
             new_sql = "SET NAMES = utf8mb4"
         }
-        let core_logical_plan = self.create_logical_plan(new_sql)?;
-        let core_logical_plan = self.optimize(&core_logical_plan)?;
-        let core_physical_plan = self.create_physical_plan(&core_logical_plan)?;
-        let core_output = self.execution(&core_physical_plan).await;
-        core_output
-    }
-
-    pub async fn execute_query2(&mut self, sql: &str) -> MysqlResult<CoreOutput> {
-        let mut new_sql = sql;
-        if sql.starts_with("SET NAMES") {
-            new_sql = "SET NAMES = utf8mb4"
-        }
 
         let dialect = &GenericDialect {};
-        let statements = DFParser::parse_sql_with_dialect(sql, dialect).unwrap();
+        let statements = DFParser::parse_sql_with_dialect(new_sql, dialect).unwrap();
 
         match &statements[0] {
             Statement::Statement(statement) => {
                 let statement = self.fix_statement(statement.clone());
                 match statement {
                     SQLStatement::AlterTable { name, operation } => {
+                        let table_name = name;
                         match operation.clone() {
                             AlterTableOperation::DropColumn { column_name, .. } => {
-                                let drop_column = DropColumn::new(self.global_context.clone(), table_name.clone(), column_name.clone());
-                                let result = drop_column.execute(&mut self.datafusion_context, &mut self.session_context);
+                                let result = self.drop_column(table_name, column_name).await;
                                 match result {
-                                    Ok(count) => Ok(CoreOutput::FinalCount(FinalCount::new(count, 0))),
+                                    Ok(count) => {
+                                        Ok(CoreOutput::FinalCount(FinalCount::new(count, 0)))
+                                    }
                                     Err(mysql_error) => Err(mysql_error),
                                 }
                             }
-                            AlterTableOperation::AddColumn { .. } => {
-                                Ok(CoreLogicalPlan::AlterTableAddColumn { table, operation })
+                            AlterTableOperation::AddColumn { column_def } => {
+                                let result = self.add_column(table_name, column_def);
+                                match result {
+                                    Ok(count) => {
+                                        Ok(CoreOutput::FinalCount(FinalCount::new(count, 0)))
+                                    }
+                                    Err(mysql_error) => Err(mysql_error),
+                                }
                             }
                             _ => {
                                 return Err(MysqlError::new_global_error(
                                     1105,
                                     format!(
                                         "Unknown error. The drop command is not allowed with this MySQL version"
-                                    )
-                                        .as_str(),
+                                    ).as_str(),
                                 ));
                             }
                         }
                     }
                     SQLStatement::Query(ref query) => {
-                        let result = self.select_from(query);
+                        let result = self.select_from(query).await;
                         match result {
-                            Ok((schema_ref, records)) => Ok(CoreOutput::ResultSet(schema_ref, records)),
+                            Ok((schema_ref, records)) => {
+                                Ok(CoreOutput::ResultSet(schema_ref, records))
+                            }
                             Err(mysql_error) => Err(mysql_error),
                         }
                     }
-                    _ => {}
+                    _ => {
+                        let core_logical_plan = self.create_logical_plan(new_sql)?;
+                        let core_logical_plan = self.optimize(&core_logical_plan)?;
+                        let core_physical_plan = self.create_physical_plan(&core_logical_plan)?;
+                        let core_output = self.execution(&core_physical_plan).await;
+                        core_output
+                    }
                 }
             }
             _ => Err(MysqlError::new_global_error(
                 1105,
                 "Unknown error. The statement is not supported",
-            )),
+            ))
         }
-
-
-        let core_logical_plan = self.create_logical_plan(new_sql)?;
-        let core_logical_plan = self.optimize(&core_logical_plan)?;
-        let core_physical_plan = self.create_physical_plan(&core_logical_plan)?;
-        let core_output = self.execution(&core_physical_plan).await;
-        core_output
     }
 
     pub async fn set_default_schema(&mut self, db_name: &str) -> MysqlResult<CoreOutput> {
@@ -1963,14 +2052,18 @@ impl Execution {
                     }
                 };
 
-                let select =
-                    physical_plan::select::PhysicalPlanSelect::new(self.global_context.clone(), execution_plan);
+                let select = physical_plan::select::PhysicalPlanSelect::new(
+                    self.global_context.clone(),
+                    execution_plan,
+                );
                 Ok(CorePhysicalPlan::Select(select))
             }
             CoreLogicalPlan::Explain(logical_plan) => {
                 let execution_plan = self.datafusion_context.create_physical_plan(logical_plan)?;
-                let select =
-                    physical_plan::select::PhysicalPlanSelect::new(self.global_context.clone(), execution_plan);
+                let select = physical_plan::select::PhysicalPlanSelect::new(
+                    self.global_context.clone(),
+                    execution_plan,
+                );
                 Ok(CorePhysicalPlan::Select(select))
             }
             CoreLogicalPlan::SetDefaultDb(object_name) => {
@@ -2134,22 +2227,28 @@ impl Execution {
                     .datafusion_context
                     .create_physical_plan(select_columns.logical_plan())
                     .unwrap();
-                let select_columns =
-                    physical_plan::select::PhysicalPlanSelect::new(self.global_context.clone(), execution_plan);
+                let select_columns = physical_plan::select::PhysicalPlanSelect::new(
+                    self.global_context.clone(),
+                    execution_plan,
+                );
 
                 let execution_plan = self
                     .datafusion_context
                     .create_physical_plan(select_statistics.logical_plan())
                     .unwrap();
-                let select_statistics =
-                    physical_plan::select::PhysicalPlanSelect::new(self.global_context.clone(), execution_plan);
+                let select_statistics = physical_plan::select::PhysicalPlanSelect::new(
+                    self.global_context.clone(),
+                    execution_plan,
+                );
 
                 let execution_plan = self
                     .datafusion_context
                     .create_physical_plan(select_tables.logical_plan())
                     .unwrap();
-                let select_tables =
-                    physical_plan::select::PhysicalPlanSelect::new(self.global_context.clone(), execution_plan);
+                let select_tables = physical_plan::select::PhysicalPlanSelect::new(
+                    self.global_context.clone(),
+                    execution_plan,
+                );
 
                 Ok(CorePhysicalPlan::ShowCreateTable(
                     show_create_table,
@@ -2170,15 +2269,19 @@ impl Execution {
                     .datafusion_context
                     .create_physical_plan(select_from_columns.logical_plan())
                     .unwrap();
-                let select_columns =
-                    physical_plan::select::PhysicalPlanSelect::new(self.global_context.clone(), execution_plan);
+                let select_columns = physical_plan::select::PhysicalPlanSelect::new(
+                    self.global_context.clone(),
+                    execution_plan,
+                );
 
                 let execution_plan = self
                     .datafusion_context
                     .create_physical_plan(select_from_statistics.logical_plan())
                     .unwrap();
-                let select_statistics =
-                    physical_plan::select::PhysicalPlanSelect::new(self.global_context.clone(), execution_plan);
+                let select_statistics = physical_plan::select::PhysicalPlanSelect::new(
+                    self.global_context.clone(),
+                    execution_plan,
+                );
 
                 Ok(CorePhysicalPlan::ShowColumnsFrom(
                     show_columns_from,
