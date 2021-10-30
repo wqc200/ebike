@@ -17,7 +17,7 @@ use arrow::array::{
 use arrow::datatypes::{DataType};
 use arrow::record_batch::RecordBatch;
 use datafusion::physical_plan::{collect, ExecutionPlan};
-use sqlparser::ast::{Assignment};
+use sqlparser::ast::{Assignment, ObjectName, SetExpr, Query};
 
 use crate::mysql::{metadata};
 use crate::core::global_context::GlobalContext;
@@ -28,30 +28,87 @@ use crate::core::session_context::SessionContext;
 use crate::store::engine::engine_util::StoreEngineFactory;
 use crate::util::dbkey::create_column_key;
 use crate::meta::meta_def::TableDef;
+use datafusion::execution::context::ExecutionContext;
+use crate::meta::meta_util;
+use crate::core::core_util;
+use crate::execute_impl::select_from::SelectFrom;
 
-pub struct UpdateRecord {
+pub struct UpdateSet {
     global_context: Arc<Mutex<GlobalContext>>,
-    table: TableDef,
-    assignments: Vec<Assignment>,
+    session_context: SessionContext,
+    execution_context: ExecutionContext,
 }
 
-impl UpdateRecord {
+impl UpdateSet {
     pub fn new(
         global_context: Arc<Mutex<GlobalContext>>,
-        table: TableDef,
-        assignments: Vec<Assignment>,
+        session_context: SessionContext,
+        execution_context: ExecutionContext,
     ) -> Self {
         Self {
             global_context,
-            table,
-            assignments,
+            session_context,
+            execution_context,
         }
     }
 
-    pub fn execute(&self, session_context: &mut SessionContext, records: Vec<RecordBatch>) -> MysqlResult<u64> {
+    pub fn execute(
+        &mut self,
+        table_name: ObjectName,
+        assignments: Vec<Assignment>,
+        selection: Option<SQLExpr>,
+    ) -> MysqlResult<u64> {
+        let full_table_name =
+            meta_util::fill_up_table_name(&mut self.session_context, table_name.clone()).unwrap();
+
+        let table_map = self
+            .global_context
+            .lock()
+            .unwrap()
+            .meta_data
+            .get_table_map();
+        let table = match table_map.get(&full_table_name) {
+            None => {
+                let message = format!("Table '{}' doesn't exist", table_name.to_string());
+                log::error!("{}", message);
+                return Err(MysqlError::new_server_error(
+                    1146,
+                    "42S02",
+                    message.as_str(),
+                ));
+            }
+            Some(table) => table.clone(),
+        };
+
+        let select =
+            core_util::build_update_sqlselect(table_name.clone(), assignments.clone(), selection);
+        let query = Box::new(Query {
+            with: None,
+            body: SetExpr::Select(Box::new(select)),
+            order_by: vec![],
+            limit: None,
+            offset: None,
+            fetch: None,
+        });
+        let mut select_from = SelectFrom::new(
+            self.global_context.clone(),
+            self.session_context.clone(),
+            self.execution_context.clone(),
+        );
+        let result = select_from.execute(&query).await;
+        match result {
+            Ok(result_set) => {
+                let result = self.update_record_batches(result_set.record_batches);
+                result
+            }
+            Err(mysql_error) => Err(mysql_error),
+        }
+    }
+
+    fn update_record_batches(&self, record_batches: Vec<RecordBatch>) -> MysqlResult<u64> {
         let mut total = 0;
-        for record in records {
-            let result = self.update_record(session_context, record);
+        for record_batch in record_batches {
+            let result = self.update_record_batch(record_batch);
             match result {
                 Ok(count) => total += count,
                 Err(mysql_error) => return Err(mysql_error),
@@ -60,7 +117,7 @@ impl UpdateRecord {
         Ok(total)
     }
 
-    pub fn update_record(&self, _: &mut SessionContext, batch: RecordBatch) -> MysqlResult<u64> {
+    pub fn update_record_batch(&self, batch: RecordBatch) -> MysqlResult<u64> {
         let store_engine = StoreEngineFactory::try_new_with_table(self.global_context.clone(), self.table.clone()).unwrap();
 
         let mut assignment_column_value: Vec<metadata::ArrayCell> = Vec::new();

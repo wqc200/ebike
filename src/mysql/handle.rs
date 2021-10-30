@@ -198,7 +198,7 @@ impl Handle {
             }
             CoreOutput::ResultSet(result_set) => {
                 let schema_ref = result_set.schema_ref;
-                let batches = result_set.batches;
+                let batches = result_set.record_batches;
 
                 let payload = message::column_count_message(schema_ref.fields().len());
                 self.write_packet(payload).await;

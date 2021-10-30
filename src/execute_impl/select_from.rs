@@ -30,12 +30,12 @@ impl SelectFrom {
     pub fn new(
         global_context: Arc<Mutex<GlobalContext>>,
         session_context: SessionContext,
-        datafusion_context: ExecutionContext,
+        execution_context: ExecutionContext,
     ) -> Self {
         Self {
             global_context,
             session_context,
-            execution_context: datafusion_context,
+            execution_context,
         }
     }
 

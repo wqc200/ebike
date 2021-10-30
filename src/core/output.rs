@@ -32,14 +32,14 @@ impl FinalCount {
 
 pub struct ResultSet {
     pub schema_ref: SchemaRef,
-    pub batches: Vec<RecordBatch>,
+    pub record_batches: Vec<RecordBatch>,
 }
 
 impl ResultSet {
-    pub fn new(schema_ref: SchemaRef, batches: Vec<RecordBatch>) -> Self {
+    pub fn new(schema_ref: SchemaRef, record_batches: Vec<RecordBatch>) -> Self {
         Self {
             schema_ref,
-            batches,
+            record_batches,
         }
     }
 }
