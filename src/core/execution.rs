@@ -1556,32 +1556,14 @@ impl Execution {
         }
     }
 
-    pub fn add_column(&mut self, table_name: ObjectName, column: ColumnDef) -> MysqlResult<u64> {
-        let full_table_name =
-            meta_util::fill_up_table_name(&mut self.session_context, table_name.clone()).unwrap();
-
-        let table_map = self
-            .global_context
-            .lock()
-            .unwrap()
-            .meta_data
-            .get_table_map();
-        let table = match table_map.get(&full_table_name) {
-            None => {
-                return Err(meta_util::error_of_table_doesnt_exists(
-                    full_table_name.clone(),
-                ))
-            }
-            Some(table) => table.clone(),
-        };
-
-        let drop_column = DropColumn::new(self.global_context.clone(), table);
-        let result = drop_column.execute(&mut self.execution_context);
-        if let Err(mysql_error) = result {
-            return Err(mysql_error);
-        }
-
-        Ok(1)
+    pub async fn add_column(&mut self, table_name: ObjectName, column_def: ColumnDef) -> MysqlResult<u64> {
+        let mut add_column = AddColumn::new(
+            self.global_context.clone(),
+            self.session_context.clone(),
+            self.execution_context.clone(),
+        );
+        let result = add_column.execute(table_name, column_def);
+        result
     }
 
     pub async fn drop_column(
@@ -1589,75 +1571,13 @@ impl Execution {
         table_name: ObjectName,
         column_name: Ident,
     ) -> MysqlResult<u64> {
-        let full_table_name =
-            meta_util::fill_up_table_name(&mut self.session_context, table_name.clone()).unwrap();
-
-        let table_map = self
-            .global_context
-            .lock()
-            .unwrap()
-            .meta_data
-            .get_table_map();
-        let table = match table_map.get(&full_table_name) {
-            None => {
-                return Err(meta_util::error_of_table_doesnt_exists(
-                    full_table_name.clone(),
-                ))
-            }
-            Some(table) => table.clone(),
-        };
-
-        let sparrow_column = table
-            .column
-            .get_sparrow_column(column_name.clone())
-            .unwrap();
-
-        // delete column from information_schema.columns
-        let selection = core_util::build_find_column_sqlwhere(
-            table.option.catalog_name.as_ref(),
-            table.option.schema_name.as_str(),
-            table.option.table_name.as_str(),
-            column_name.to_string().as_str(),
+        let mut drop_column = DropColumn::new(
+            self.global_context.clone(),
+            self.session_context.clone(),
+            self.execution_context.clone(),
         );
-        let result = self
-            .delete_from(
-                meta_util::create_full_table_name(
-                    meta_const::CATALOG_NAME,
-                    meta_const::SCHEMA_NAME_OF_DEF_INFORMATION_SCHEMA,
-                    meta_const::TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_COLUMNS,
-                ),
-                Some(selection),
-            )
-            .await;
-
-        // update ordinal_position from information_schema.columns
-        let ordinal_position = sparrow_column.ordinal_position;
-        let assignments = core_util::build_update_column_assignments();
-        let selection = core_util::build_find_column_ordinal_position_sqlwhere(
-            table.option.catalog_name.as_ref(),
-            table.option.schema_name.as_str(),
-            table.option.table_name.as_str(),
-            ordinal_position,
-        );
-        let result = self
-            .update_set(
-                meta_util::create_full_table_name(
-                    meta_const::CATALOG_NAME,
-                    meta_const::SCHEMA_NAME_OF_DEF_INFORMATION_SCHEMA,
-                    meta_const::TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_COLUMNS,
-                ),
-                assignments.clone(),
-                Some(selection),
-            )
-            .await;
-
-        let drop_column = DropColumn::new(self.global_context.clone(), table);
-        let result = drop_column.execute(&mut self.execution_context);
-        if let Err(mysql_error) = result {
-            return Err(mysql_error);
-        }
-
-        Ok(1)
+        let result = drop_column.execute(table_name, column_name).await;
+        result
     }
 
     pub async fn update_set(
@@ -1737,7 +1657,7 @@ impl Execution {
                                 }
                             }
                             AlterTableOperation::AddColumn { column_def } => {
-                                let result = self.add_column(table_name, column_def);
+                                let result = self.add_column(table_name, column_def).await;
                                 match result {
                                     Ok(count) => {
                                         Ok(CoreOutput::FinalCount(FinalCount::new(count, 0)))

@@ -14,7 +14,7 @@ use crate::meta::{meta_const, meta_util};
 use crate::mysql::error::{MysqlError, MysqlResult};
 use crate::store::engine::engine_util::StoreEngineFactory;
 use crate::util;
-use sqlparser::ast::{ObjectName, Query, SetExpr};
+use sqlparser::ast::{ObjectName, Query, SetExpr, Expr as SQLExpr};
 
 pub struct DeleteFrom {
     global_context: Arc<Mutex<GlobalContext>>,
@@ -35,7 +35,7 @@ impl DeleteFrom {
         }
     }
 
-    pub fn execute(
+    pub async fn execute(
         &mut self,
         table_name: ObjectName,
         selection: Option<SQLExpr>,
@@ -49,7 +49,7 @@ impl DeleteFrom {
             .unwrap()
             .meta_data
             .get_table_map();
-        let table = match table_map.get(&full_table_name) {
+        let table_def = match table_map.get(&full_table_name) {
             None => {
                 let message = format!("Table '{}' doesn't exist", table_name.to_string());
                 log::error!("{}", message);
@@ -74,22 +74,22 @@ impl DeleteFrom {
         let mut select_from = SelectFrom::new(
             self.global_context.clone(),
             self.session_context.clone(),
-            self.datafusion_context.clone(),
+            self.execution_context.clone(),
         );
         let result = select_from.execute(&query).await;
         return match result {
             Ok(result_set) => {
-                let result = self.delete_record_batches(result_set.record_batches);
+                let result = self.delete_record_batches(table_def, result_set.record_batches);
                 result
             }
             Err(mysql_error) => Err(mysql_error),
         };
     }
 
-    fn delete_record_batches(&self, records: Vec<RecordBatch>) -> MysqlResult<u64> {
+    fn delete_record_batches(&self, table_def: TableDef, record_batches: Vec<RecordBatch>) -> MysqlResult<u64> {
         let mut total = 0;
-        for record in records {
-            let result = self.delete_record_batch(record);
+        for record_batch in record_batches {
+            let result = self.delete_record_batch(table_def.clone(), record_batch);
             match result {
                 Ok(count) => total += count,
                 Err(mysql_error) => return Err(mysql_error),
@@ -98,12 +98,12 @@ impl DeleteFrom {
         Ok(total)
     }
 
-    fn delete_record_batch(&self, record: RecordBatch) -> MysqlResult<u64> {
+    fn delete_record_batch(&self, table_def: TableDef, record_batch: RecordBatch) -> MysqlResult<u64> {
         let store_engine =
-            StoreEngineFactory::try_new_with_table(self.global_context.clone(), self.table_def.clone())
+            StoreEngineFactory::try_new_with_table(self.global_context.clone(), table_def.clone())
                 .unwrap();
 
-        let rowid_array = record
+        let rowid_array = record_batch
             .column(0)
             .as_any()
             .downcast_ref::<StringArray>()
@@ -113,7 +113,7 @@ impl DeleteFrom {
             let rowid = rowid_array.value(row_index);
 
             let record_rowid_key = util::dbkey::create_record_rowid(
-                self.table_def.option.full_table_name.clone(),
+                table_def.option.full_table_name.clone(),
                 rowid.as_ref(),
             );
             log::debug!("record_rowid_key: {:?}", record_rowid_key);
@@ -122,21 +122,20 @@ impl DeleteFrom {
                 return Err(e);
             }
 
-            for sql_column in self.table_def.get_table_column().sql_column_list {
+            for sql_column in table_def.get_table_column().sql_column_list {
                 let column_name = sql_column.name;
                 if column_name.to_string().contains(meta_const::COLUMN_ROWID) {
                     continue;
                 }
 
-                let sparrow_column = self
-                    .table_def
+                let sparrow_column = table_def
                     .get_table_column()
                     .get_sparrow_column(column_name)
                     .unwrap();
                 let store_id = sparrow_column.store_id;
 
                 let record_column_key = util::dbkey::create_column_key(
-                    self.table_def.option.full_table_name.clone(),
+                    table_def.option.full_table_name.clone(),
                     store_id,
                     rowid.as_ref(),
                 );

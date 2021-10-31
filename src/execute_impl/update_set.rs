@@ -17,7 +17,7 @@ use arrow::array::{
 use arrow::datatypes::{DataType};
 use arrow::record_batch::RecordBatch;
 use datafusion::physical_plan::{collect, ExecutionPlan};
-use sqlparser::ast::{Assignment, ObjectName, SetExpr, Query};
+use sqlparser::ast::{Assignment, ObjectName, SetExpr, Query, Expr as SQLExpr};
 
 use crate::mysql::{metadata};
 use crate::core::global_context::GlobalContext;
@@ -52,7 +52,7 @@ impl UpdateSet {
         }
     }
 
-    pub fn execute(
+    pub async fn execute(
         &mut self,
         table_name: ObjectName,
         assignments: Vec<Assignment>,
@@ -67,7 +67,7 @@ impl UpdateSet {
             .unwrap()
             .meta_data
             .get_table_map();
-        let table = match table_map.get(&full_table_name) {
+        let table_def = match table_map.get(&full_table_name) {
             None => {
                 let message = format!("Table '{}' doesn't exist", table_name.to_string());
                 log::error!("{}", message);
@@ -98,17 +98,17 @@ impl UpdateSet {
         let result = select_from.execute(&query).await;
         match result {
             Ok(result_set) => {
-                let result = self.update_record_batches(result_set.record_batches);
+                let result = self.update_record_batches(table_def, assignments, result_set.record_batches);
                 result
             }
             Err(mysql_error) => Err(mysql_error),
         }
     }
 
-    fn update_record_batches(&self, record_batches: Vec<RecordBatch>) -> MysqlResult<u64> {
+    fn update_record_batches(&self, table_def: TableDef, assignments: Vec<Assignment>, record_batches: Vec<RecordBatch>) -> MysqlResult<u64> {
         let mut total = 0;
         for record_batch in record_batches {
-            let result = self.update_record_batch(record_batch);
+            let result = self.update_record_batch(table_def.clone(), assignments.clone(), record_batch);
             match result {
                 Ok(count) => total += count,
                 Err(mysql_error) => return Err(mysql_error),
@@ -117,8 +117,8 @@ impl UpdateSet {
         Ok(total)
     }
 
-    pub fn update_record_batch(&self, batch: RecordBatch) -> MysqlResult<u64> {
-        let store_engine = StoreEngineFactory::try_new_with_table(self.global_context.clone(), self.table.clone()).unwrap();
+    pub fn update_record_batch(&self, table_def: TableDef, assignments: Vec<Assignment>, batch: RecordBatch) -> MysqlResult<u64> {
+        let store_engine = StoreEngineFactory::try_new_with_table(self.global_context.clone(), table_def.clone()).unwrap();
 
         let mut assignment_column_value: Vec<metadata::ArrayCell> = Vec::new();
         for column_id in 1..batch.num_columns() {
@@ -224,8 +224,8 @@ impl UpdateSet {
             .unwrap();
         for row_index in 0..rowid_array.len() {
             let rowid = rowid_array.value(row_index);
-            for assignment_index in 0..self.assignments.len() {
-                let assignment = &self.assignments[assignment_index];
+            for assignment_index in 0..assignments.len() {
+                let assignment = &assignments[assignment_index];
                 let column_value;
                 match assignment_column_value[assignment_index] {
                     metadata::ArrayCell::StringArray(s) => {
@@ -265,10 +265,10 @@ impl UpdateSet {
 
                 let column_name = &assignment.id;
 
-                let sparrow_column = self.table.get_table_column().get_sparrow_column(column_name.clone()).unwrap();
+                let sparrow_column = table_def.get_table_column().get_sparrow_column(column_name.clone()).unwrap();
                 let store_id = sparrow_column.store_id;
 
-                let record_column_key = create_column_key(self.table.option.full_table_name.clone(), store_id, rowid.as_ref());
+                let record_column_key = create_column_key(table_def.option.full_table_name.clone(), store_id, rowid.as_ref());
                 let result = store_engine.put_key(record_column_key.clone(), column_value.as_bytes());
                 match result {
                     Err(error) => {
