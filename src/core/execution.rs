@@ -49,6 +49,7 @@ use crate::physical_plan::util::CorePhysicalPlan;
 use crate::util::convert::{convert_ident_to_lowercase, ToIdent, ToLowercase, ToObjectName};
 use crate::variable::system::SystemVar;
 use crate::variable::user_defined::UserDefinedVar;
+use crate::execute_impl::drop_table::DropTable;
 
 /// Execution context for registering data sources and executing queries
 pub struct Execution {
@@ -1680,6 +1681,34 @@ impl Execution {
                         match result {
                             Ok(result_set) => Ok(CoreOutput::ResultSet(result_set)),
                             Err(mysql_error) => Err(mysql_error),
+                        }
+                    }
+                    SQLStatement::Drop {
+                        object_type, names, ..
+                    } => {
+                        match object_type {
+                            ObjectType::Table => {
+                                let table_name = names[0].clone();
+
+                                let mut drop_table = DropTable::new(
+                                    self.global_context.clone(),
+                                    self.session_context.clone(),
+                                    self.execution_context.clone(),
+                                );
+                                let result = drop_table.execute(table_name).await;
+                                match result {
+                                    Ok(count) => Ok(CoreOutput::FinalCount(FinalCount::new(count, 0))),
+                                    Err(mysql_error) => Err(mysql_error),
+                                }
+                            }
+                            _ => {
+                                return Err(MysqlError::new_global_error(
+                                    1105,
+                                    format!(
+                                        "Unknown error. The drop command is not allowed with this MySQL version"
+                                    ).as_str(),
+                                ));
+                            }
                         }
                     }
                     _ => {
