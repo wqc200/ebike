@@ -744,6 +744,36 @@ pub fn build_find_table_sqlwhere(
     selection
 }
 
+pub fn selection_information_schema_schemata(
+    catalog_name: &str,
+    schema_name: &str,
+) -> SQLExpr {
+    let selection_catalog_name = SQLExpr::BinaryOp {
+        left: Box::new(SQLExpr::Identifier(Ident::new(
+            meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_SCHEMATA_CATALOG_NAME,
+        ))),
+        op: BinaryOperator::Eq,
+        right: Box::new(SQLExpr::Value(Value::SingleQuotedString(
+            catalog_name.to_string(),
+        ))),
+    };
+    let selection_schema_name = SQLExpr::BinaryOp {
+        left: Box::new(SQLExpr::Identifier(Ident::new(
+            meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_SCHEMATA_SCHEMA_NAME,
+        ))),
+        op: BinaryOperator::Eq,
+        right: Box::new(SQLExpr::Value(Value::SingleQuotedString(
+            schema_name.to_string(),
+        ))),
+    };
+    let selection = SQLExpr::BinaryOp {
+        left: Box::new(selection_catalog_name),
+        op: BinaryOperator::And,
+        right: Box::new(selection_schema_name),
+    };
+    selection
+}
+
 pub fn build_find_column_ordinal_position_sqlwhere(
     catalog_name: &str,
     schema_name: &str,

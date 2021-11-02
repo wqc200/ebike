@@ -35,6 +35,7 @@ use crate::core::session_context::SessionContext;
 use crate::execute_impl::add_column::AddColumn;
 use crate::execute_impl::delete_from::DeleteFrom;
 use crate::execute_impl::drop_column::DropColumn;
+use crate::execute_impl::drop_table::DropTable;
 use crate::execute_impl::select_from::SelectFrom;
 use crate::execute_impl::update_set::UpdateSet;
 use crate::logical_plan::insert::LogicalPlanInsert;
@@ -49,7 +50,6 @@ use crate::physical_plan::util::CorePhysicalPlan;
 use crate::util::convert::{convert_ident_to_lowercase, ToIdent, ToLowercase, ToObjectName};
 use crate::variable::system::SystemVar;
 use crate::variable::user_defined::UserDefinedVar;
-use crate::execute_impl::drop_table::DropTable;
 
 /// Execution context for registering data sources and executing queries
 pub struct Execution {
@@ -1557,7 +1557,11 @@ impl Execution {
         }
     }
 
-    pub async fn add_column(&mut self, table_name: ObjectName, column_def: ColumnDef) -> MysqlResult<u64> {
+    pub async fn add_column(
+        &mut self,
+        table_name: ObjectName,
+        column_def: ColumnDef,
+    ) -> MysqlResult<u64> {
         let mut add_column = AddColumn::new(
             self.global_context.clone(),
             self.session_context.clone(),
@@ -1592,7 +1596,9 @@ impl Execution {
             self.session_context.clone(),
             self.execution_context.clone(),
         );
-        let result = delete_from.execute(table_name, assignments, selection).await;
+        let result = delete_from
+            .execute(table_name, assignments, selection)
+            .await;
         result
     }
 
@@ -1685,32 +1691,54 @@ impl Execution {
                     }
                     SQLStatement::Drop {
                         object_type, names, ..
-                    } => {
-                        match object_type {
-                            ObjectType::Table => {
-                                let table_name = names[0].clone();
+                    } => match object_type {
+                        ObjectType::Table => {
+                            let table_name = names[0].clone();
 
-                                let mut drop_table = DropTable::new(
-                                    self.global_context.clone(),
-                                    self.session_context.clone(),
-                                    self.execution_context.clone(),
-                                );
-                                let result = drop_table.execute(table_name).await;
-                                match result {
-                                    Ok(count) => Ok(CoreOutput::FinalCount(FinalCount::new(count, 0))),
-                                    Err(mysql_error) => Err(mysql_error),
-                                }
+                            let mut drop_table = DropTable::new(
+                                self.global_context.clone(),
+                                self.session_context.clone(),
+                                self.execution_context.clone(),
+                            );
+                            let result = drop_table.execute(table_name).await;
+                            match result {
+                                Ok(count) => Ok(CoreOutput::FinalCount(FinalCount::new(count, 0))),
+                                Err(mysql_error) => Err(mysql_error),
                             }
-                            _ => {
+                        }
+                        ObjectType::Schema => {
+                            let schema_name = names[0].clone();
+
+                            let full_schema_name = meta_util::fill_up_schema_name(
+                                &mut self.session_context,
+                                schema_name.clone(),
+                            )
+                            .unwrap();
+
+                            let map_table_schema =
+                                meta_util::read_all_schema(self.global_context.clone()).unwrap();
+                            if !map_table_schema.contains_key(&full_schema_name) {
                                 return Err(MysqlError::new_global_error(
+                                    1008,
+                                    format!(
+                                        "Can't drop database '{}'; database doesn't exist",
+                                        original_schema_name
+                                    )
+                                    .as_str(),
+                                ));
+                            }
+
+                            Ok(CoreLogicalPlan::DropSchema(original_schema_name))
+                        }
+                        _ => {
+                            return Err(MysqlError::new_global_error(
                                     1105,
                                     format!(
                                         "Unknown error. The drop command is not allowed with this MySQL version"
                                     ).as_str(),
                                 ));
-                            }
                         }
-                    }
+                    },
                     _ => {
                         let core_logical_plan = self.create_logical_plan(new_sql)?;
                         let core_logical_plan = self.optimize(&core_logical_plan)?;
