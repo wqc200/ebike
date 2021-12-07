@@ -3,5 +3,8 @@ pub mod delete_from;
 pub mod drop_column;
 pub mod drop_schema;
 pub mod drop_table;
+pub mod explain;
 pub mod select_from;
 pub mod update_set;
+pub mod show_columns;
+pub mod show_create_table;

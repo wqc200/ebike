@@ -35,7 +35,9 @@ use crate::core::session_context::SessionContext;
 use crate::execute_impl::add_column::AddColumn;
 use crate::execute_impl::delete_from::DeleteFrom;
 use crate::execute_impl::drop_column::DropColumn;
+use crate::execute_impl::drop_schema::DropSchema;
 use crate::execute_impl::drop_table::DropTable;
+use crate::execute_impl::explain::Explain;
 use crate::execute_impl::select_from::SelectFrom;
 use crate::execute_impl::update_set::UpdateSet;
 use crate::logical_plan::insert::LogicalPlanInsert;
@@ -50,6 +52,7 @@ use crate::physical_plan::util::CorePhysicalPlan;
 use crate::util::convert::{convert_ident_to_lowercase, ToIdent, ToLowercase, ToObjectName};
 use crate::variable::system::SystemVar;
 use crate::variable::user_defined::UserDefinedVar;
+use crate::execute_impl::show_columns::ShowColumns;
 
 /// Execution context for registering data sources and executing queries
 pub struct Execution {
@@ -768,259 +771,6 @@ impl Execution {
     ) -> MysqlResult<CoreLogicalPlan> {
         let statement = self.fix_statement(statement);
         match statement {
-            SQLStatement::AlterTable { name, operation } => {
-                let full_table_name =
-                    meta_util::fill_up_table_name(&mut self.session_context, name.clone()).unwrap();
-
-                let table_map = self
-                    .global_context
-                    .lock()
-                    .unwrap()
-                    .meta_data
-                    .get_table_map();
-                let table = match table_map.get(&full_table_name) {
-                    None => {
-                        return Err(meta_util::error_of_table_doesnt_exists(
-                            full_table_name.clone(),
-                        ))
-                    }
-                    Some(table) => table.clone(),
-                };
-
-                match operation.clone() {
-                    AlterTableOperation::DropColumn { column_name, .. } => {
-                        let sparrow_column = table
-                            .column
-                            .get_sparrow_column(column_name.clone())
-                            .unwrap();
-
-                        // delete column from information_schema.columns
-                        let selection = core_util::build_find_column_sqlwhere(
-                            table.option.catalog_name.as_ref(),
-                            table.option.schema_name.as_str(),
-                            table.option.table_name.as_str(),
-                            column_name.to_string().as_str(),
-                        );
-                        let select = core_util::build_select_rowid_sqlselect(
-                            meta_util::convert_to_object_name(
-                                meta_const::FULL_TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_COLUMNS,
-                            ),
-                            Some(selection),
-                        );
-                        let logical_plan =
-                            query_planner.select_to_plan(&select, &mut Default::default())?;
-                        let select_from_columns_for_delete = CoreSelectFrom::new(
-                            meta_const::FULL_TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_COLUMNS,
-                            logical_plan,
-                        );
-
-                        // update ordinal_position from information_schema.columns
-                        let ordinal_position = sparrow_column.ordinal_position;
-                        let assignments = core_util::build_update_column_assignments();
-                        let selection = core_util::build_find_column_ordinal_position_sqlwhere(
-                            table.option.catalog_name.as_ref(),
-                            table.option.schema_name.as_str(),
-                            table.option.table_name.as_str(),
-                            ordinal_position,
-                        );
-                        let select = core_util::build_update_sqlselect(
-                            meta_util::convert_to_object_name(
-                                meta_const::FULL_TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_COLUMNS,
-                            ),
-                            assignments.clone(),
-                            Some(selection),
-                        );
-                        let logical_plan =
-                            query_planner.select_to_plan(&select, &mut Default::default())?;
-                        let select_from_columns_for_update = CoreSelectFromWithAssignment::new(
-                            meta_const::FULL_TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_COLUMNS,
-                            assignments,
-                            logical_plan,
-                        );
-
-                        Ok(CoreLogicalPlan::AlterTableDropColumn {
-                            table,
-                            operation,
-                            delete_columns: select_from_columns_for_delete,
-                            update_columns: select_from_columns_for_update,
-                        })
-                    }
-                    AlterTableOperation::AddColumn { .. } => {
-                        Ok(CoreLogicalPlan::AlterTableAddColumn { table, operation })
-                    }
-                    _ => {
-                        return Err(MysqlError::new_global_error(
-                            1105,
-                            format!(
-                            "Unknown error. The drop command is not allowed with this MySQL version"
-                        )
-                            .as_str(),
-                        ));
-                    }
-                }
-            }
-            SQLStatement::Drop {
-                object_type, names, ..
-            } => {
-                match object_type {
-                    ObjectType::Table => {
-                        let name = names[0].clone();
-
-                        let full_table_name =
-                            meta_util::fill_up_table_name(&mut self.session_context, name.clone())
-                                .unwrap();
-
-                        let result = meta_util::get_table(
-                            self.global_context.clone(),
-                            full_table_name.clone(),
-                        );
-                        let table = match result {
-                            Ok(table) => table.clone(),
-                            Err(mysql_error) => return Err(mysql_error),
-                        };
-
-                        let catalog_name = table.option.catalog_name.to_string();
-                        let schema_name = table.option.schema_name.to_string();
-                        let table_name = table.option.table_name.to_string();
-
-                        // delete table from the information_schema.columns
-                        let selection = core_util::build_find_table_sqlwhere(
-                            catalog_name.as_str(),
-                            schema_name.as_str(),
-                            table_name.as_str(),
-                        );
-                        let select = core_util::build_select_rowid_sqlselect(
-                            meta_util::convert_to_object_name(
-                                meta_const::FULL_TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_COLUMNS,
-                            ),
-                            Some(selection),
-                        );
-                        let logical_plan_of_delete_columns =
-                            query_planner.select_to_plan(&select, &mut Default::default())?;
-
-                        // delete table from the information_schema.statistics
-                        let selection = core_util::build_find_table_sqlwhere(
-                            catalog_name.as_str(),
-                            schema_name.as_str(),
-                            table_name.as_str(),
-                        );
-                        let select = core_util::build_select_rowid_sqlselect(
-                            meta_util::convert_to_object_name(
-                                meta_const::FULL_TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_STATISTICS,
-                            ),
-                            Some(selection),
-                        );
-                        let logical_plan_of_statistics =
-                            query_planner.select_to_plan(&select, &mut Default::default())?;
-
-                        // delete table from the information_schema.tables
-                        let selection = core_util::build_find_table_sqlwhere(
-                            catalog_name.as_str(),
-                            schema_name.as_str(),
-                            table_name.as_str(),
-                        );
-                        let select = core_util::build_select_rowid_sqlselect(
-                            meta_util::convert_to_object_name(
-                                meta_const::FULL_TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_TABLES,
-                            ),
-                            Some(selection),
-                        );
-                        let logical_plan_of_tables =
-                            query_planner.select_to_plan(&select, &mut Default::default())?;
-
-                        Ok(CoreLogicalPlan::DropTable {
-                            delete_columns: logical_plan_of_delete_columns,
-                            delete_statistics: logical_plan_of_statistics,
-                            delete_tables: logical_plan_of_tables,
-                            table,
-                        })
-                    }
-                    ObjectType::Schema => {
-                        let original_schema_name = names[0].clone();
-                        let full_schema_name = meta_util::fill_up_schema_name(
-                            &mut self.session_context,
-                            original_schema_name.clone(),
-                        )
-                        .unwrap();
-
-                        let map_table_schema =
-                            meta_util::read_all_schema(self.global_context.clone()).unwrap();
-                        if !map_table_schema.contains_key(&full_schema_name) {
-                            return Err(MysqlError::new_global_error(
-                                1008,
-                                format!(
-                                    "Can't drop database '{}'; database doesn't exist",
-                                    original_schema_name
-                                )
-                                .as_str(),
-                            ));
-                        }
-
-                        Ok(CoreLogicalPlan::DropSchema(original_schema_name))
-                    }
-                    _ => {
-                        return Err(MysqlError::new_global_error(
-                            1105,
-                            format!(
-                            "Unknown error. The drop command is not allowed with this MySQL version"
-                        )
-                            .as_str(),
-                        ));
-                    }
-                }
-            }
-            SQLStatement::ShowColumns { table_name, .. } => {
-                let result = meta_util::resolve_table_name(&mut self.session_context, &table_name);
-                let full_table_name = match result {
-                    Ok(full_table_name) => full_table_name,
-                    Err(mysql_error) => return Err(mysql_error),
-                };
-
-                let result =
-                    meta_util::get_table(self.global_context.clone(), full_table_name.clone());
-                let table = match result {
-                    Ok(table) => table.clone(),
-                    Err(mysql_error) => return Err(mysql_error),
-                };
-
-                let catalog_name = table.option.catalog_name.to_string();
-                let schema_name = table.option.schema_name.to_string();
-                let table_name = table.option.table_name.to_string();
-
-                let selection = core_util::build_find_table_sqlwhere(
-                    catalog_name.as_str(),
-                    schema_name.as_str(),
-                    table_name.as_str(),
-                );
-
-                let select = core_util::build_select_wildcard_sqlselect(
-                    meta_const::FULL_TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_COLUMNS.to_object_name(),
-                    Some(selection.clone()),
-                );
-                let logical_plan =
-                    query_planner.select_to_plan(&select, &mut Default::default())?;
-                let select_from_columns = CoreSelectFrom::new(
-                    meta_const::FULL_TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_COLUMNS,
-                    logical_plan,
-                );
-
-                let select = core_util::build_select_wildcard_sqlselect(
-                    meta_const::FULL_TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_STATISTICS
-                        .to_object_name(),
-                    Some(selection.clone()),
-                );
-                let logical_plan =
-                    query_planner.select_to_plan(&select, &mut Default::default())?;
-                let select_from_statistics = CoreSelectFrom::new(
-                    meta_const::FULL_TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_STATISTICS,
-                    logical_plan,
-                );
-
-                return Ok(CoreLogicalPlan::ShowColumnsFrom {
-                    select_from_columns,
-                    select_from_statistics,
-                });
-            }
             SQLStatement::SetVariable {
                 variable, value, ..
             } => {
@@ -1363,10 +1113,10 @@ impl Execution {
                     Some(filter) => match filter {
                         ShowStatementFilter::Like(value) => {
                             let sql_expr = SQLExpr::BinaryOp {
-                                    left: Box::new(SQLExpr::Identifier(Ident::new(meta_const::COLUMN_NAME_OF_DEF_PERFORMANCE_SCHEMA_GLOBAL_VARIABLES_VARIABLE_VALUE))),
-                                    op: BinaryOperator::Like,
-                                    right: Box::new(SQLExpr::Value(Value::SingleQuotedString(value.clone()))),
-                                };
+                                left: Box::new(SQLExpr::Identifier(Ident::new(meta_const::COLUMN_NAME_OF_DEF_PERFORMANCE_SCHEMA_GLOBAL_VARIABLES_VARIABLE_VALUE))),
+                                op: BinaryOperator::Like,
+                                right: Box::new(SQLExpr::Value(Value::SingleQuotedString(value.clone()))),
+                            };
                             Some(sql_expr)
                         }
                         ShowStatementFilter::ILike(_) => None,
@@ -1390,23 +1140,6 @@ impl Execution {
                 let logical_plan =
                     query_planner.select_to_plan(&select, &mut Default::default())?;
                 return Ok(CoreLogicalPlan::Select(logical_plan));
-            }
-            SQLStatement::Explain {
-                analyze,
-                verbose,
-                statement,
-                ..
-            } => {
-                let mut logical_plan =
-                    query_planner.explain_statement_to_plan(verbose, analyze, &statement)?;
-
-                let has_rowid = self.projection_has_rowid(&statement);
-                if !has_rowid {
-                    logical_plan = core_util::remove_rowid_from_projection(&logical_plan);
-                }
-                //logical_plan = core_util::explain_reset_ified_plan(&logical_plan);
-
-                Ok(CoreLogicalPlan::Select(logical_plan))
             }
             SQLStatement::CreateSchema { schema_name, .. } => {
                 let db_name = meta_util::object_name_remove_quote(schema_name.clone());
@@ -1683,7 +1416,29 @@ impl Execution {
                         }
                     }
                     SQLStatement::Query(ref query) => {
-                        let result = self.select_from(query).await;
+                        let mut select_from = SelectFrom::new(
+                            self.global_context.clone(),
+                            self.session_context.clone(),
+                            self.execution_context.clone(),
+                        );
+                        let result = select_from.execute(query).await;
+                        match result {
+                            Ok(result_set) => Ok(CoreOutput::ResultSet(result_set)),
+                            Err(mysql_error) => Err(mysql_error),
+                        }
+                    }
+                    SQLStatement::Explain {
+                        analyze,
+                        verbose,
+                        statement,
+                        ..
+                    } => {
+                        let mut explain = Explain::new(
+                            self.global_context.clone(),
+                            self.session_context.clone(),
+                            self.execution_context.clone(),
+                        );
+                        let result = explain.execute(verbose, analyze, &statement).await;
                         match result {
                             Ok(result_set) => Ok(CoreOutput::ResultSet(result_set)),
                             Err(mysql_error) => Err(mysql_error),
@@ -1709,36 +1464,38 @@ impl Execution {
                         ObjectType::Schema => {
                             let schema_name = names[0].clone();
 
-                            let full_schema_name = meta_util::fill_up_schema_name(
-                                &mut self.session_context,
-                                schema_name.clone(),
-                            )
-                            .unwrap();
-
-                            let map_table_schema =
-                                meta_util::read_all_schema(self.global_context.clone()).unwrap();
-                            if !map_table_schema.contains_key(&full_schema_name) {
-                                return Err(MysqlError::new_global_error(
-                                    1008,
-                                    format!(
-                                        "Can't drop database '{}'; database doesn't exist",
-                                        original_schema_name
-                                    )
-                                    .as_str(),
-                                ));
+                            let mut drop_schema = DropSchema::new(
+                                self.global_context.clone(),
+                                self.session_context.clone(),
+                                self.execution_context.clone(),
+                            );
+                            let result = drop_schema.execute(schema_name).await;
+                            match result {
+                                Ok(count) => Ok(CoreOutput::FinalCount(FinalCount::new(count, 0))),
+                                Err(mysql_error) => Err(mysql_error),
                             }
-
-                            Ok(CoreLogicalPlan::DropSchema(original_schema_name))
                         }
                         _ => {
                             return Err(MysqlError::new_global_error(
-                                    1105,
-                                    format!(
-                                        "Unknown error. The drop command is not allowed with this MySQL version"
-                                    ).as_str(),
-                                ));
+                                1105,
+                                format!(
+                                    "Unknown error. The drop command is not allowed with this MySQL version"
+                                ).as_str(),
+                            ));
                         }
                     },
+                    SQLStatement::ShowColumns { table_name, .. } => {
+                        let mut show_columns = ShowColumns::new(
+                            self.global_context.clone(),
+                            self.session_context.clone(),
+                            self.execution_context.clone(),
+                        );
+                        let result = show_columns.execute(&table_name).await;
+                        match result {
+                            Ok(result_set) => Ok(CoreOutput::ResultSet(result_set)),
+                            Err(mysql_error) => Err(mysql_error),
+                        }
+                    }
                     _ => {
                         let core_logical_plan = self.create_logical_plan(new_sql)?;
                         let core_logical_plan = self.optimize(&core_logical_plan)?;
@@ -1812,81 +1569,6 @@ impl Execution {
         core_logical_plan: &CoreLogicalPlan,
     ) -> MysqlResult<CorePhysicalPlan> {
         match core_logical_plan {
-            CoreLogicalPlan::AlterTableDropColumn {
-                table,
-                operation,
-                delete_columns: for_delete,
-                update_columns: for_update,
-            } => {
-                let alter_table = physical_plan::alter_table::AlterTable::new(
-                    self.global_context.clone(),
-                    table.clone(),
-                    operation.clone(),
-                );
-
-                let full_table_name_of_def_information_schema_columns =
-                    meta_util::create_full_table_name(
-                        meta_const::CATALOG_NAME,
-                        meta_const::SCHEMA_NAME_OF_DEF_INFORMATION_SCHEMA,
-                        meta_const::TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_COLUMNS,
-                    );
-                let table_of_def_information_schema_columns = meta_util::get_table(
-                    self.global_context.clone(),
-                    full_table_name_of_def_information_schema_columns,
-                )
-                .unwrap();
-
-                let execution_plan = self
-                    .execution_context
-                    .create_physical_plan(for_delete.logical_plan())
-                    .unwrap();
-                let physical_plan_delete_from_columns =
-                    physical_plan::delete::PhysicalPlanDelete::new(
-                        self.global_context.clone(),
-                        table_of_def_information_schema_columns.clone(),
-                        execution_plan,
-                    );
-
-                let execution_plan = self
-                    .execution_context
-                    .create_physical_plan(for_update.logical_plan())
-                    .unwrap();
-                let physical_plan_update_from_columns = physical_plan::update::Update::new(
-                    self.global_context.clone(),
-                    table_of_def_information_schema_columns.clone(),
-                    for_update.assignments(),
-                    execution_plan,
-                );
-
-                Ok(CorePhysicalPlan::AlterTableDropColumn(
-                    alter_table,
-                    physical_plan_delete_from_columns,
-                    physical_plan_update_from_columns,
-                ))
-            }
-            CoreLogicalPlan::AlterTableAddColumn { table, operation } => {
-                let alter_table = physical_plan::alter_table::AlterTable::new(
-                    self.global_context.clone(),
-                    table.clone(),
-                    operation.clone(),
-                );
-                Ok(CorePhysicalPlan::AlterTableAddColumn(alter_table))
-            }
-            CoreLogicalPlan::Select(logical_plan) => {
-                let result = self.execution_context.create_physical_plan(logical_plan);
-                let execution_plan = match result {
-                    Ok(execution_plan) => execution_plan,
-                    Err(datafusion_error) => {
-                        return Err(MysqlError::from(datafusion_error));
-                    }
-                };
-
-                let select = physical_plan::select::PhysicalPlanSelect::new(
-                    self.global_context.clone(),
-                    execution_plan,
-                );
-                Ok(CorePhysicalPlan::Select(select))
-            }
             CoreLogicalPlan::Explain(logical_plan) => {
                 let execution_plan = self.execution_context.create_physical_plan(logical_plan)?;
                 let select = physical_plan::select::PhysicalPlanSelect::new(
@@ -1899,80 +1581,6 @@ impl Execution {
                 let set_default_db =
                     physical_plan::set_default_schema::SetDefaultSchema::new(object_name.clone());
                 Ok(CorePhysicalPlan::SetDefaultSchema(set_default_db))
-            }
-            CoreLogicalPlan::DropTable {
-                delete_columns: logical_plan_of_columns,
-                delete_statistics: logical_plan_of_statistics,
-                delete_tables: logical_plan_of_tables,
-                table,
-            } => {
-                let physical_plan_drop_table =
-                    PhysicalPlanDropTable::new(self.global_context.clone(), table.clone());
-
-                let full_table_name = meta_util::create_full_table_name(
-                    meta_const::CATALOG_NAME,
-                    meta_const::SCHEMA_NAME_OF_DEF_INFORMATION_SCHEMA,
-                    meta_const::TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_COLUMNS,
-                );
-                let table_of_columns =
-                    meta_util::get_table(self.global_context.clone(), full_table_name).unwrap();
-                let execution_plan = self
-                    .execution_context
-                    .create_physical_plan(logical_plan_of_columns)
-                    .unwrap();
-                let physical_plan_delete_columns = PhysicalPlanDelete::new(
-                    self.global_context.clone(),
-                    table_of_columns,
-                    execution_plan,
-                );
-
-                let full_table_name = meta_util::create_full_table_name(
-                    meta_const::CATALOG_NAME,
-                    meta_const::SCHEMA_NAME_OF_DEF_INFORMATION_SCHEMA,
-                    meta_const::TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_STATISTICS,
-                );
-                let table_of_statistics =
-                    meta_util::get_table(self.global_context.clone(), full_table_name).unwrap();
-                let execution_plan = self
-                    .execution_context
-                    .create_physical_plan(logical_plan_of_statistics)
-                    .unwrap();
-                let physical_plan_delete_statistics = PhysicalPlanDelete::new(
-                    self.global_context.clone(),
-                    table_of_statistics,
-                    execution_plan,
-                );
-
-                let full_table_name = meta_util::create_full_table_name(
-                    meta_const::CATALOG_NAME,
-                    meta_const::SCHEMA_NAME_OF_DEF_INFORMATION_SCHEMA,
-                    meta_const::TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_TABLES,
-                );
-                let table_of_tables =
-                    meta_util::get_table(self.global_context.clone(), full_table_name).unwrap();
-                let execution_plan = self
-                    .execution_context
-                    .create_physical_plan(logical_plan_of_tables)
-                    .unwrap();
-                let physical_plan_delete_tables = PhysicalPlanDelete::new(
-                    self.global_context.clone(),
-                    table_of_tables,
-                    execution_plan,
-                );
-
-                Ok(CorePhysicalPlan::DropTable(
-                    physical_plan_drop_table,
-                    physical_plan_delete_columns,
-                    physical_plan_delete_statistics,
-                    physical_plan_delete_tables,
-                ))
-            }
-            CoreLogicalPlan::DropSchema(db_name) => {
-                let drop_db = physical_plan::drop_db::DropDB::new(
-                    self.global_context.clone(),
-                    db_name.clone(),
-                );
-                Ok(CorePhysicalPlan::DropDB(drop_db))
             }
             CoreLogicalPlan::CreateDb {
                 db_name: schema_name,
@@ -2154,6 +1762,7 @@ impl Execution {
                 Ok(CorePhysicalPlan::ComFieldList(com_field_list))
             }
             CoreLogicalPlan::Commit => Ok(CorePhysicalPlan::Commit),
+            _ => {}
         }
     }
 
