@@ -52,7 +52,7 @@ use crate::physical_plan::util::CorePhysicalPlan;
 use crate::util::convert::{convert_ident_to_lowercase, ToIdent, ToLowercase, ToObjectName};
 use crate::variable::system::SystemVar;
 use crate::variable::user_defined::UserDefinedVar;
-use crate::execute_impl::show_columns::ShowColumns;
+use crate::execute_impl::show_columns_from_table::ShowColumns;
 
 /// Execution context for registering data sources and executing queries
 pub struct Execution {
@@ -778,94 +778,6 @@ impl Execution {
                 let variable = ObjectName(idents);
                 return Ok(CoreLogicalPlan::SetVariable { variable, value });
             }
-            SQLStatement::ShowCreate { obj_type, obj_name } => match obj_type {
-                ShowCreateObject::Table => {
-                    let table_name = obj_name;
-
-                    let full_table_name = meta_util::fill_up_table_name(
-                        &mut self.session_context,
-                        table_name.clone(),
-                    )
-                    .unwrap();
-
-                    let result =
-                        meta_util::get_table(self.global_context.clone(), full_table_name.clone());
-                    let table = match result {
-                        Ok(table) => table.clone(),
-                        Err(mysql_error) => return Err(mysql_error),
-                    };
-
-                    let catalog_name = table.option.catalog_name.to_string();
-                    let schema_name = table.option.schema_name.to_string();
-                    let table_name = table.option.table_name.to_string();
-
-                    let selection = core_util::build_find_table_sqlwhere(
-                        catalog_name.as_str(),
-                        schema_name.as_str(),
-                        table_name.as_str(),
-                    );
-
-                    let select = core_util::build_select_wildcard_sqlselect(
-                        meta_const::FULL_TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_COLUMNS
-                            .to_object_name(),
-                        Some(selection.clone()),
-                    );
-                    // order by
-                    let order_by = OrderByExpr {
-                        expr: SQLExpr::Identifier(Ident::new(meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_COLUMNS_ORDINAL_POSITION)),
-                        asc: None,
-                        nulls_first: None,
-                    };
-                    // create logical plan
-                    let logical_plan =
-                        query_planner.select_to_plan(&select, &mut Default::default())?;
-                    let logical_plan = query_planner.order_by(logical_plan, &[order_by])?;
-                    let select_from_columns = CoreSelectFrom::new(
-                        meta_const::FULL_TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_COLUMNS,
-                        logical_plan,
-                    );
-
-                    let select = core_util::build_select_wildcard_sqlselect(
-                        meta_const::FULL_TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_STATISTICS
-                            .to_object_name(),
-                        Some(selection.clone()),
-                    );
-                    let logical_plan =
-                        query_planner.select_to_plan(&select, &mut Default::default())?;
-                    let select_from_statistics = CoreSelectFrom::new(
-                        meta_const::FULL_TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_STATISTICS,
-                        logical_plan,
-                    );
-
-                    let select = core_util::build_select_wildcard_sqlselect(
-                        meta_const::FULL_TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_TABLES
-                            .to_object_name(),
-                        Some(selection.clone()),
-                    );
-                    let logical_plan =
-                        query_planner.select_to_plan(&select, &mut Default::default())?;
-                    let select_from_tables = CoreSelectFrom::new(
-                        meta_const::FULL_TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_TABLES,
-                        logical_plan,
-                    );
-
-                    return Ok(CoreLogicalPlan::ShowCreateTable {
-                        select_columns: select_from_columns,
-                        select_statistics: select_from_statistics,
-                        select_tables: select_from_tables,
-                        table,
-                    });
-                }
-                _ => {
-                    let message = format!(
-                        "Unsupported show create statement, show type: {:?}, show name: {:?}",
-                        obj_type.clone(),
-                        obj_name.clone()
-                    );
-                    log::error!("{}", message);
-                    return Err(MysqlError::new_global_error(67, message.as_str()));
-                }
-            },
             SQLStatement::ShowVariable { variable } => {
                 let first_variable = variable.get(0).unwrap();
                 if first_variable.to_string().to_uppercase()
@@ -1569,14 +1481,6 @@ impl Execution {
         core_logical_plan: &CoreLogicalPlan,
     ) -> MysqlResult<CorePhysicalPlan> {
         match core_logical_plan {
-            CoreLogicalPlan::Explain(logical_plan) => {
-                let execution_plan = self.execution_context.create_physical_plan(logical_plan)?;
-                let select = physical_plan::select::PhysicalPlanSelect::new(
-                    self.global_context.clone(),
-                    execution_plan,
-                );
-                Ok(CorePhysicalPlan::Select(select))
-            }
             CoreLogicalPlan::SetDefaultDb(object_name) => {
                 let set_default_db =
                     physical_plan::set_default_schema::SetDefaultSchema::new(object_name.clone());
@@ -1649,83 +1553,6 @@ impl Execution {
                     physical_plan::set_variable::SetVariable::new(variable.clone(), value.clone());
                 Ok(CorePhysicalPlan::SetVariable(set_variable))
             }
-            CoreLogicalPlan::ShowCreateTable {
-                select_columns,
-                select_statistics,
-                select_tables,
-                table,
-            } => {
-                let show_create_table = physical_plan::show_create_table::ShowCreateTable::new(
-                    self.global_context.clone(),
-                    table.clone(),
-                );
-
-                let execution_plan = self
-                    .execution_context
-                    .create_physical_plan(select_columns.logical_plan())
-                    .unwrap();
-                let select_columns = physical_plan::select::PhysicalPlanSelect::new(
-                    self.global_context.clone(),
-                    execution_plan,
-                );
-
-                let execution_plan = self
-                    .execution_context
-                    .create_physical_plan(select_statistics.logical_plan())
-                    .unwrap();
-                let select_statistics = physical_plan::select::PhysicalPlanSelect::new(
-                    self.global_context.clone(),
-                    execution_plan,
-                );
-
-                let execution_plan = self
-                    .execution_context
-                    .create_physical_plan(select_tables.logical_plan())
-                    .unwrap();
-                let select_tables = physical_plan::select::PhysicalPlanSelect::new(
-                    self.global_context.clone(),
-                    execution_plan,
-                );
-
-                Ok(CorePhysicalPlan::ShowCreateTable(
-                    show_create_table,
-                    select_columns,
-                    select_statistics,
-                    select_tables,
-                ))
-            }
-            CoreLogicalPlan::ShowColumnsFrom {
-                select_from_columns,
-                select_from_statistics,
-            } => {
-                let show_columns_from = physical_plan::show_columns_from::ShowColumnsFrom::new(
-                    self.global_context.clone(),
-                );
-
-                let execution_plan = self
-                    .execution_context
-                    .create_physical_plan(select_from_columns.logical_plan())
-                    .unwrap();
-                let select_columns = physical_plan::select::PhysicalPlanSelect::new(
-                    self.global_context.clone(),
-                    execution_plan,
-                );
-
-                let execution_plan = self
-                    .execution_context
-                    .create_physical_plan(select_from_statistics.logical_plan())
-                    .unwrap();
-                let select_statistics = physical_plan::select::PhysicalPlanSelect::new(
-                    self.global_context.clone(),
-                    execution_plan,
-                );
-
-                Ok(CorePhysicalPlan::ShowColumnsFrom(
-                    show_columns_from,
-                    select_columns,
-                    select_statistics,
-                ))
-            }
             CoreLogicalPlan::ShowGrants { user } => {
                 let show_grants = physical_plan::show_grants::ShowGrants::new(
                     self.global_context.clone(),
@@ -1771,40 +1598,6 @@ impl Execution {
         core_physical_plan: &CorePhysicalPlan,
     ) -> MysqlResult<CoreOutput> {
         match core_physical_plan {
-            CorePhysicalPlan::AlterTableAddColumn(physical_plan_alter_table) => {
-                let result = physical_plan_alter_table
-                    .execute(&mut self.execution_context, &mut self.session_context);
-                match result {
-                    Ok(count) => Ok(CoreOutput::FinalCount(FinalCount::new(count, 0))),
-                    Err(mysql_error) => Err(mysql_error),
-                }
-            }
-            CorePhysicalPlan::AlterTableDropColumn(
-                physical_plan_alter_table,
-                physical_plan_delete_from_columns,
-                physical_plan_update_from_columns,
-            ) => {
-                let result = physical_plan_delete_from_columns
-                    .execute(&mut self.session_context)
-                    .await;
-                if let Err(mysql_error) = result {
-                    return Err(mysql_error);
-                }
-
-                let result = physical_plan_update_from_columns
-                    .execute(&mut self.session_context)
-                    .await;
-                if let Err(mysql_error) = result {
-                    return Err(mysql_error);
-                }
-
-                let result = physical_plan_alter_table
-                    .execute(&mut self.execution_context, &mut self.session_context);
-                match result {
-                    Ok(count) => Ok(CoreOutput::FinalCount(FinalCount::new(count, 0))),
-                    Err(mysql_error) => Err(mysql_error),
-                }
-            }
             CorePhysicalPlan::SetDefaultSchema(set_default_schema) => {
                 let result = set_default_schema.execute(
                     &mut self.execution_context,
@@ -1860,40 +1653,6 @@ impl Execution {
                     Err(mysql_error) => Err(mysql_error),
                 }
             }
-            CorePhysicalPlan::DropTable(
-                physical_plan_drop_table,
-                physical_plan_delete_columns,
-                physical_plan_delete_statistics,
-                physical_plan_delete_tables,
-            ) => {
-                let result = physical_plan_delete_columns
-                    .execute(&mut self.session_context)
-                    .await;
-                if let Err(mysql_error) = result {
-                    return Err(mysql_error);
-                }
-
-                let result = physical_plan_delete_statistics
-                    .execute(&mut self.session_context)
-                    .await;
-                if let Err(mysql_error) = result {
-                    return Err(mysql_error);
-                }
-
-                let result = physical_plan_delete_tables
-                    .execute(&mut self.session_context)
-                    .await;
-                if let Err(mysql_error) = result {
-                    return Err(mysql_error);
-                }
-
-                let result = physical_plan_drop_table
-                    .execute(&mut self.execution_context, &mut self.session_context);
-                match result {
-                    Ok(count) => Ok(CoreOutput::FinalCount(FinalCount::new(count, 0))),
-                    Err(mysql_error) => Err(mysql_error),
-                }
-            }
             CorePhysicalPlan::Insert(physical_plan_insert) => {
                 let result = physical_plan_insert.execute();
                 match result {
@@ -1909,37 +1668,6 @@ impl Execution {
                 );
                 match result {
                     Ok(count) => Ok(CoreOutput::FinalCount(FinalCount::new(count, 0))),
-                    Err(mysql_error) => Err(mysql_error),
-                }
-            }
-            CorePhysicalPlan::ShowCreateTable(
-                show_create_table,
-                select_columns,
-                select_statistics,
-                select_tables,
-            ) => {
-                let result = select_columns.execute().await;
-                let columns_record = match result {
-                    Ok((_, records)) => records,
-                    Err(mysql_error) => return Err(mysql_error),
-                };
-
-                let result = select_statistics.execute().await;
-                let statistics_record = match result {
-                    Ok((_, records)) => records,
-                    Err(mysql_error) => return Err(mysql_error),
-                };
-
-                let result = select_tables.execute().await;
-                let tables_record = match result {
-                    Ok((_, records)) => records,
-                    Err(mysql_error) => return Err(mysql_error),
-                };
-
-                let result =
-                    show_create_table.execute(columns_record, statistics_record, tables_record);
-                match result {
-                    Ok(result_set) => Ok(CoreOutput::ResultSet(result_set)),
                     Err(mysql_error) => Err(mysql_error),
                 }
             }

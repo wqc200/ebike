@@ -6,5 +6,5 @@ pub mod drop_table;
 pub mod explain;
 pub mod select_from;
 pub mod update_set;
-pub mod show_columns;
+pub mod show_columns_from_table;
 pub mod show_create_table;
