@@ -167,7 +167,7 @@ impl Handle {
                 0x04 => {
                     // ComFieldList
                     let table_name = sql.trim_end_matches("\x00").to_string();
-                    self.core_execution.field_list(table_name.as_str()).await
+                    self.core_execution.com_field_list(table_name.as_str()).await
                 }
                 _ => {
                     log::error!("Unknown error. The command is not support, command id: {:?}", command_id.to_string());

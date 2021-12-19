@@ -39,7 +39,17 @@ use crate::execute_impl::drop_schema::DropSchema;
 use crate::execute_impl::drop_table::DropTable;
 use crate::execute_impl::explain::Explain;
 use crate::execute_impl::select_from::SelectFrom;
+use crate::execute_impl::show_columns_from_table::ShowColumns;
+use crate::execute_impl::show_databases::ShowDatabases;
+use crate::execute_impl::show_grants::ShowGrants;
 use crate::execute_impl::update_set::UpdateSet;
+use crate::execute_impl::set_variable::SetVariable;
+use crate::execute_impl::show_privileges::ShowPrivileges;
+use crate::execute_impl::show_engines::ShowEngines;
+use crate::execute_impl::show_charset::ShowCharset;
+use crate::execute_impl::show_collation::ShowCollation;
+use crate::execute_impl::com_field_list::ComFieldList;
+use crate::execute_impl::set_default_schema::SetDefaultSchema;
 use crate::logical_plan::insert::LogicalPlanInsert;
 use crate::meta::meta_util::load_all_table;
 use crate::meta::{meta_const, meta_util};
@@ -52,7 +62,6 @@ use crate::physical_plan::util::CorePhysicalPlan;
 use crate::util::convert::{convert_ident_to_lowercase, ToIdent, ToLowercase, ToObjectName};
 use crate::variable::system::SystemVar;
 use crate::variable::user_defined::UserDefinedVar;
-use crate::execute_impl::show_columns_from_table::ShowColumns;
 
 /// Execution context for registering data sources and executing queries
 pub struct Execution {
@@ -783,58 +792,6 @@ impl Execution {
                 if first_variable.to_string().to_uppercase()
                     == meta_const::SHOW_VARIABLE_DATABASES.to_uppercase()
                 {
-                    let table_name = meta_util::convert_to_object_name(
-                        meta_const::FULL_TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_SCHEMATA,
-                    );
-                    let full_table_name = meta_util::fill_up_table_name(
-                        &mut self.session_context,
-                        table_name.clone(),
-                    )
-                    .unwrap();
-
-                    let projection_column = SQLExpr::Identifier(Ident {
-                        value:
-                            meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_SCHEMATA_SCHEMA_NAME
-                                .to_string(),
-                        quote_style: None,
-                    });
-                    let projection_column_alias = Ident::new("Database");
-                    // from
-                    let table_with_joins =
-                        core_util::build_table_with_joins(full_table_name.clone());
-                    // projection
-                    let projection = vec![SelectItem::ExprWithAlias {
-                        expr: projection_column,
-                        alias: projection_column_alias.clone(),
-                    }];
-                    // order by
-                    let order_by_column = SQLExpr::Identifier(projection_column_alias);
-                    let order_by = OrderByExpr {
-                        expr: order_by_column,
-                        asc: None,
-                        nulls_first: None,
-                    };
-
-                    // select
-                    let select = Select {
-                        distinct: false,
-                        top: None,
-                        projection,
-                        from: vec![table_with_joins],
-                        lateral_views: vec![],
-                        selection: None,
-                        group_by: vec![],
-                        cluster_by: vec![],
-                        distribute_by: vec![],
-                        sort_by: vec![],
-                        having: None,
-                    };
-                    // create logical plan
-                    let logical_plan =
-                        query_planner.select_to_plan(&select, &mut Default::default())?;
-                    let logical_plan = query_planner.order_by(logical_plan, &[order_by])?;
-
-                    return Ok(CoreLogicalPlan::Select(logical_plan));
                 } else if first_variable.to_string().to_uppercase()
                     == meta_const::SHOW_VARIABLE_GRANTS.to_uppercase()
                 {
@@ -1408,6 +1365,110 @@ impl Execution {
                             Err(mysql_error) => Err(mysql_error),
                         }
                     }
+                    SQLStatement::SetVariable {
+                        variable, value, ..
+                    } => {
+                        let idents = vec![variable];
+                        let variable = ObjectName(idents);
+
+                        let mut drop_schema = SetVariable::new(
+                            self.global_context.clone(),
+                            self.session_context.clone(),
+                            self.execution_context.clone(),
+                        );
+                        let result = drop_schema.execute().await;
+                        match result {
+                            Ok(count) => Ok(CoreOutput::FinalCount(FinalCount::new(count, 0))),
+                            Err(mysql_error) => Err(mysql_error),
+                        }
+                    }
+                    SQLStatement::ShowVariable { variable } => {
+                        let first_variable = variable.get(0).unwrap();
+                        if first_variable.to_string().to_uppercase()
+                            == meta_const::SHOW_VARIABLE_DATABASES.to_uppercase()
+                        {
+                            let mut show_databases = ShowDatabases::new(
+                                self.global_context.clone(),
+                                self.session_context.clone(),
+                                self.execution_context.clone(),
+                            );
+                            let result = show_databases.execute().await;
+                            match result {
+                                Ok(result_set) => Ok(CoreOutput::ResultSet(result_set)),
+                                Err(mysql_error) => Err(mysql_error),
+                            }
+                        } else if first_variable.to_string().to_uppercase()
+                            == meta_const::SHOW_VARIABLE_GRANTS.to_uppercase()
+                        {
+                            let mut show_grants = ShowGrants::new(
+                                self.global_context.clone(),
+                                self.session_context.clone(),
+                                self.execution_context.clone(),
+                            );
+                            let result = show_grants.execute().await;
+                            match result {
+                                Ok(result_set) => Ok(CoreOutput::ResultSet(result_set)),
+                                Err(mysql_error) => Err(mysql_error),
+                            }
+                        } else if first_variable.to_string().to_uppercase()
+                            == meta_const::SHOW_VARIABLE_PRIVILEGES.to_uppercase()
+                        {
+                            let mut show_privileges = ShowPrivileges::new(
+                                self.global_context.clone(),
+                                self.session_context.clone(),
+                                self.execution_context.clone(),
+                            );
+                            let result = show_privileges.execute().await;
+                            match result {
+                                Ok(result_set) => Ok(CoreOutput::ResultSet(result_set)),
+                                Err(mysql_error) => Err(mysql_error),
+                            }
+                        } else if first_variable.to_string().to_uppercase()
+                            == meta_const::SHOW_VARIABLE_ENGINES.to_uppercase()
+                        {
+                            let mut show_engines = ShowEngines::new(
+                                self.global_context.clone(),
+                                self.session_context.clone(),
+                                self.execution_context.clone(),
+                            );
+                            let result = show_engines.execute().await;
+                            match result {
+                                Ok(result_set) => Ok(CoreOutput::ResultSet(result_set)),
+                                Err(mysql_error) => Err(mysql_error),
+                            }
+                        } else if first_variable.to_string().to_uppercase()
+                            == meta_const::SHOW_VARIABLE_CHARSET.to_uppercase()
+                        {
+                            let mut show_charset = ShowCharset::new(
+                                self.global_context.clone(),
+                                self.session_context.clone(),
+                                self.execution_context.clone(),
+                            );
+                            let result = show_charset.execute().await;
+                            match result {
+                                Ok(result_set) => Ok(CoreOutput::ResultSet(result_set)),
+                                Err(mysql_error) => Err(mysql_error),
+                            }
+                        } else if first_variable.to_string().to_uppercase()
+                            == meta_const::SHOW_VARIABLE_COLLATION.to_uppercase()
+                        {
+                            let mut show_collation = ShowCollation::new(
+                                self.global_context.clone(),
+                                self.session_context.clone(),
+                                self.execution_context.clone(),
+                            );
+                            let result = show_collation.execute().await;
+                            match result {
+                                Ok(result_set) => Ok(CoreOutput::ResultSet(result_set)),
+                                Err(mysql_error) => Err(mysql_error),
+                            }
+                        }
+
+                        let message =
+                            format!("Unsupported show statement, show variable: {:?}", variable);
+                        log::error!("{}", message);
+                        Err(MysqlError::new_global_error(67, message.as_str()))
+                    }
                     _ => {
                         let core_logical_plan = self.create_logical_plan(new_sql)?;
                         let core_logical_plan = self.optimize(&core_logical_plan)?;
@@ -1426,19 +1487,37 @@ impl Execution {
 
     pub async fn set_default_schema(&mut self, db_name: &str) -> MysqlResult<CoreOutput> {
         let schema_name = meta_util::convert_to_object_name(db_name);
-        let core_logical_plan = CoreLogicalPlan::SetDefaultDb(schema_name);
-        let core_physical_plan = self.create_physical_plan(&core_logical_plan)?;
-        let core_output = self.execution(&core_physical_plan).await?;
-        Ok(core_output)
+
+        let mut set_default_schema = SetDefaultSchema::new(
+            self.global_context.clone(),
+            self.session_context.clone(),
+            self.execution_context.clone(),
+        );
+        let result = set_default_schema.execute(schema_name);
+        match result {
+            Ok(count) => Ok(CoreOutput::FinalCount(FinalCount::new_with_message(
+                count,
+                0,
+                "Database changed",
+            ))),
+            Err(mysql_error) => Err(mysql_error),
+        }
     }
 
-    pub async fn field_list(&mut self, table_name: &str) -> MysqlResult<CoreOutput> {
+    pub async fn com_field_list(&mut self, table_name: &str) -> MysqlResult<CoreOutput> {
         let table_name = table_name.to_object_name();
         log::debug!("com field list table name: {}", table_name);
-        let core_logical_plan = CoreLogicalPlan::ComFieldList(table_name);
-        let core_physical_plan = self.create_physical_plan(&core_logical_plan)?;
-        let core_output = self.execution(&core_physical_plan).await?;
-        Ok(core_output)
+
+        let mut com_field_list = ComFieldList::new(
+            self.global_context.clone(),
+            self.session_context.clone(),
+            self.execution_context.clone(),
+        );
+        let result = com_field_list.execute(table_name.clone()).await;
+        match result {
+            Ok(result_set) => Ok(CoreOutput::ResultSet(result_set)),
+            Err(mysql_error) => Err(mysql_error),
+        }
     }
 
     pub fn create_logical_plan(&mut self, sql: &str) -> MysqlResult<CoreLogicalPlan> {
