@@ -31,7 +31,7 @@ use crate::meta::meta_def::TableDef;
 use datafusion::execution::context::ExecutionContext;
 use crate::meta::meta_util;
 use crate::core::core_util;
-use crate::execute_impl::select_from::SelectFrom;
+use crate::execute_impl::select::SelectFrom;
 
 pub struct UpdateSet {
     global_context: Arc<Mutex<GlobalContext>>,

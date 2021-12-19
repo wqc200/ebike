@@ -8,7 +8,7 @@ use datafusion::physical_plan::{collect, ExecutionPlan};
 use crate::core::core_util;
 use crate::core::global_context::GlobalContext;
 use crate::core::session_context::SessionContext;
-use crate::execute_impl::select_from::SelectFrom;
+use crate::execute_impl::select::SelectFrom;
 use crate::meta::meta_def::TableDef;
 use crate::meta::{meta_const, meta_util};
 use crate::mysql::error::{MysqlError, MysqlResult};

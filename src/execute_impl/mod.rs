@@ -1,11 +1,11 @@
 pub mod add_column;
 pub mod com_field_list;
-pub mod delete_from;
+pub mod delete;
 pub mod drop_column;
 pub mod drop_schema;
 pub mod drop_table;
 pub mod explain;
-pub mod select_from;
+pub mod select;
 pub mod set_variable;
 pub mod show_charset;
 pub mod show_collation;
@@ -19,3 +19,4 @@ pub mod update_set;
 pub mod set_default_schema;
 pub mod create_db;
 pub mod create_table;
+pub mod insert;

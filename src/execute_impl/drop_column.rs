@@ -12,7 +12,7 @@ use crate::meta::meta_util;
 use crate::meta::meta_util::load_all_table;
 use crate::mysql::error::{MysqlResult};
 use crate::core::core_util;
-use crate::execute_impl::delete_from::DeleteFrom;
+use crate::execute_impl::delete::DeleteFrom;
 use crate::execute_impl::update_set::UpdateSet;
 
 pub struct DropColumn {

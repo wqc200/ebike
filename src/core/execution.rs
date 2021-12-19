@@ -33,25 +33,26 @@ use crate::core::logical_plan::{CoreLogicalPlan, CoreSelectFrom, CoreSelectFromW
 use crate::core::output::{CoreOutput, FinalCount, ResultSet};
 use crate::core::session_context::SessionContext;
 use crate::execute_impl::add_column::AddColumn;
-use crate::execute_impl::delete_from::DeleteFrom;
+use crate::execute_impl::com_field_list::ComFieldList;
+use crate::execute_impl::create_db::CreateDb;
+use crate::execute_impl::create_table::CreateTable;
+use crate::execute_impl::delete::DeleteFrom;
 use crate::execute_impl::drop_column::DropColumn;
 use crate::execute_impl::drop_schema::DropSchema;
 use crate::execute_impl::drop_table::DropTable;
 use crate::execute_impl::explain::Explain;
-use crate::execute_impl::select_from::SelectFrom;
-use crate::execute_impl::show_columns_from_table::ShowColumns;
-use crate::execute_impl::show_databases::ShowDatabases;
-use crate::execute_impl::show_grants::ShowGrants;
-use crate::execute_impl::update_set::UpdateSet;
+use crate::execute_impl::insert::Insert;
+use crate::execute_impl::select::SelectFrom;
+use crate::execute_impl::set_default_schema::SetDefaultSchema;
 use crate::execute_impl::set_variable::SetVariable;
-use crate::execute_impl::show_privileges::ShowPrivileges;
-use crate::execute_impl::show_engines::ShowEngines;
 use crate::execute_impl::show_charset::ShowCharset;
 use crate::execute_impl::show_collation::ShowCollation;
-use crate::execute_impl::com_field_list::ComFieldList;
-use crate::execute_impl::set_default_schema::SetDefaultSchema;
-use crate::execute_impl::create_db::CreateDb;
-use crate::execute_impl::create_table::CreateTable;
+use crate::execute_impl::show_columns_from_table::ShowColumns;
+use crate::execute_impl::show_databases::ShowDatabases;
+use crate::execute_impl::show_engines::ShowEngines;
+use crate::execute_impl::show_grants::ShowGrants;
+use crate::execute_impl::show_privileges::ShowPrivileges;
+use crate::execute_impl::update_set::UpdateSet;
 use crate::logical_plan::insert::LogicalPlanInsert;
 use crate::meta::meta_util::load_all_table;
 use crate::meta::{meta_const, meta_util};
@@ -1314,7 +1315,27 @@ impl Execution {
                             self.session_context.clone(),
                             self.execution_context.clone(),
                         );
-                        let result = create_table.execute(table_name, columns, constraints, with_options).await;
+                        let result = create_table
+                            .execute(table_name, columns, constraints, with_options)
+                            .await;
+                        match result {
+                            Ok(count) => Ok(CoreOutput::FinalCount(FinalCount::new(count, 0))),
+                            Err(mysql_error) => Err(mysql_error),
+                        }
+                    }
+                    SQLStatement::Insert {
+                        table_name,
+                        columns,
+                        overwrite,
+                        source,
+                        ..
+                    } => {
+                        let mut insert = Insert::new(
+                            self.global_context.clone(),
+                            self.session_context.clone(),
+                            self.execution_context.clone(),
+                        );
+                        let result = insert.execute(table_name, columns, overwrite, source).await;
                         match result {
                             Ok(count) => Ok(CoreOutput::FinalCount(FinalCount::new(count, 0))),
                             Err(mysql_error) => Err(mysql_error),

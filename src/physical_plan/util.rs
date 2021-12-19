@@ -5,7 +5,6 @@ use crate::physical_plan::create_table::CreateTable;
 use crate::physical_plan::delete::PhysicalPlanDelete;
 use crate::physical_plan::drop_db::DropDB;
 use crate::physical_plan::drop_table::PhysicalPlanDropTable;
-use crate::physical_plan::insert::PhysicalPlanInsert;
 use crate::physical_plan::select::PhysicalPlanSelect;
 use crate::physical_plan::set_default_schema::SetDefaultSchema;
 use crate::physical_plan::set_variable::SetVariable;
