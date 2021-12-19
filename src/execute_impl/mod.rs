@@ -17,3 +17,5 @@ pub mod show_grants;
 pub mod show_privileges;
 pub mod update_set;
 pub mod set_default_schema;
+pub mod create_db;
+pub mod create_table;

@@ -50,6 +50,8 @@ use crate::execute_impl::show_charset::ShowCharset;
 use crate::execute_impl::show_collation::ShowCollation;
 use crate::execute_impl::com_field_list::ComFieldList;
 use crate::execute_impl::set_default_schema::SetDefaultSchema;
+use crate::execute_impl::create_db::CreateDb;
+use crate::execute_impl::create_table::CreateTable;
 use crate::logical_plan::insert::LogicalPlanInsert;
 use crate::meta::meta_util::load_all_table;
 use crate::meta::{meta_const, meta_util};
@@ -1282,6 +1284,40 @@ impl Execution {
                                     ).as_str(),
                                 ));
                             }
+                        }
+                    }
+                    SQLStatement::CreateSchema { schema_name, .. } => {
+                        let db_name = meta_util::object_name_remove_quote(schema_name.clone());
+
+                        let mut create_db = CreateDb::new(
+                            self.global_context.clone(),
+                            self.session_context.clone(),
+                            self.execution_context.clone(),
+                        );
+                        let result = create_db.execute(db_name).await;
+                        match result {
+                            Ok(count) => Ok(CoreOutput::FinalCount(FinalCount::new(count, 0))),
+                            Err(mysql_error) => Err(mysql_error),
+                        }
+                    }
+                    SQLStatement::CreateTable {
+                        name,
+                        columns,
+                        constraints,
+                        with_options,
+                        ..
+                    } => {
+                        let table_name = name.clone();
+
+                        let mut create_table = CreateTable::new(
+                            self.global_context.clone(),
+                            self.session_context.clone(),
+                            self.execution_context.clone(),
+                        );
+                        let result = create_table.execute(table_name, columns, constraints, with_options).await;
+                        match result {
+                            Ok(count) => Ok(CoreOutput::FinalCount(FinalCount::new(count, 0))),
+                            Err(mysql_error) => Err(mysql_error),
                         }
                     }
                     SQLStatement::Query(ref query) => {
