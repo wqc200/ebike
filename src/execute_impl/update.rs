@@ -33,13 +33,13 @@ use crate::meta::meta_util;
 use crate::core::core_util;
 use crate::execute_impl::select::SelectFrom;
 
-pub struct UpdateSet {
+pub struct Update {
     global_context: Arc<Mutex<GlobalContext>>,
     session_context: SessionContext,
     execution_context: ExecutionContext,
 }
 
-impl UpdateSet {
+impl Update {
     pub fn new(
         global_context: Arc<Mutex<GlobalContext>>,
         session_context: SessionContext,

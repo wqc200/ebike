@@ -13,7 +13,7 @@ use crate::meta::meta_util::load_all_table;
 use crate::mysql::error::{MysqlResult};
 use crate::core::core_util;
 use crate::execute_impl::delete::DeleteFrom;
-use crate::execute_impl::update_set::UpdateSet;
+use crate::execute_impl::update::Update;
 
 pub struct DropColumn {
     global_context: Arc<Mutex<GlobalContext>>,
@@ -99,7 +99,7 @@ impl DropColumn {
             table_def.option.table_name.as_str(),
             ordinal_position,
         );
-        let mut update_set = UpdateSet::new(
+        let mut update_set = Update::new(
             self.global_context.clone(),
             self.session_context.clone(),
             self.execution_context.clone(),

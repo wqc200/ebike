@@ -8,7 +8,7 @@ use crate::core::core_util::register_all_table;
 use crate::core::global_context::GlobalContext;
 use crate::core::session_context::SessionContext;
 use crate::execute_impl::delete::DeleteFrom;
-use crate::execute_impl::update_set::UpdateSet;
+use crate::execute_impl::update::Update;
 use crate::meta::meta_def::{SparrowColumnDef, TableDef};
 use crate::meta::meta_util;
 use crate::meta::meta_util::load_all_table;
