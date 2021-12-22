@@ -22,6 +22,7 @@ use crate::meta::meta_util;
 use crate::mysql::error::{MysqlError, MysqlResult};
 use crate::store::engine::engine_util::StoreEngineFactory;
 use crate::util::convert::ToIdent;
+use crate::util::dbkey::{create_table_index_key, create_column_key, create_column_rowid_key};
 
 pub struct Insert {
     global_context: Arc<Mutex<GlobalContext>>,
@@ -43,14 +44,14 @@ impl Insert {
     }
 
     pub fn execute(
-        &self,
+        &mut self,
         origin_table_name: ObjectName,
         columns: Vec<Ident>,
         overwrite: bool,
         source: Box<Query>,
     ) -> MysqlResult<u64> {
         let full_table_name =
-            meta_util::fill_up_table_name(session_context, origin_table_name.clone()).unwrap();
+            meta_util::fill_up_table_name(&mut self.session_context, origin_table_name.clone()).unwrap();
 
         let table =
             meta_util::get_table(self.global_context.clone(), full_table_name.clone()).unwrap();
@@ -172,7 +173,7 @@ impl Insert {
 
             let mut index_keys = vec![];
             for table_index in table_index_list.clone() {
-                let index_key = util::dbkey::create_table_index_key(
+                let index_key = create_table_index_key(
                     table.clone(),
                     table_index.clone(),
                     column_value_map.clone(),
@@ -225,7 +226,7 @@ impl Insert {
                 .to_string();
             let column_value_map = self.column_value_map_list[row_number].clone();
 
-            let column_rowid_key = util::dbkey::create_column_rowid_key(
+            let column_rowid_key = create_column_rowid_key(
                 self.table.option.full_table_name.clone(),
                 rowid.as_str(),
             );
@@ -281,7 +282,7 @@ impl Insert {
                     .unwrap();
                 let store_id = sparrow_column.store_id;
 
-                let column_key = util::dbkey::create_column_key(
+                let column_key = create_column_key(
                     self.table.option.full_table_name.clone(),
                     store_id,
                     rowid.as_str(),

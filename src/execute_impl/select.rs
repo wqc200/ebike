@@ -17,7 +17,6 @@ use crate::meta::meta_def::{SparrowColumnDef, TableDef};
 use crate::meta::meta_util;
 use crate::meta::meta_util::load_all_table;
 use crate::mysql::error::{MysqlError, MysqlResult};
-use crate::physical_plan;
 use crate::core::output::ResultSet;
 
 pub struct SelectFrom {

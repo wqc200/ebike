@@ -7,11 +7,9 @@ use arrow::array::{ArrayRef, StringArray};
 use arrow::datatypes::DataType;
 use arrow::datatypes::SchemaRef;
 use arrow::record_batch::RecordBatch;
-
 use datafusion::execution::context::{ExecutionConfig, ExecutionContext};
 use datafusion::logical_plan::create_udf;
 use datafusion::logical_plan::LogicalPlan;
-
 use datafusion::physical_plan::functions::make_scalar_function;
 use datafusion::sql::parser::{DFParser, Statement};
 use datafusion::sql::planner::{ContextProvider, SqlToRel};
@@ -55,15 +53,9 @@ use crate::execute_impl::show_privileges::ShowPrivileges;
 use crate::execute_impl::show_tables::ShowTables;
 use crate::execute_impl::show_variables::ShowVariables;
 use crate::execute_impl::update::Update;
-use crate::logical_plan::insert::LogicalPlanInsert;
 use crate::meta::meta_util::load_all_table;
 use crate::meta::{meta_const, meta_util};
 use crate::mysql::error::{MysqlError, MysqlResult};
-use crate::physical_plan;
-use crate::physical_plan::delete::PhysicalPlanDelete;
-use crate::physical_plan::drop_table::PhysicalPlanDropTable;
-use crate::physical_plan::insert::PhysicalPlanInsert;
-use crate::physical_plan::util::CorePhysicalPlan;
 use crate::util::convert::{convert_ident_to_lowercase, ToIdent, ToLowercase, ToObjectName};
 use crate::variable::system::SystemVar;
 use crate::variable::user_defined::UserDefinedVar;
@@ -778,181 +770,6 @@ impl Execution {
         Ok(())
     }
 
-    pub fn build_logical_plan<S: ContextProvider>(
-        &mut self,
-        statement: SQLStatement,
-        query_planner: &SqlToRel<S>,
-    ) -> MysqlResult<CoreLogicalPlan> {
-        let statement = self.fix_statement(statement);
-        match statement {
-            SQLStatement::SetVariable {
-                variable, value, ..
-            } => {
-                let idents = vec![variable];
-                let variable = ObjectName(idents);
-                return Ok(CoreLogicalPlan::SetVariable { variable, value });
-            }
-            SQLStatement::ShowVariable { variable } => {
-                let first_variable = variable.get(0).unwrap();
-                if first_variable.to_string().to_uppercase()
-                    == meta_const::SHOW_VARIABLE_DATABASES.to_uppercase()
-                {
-                } else if first_variable.to_string().to_uppercase()
-                    == meta_const::SHOW_VARIABLE_GRANTS.to_uppercase()
-                {
-                    let user = variable.get(2).unwrap();
-                    return Ok(CoreLogicalPlan::ShowGrants { user: user.clone() });
-                } else if first_variable.to_string().to_uppercase()
-                    == meta_const::SHOW_VARIABLE_PRIVILEGES.to_uppercase()
-                {
-                    return Ok(CoreLogicalPlan::ShowPrivileges);
-                } else if first_variable.to_string().to_uppercase()
-                    == meta_const::SHOW_VARIABLE_ENGINES.to_uppercase()
-                {
-                    return Ok(CoreLogicalPlan::ShowEngines);
-                } else if first_variable.to_string().to_uppercase()
-                    == meta_const::SHOW_VARIABLE_CHARSET.to_uppercase()
-                {
-                    return Ok(CoreLogicalPlan::ShowCharset);
-                } else if first_variable.to_string().to_uppercase()
-                    == meta_const::SHOW_VARIABLE_COLLATION.to_uppercase()
-                {
-                    return Ok(CoreLogicalPlan::ShowCollation);
-                }
-
-                let message = format!("Unsupported show statement, show variable: {:?}", variable);
-                log::error!("{}", message);
-                Err(MysqlError::new_global_error(67, message.as_str()))
-            }
-            SQLStatement::ShowTableStatus { db_name, .. } => {
-                // table
-                let full_table_name = meta_util::convert_to_object_name(
-                    meta_const::FULL_TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_TABLES,
-                );
-                let table_with_joins = core_util::build_table_with_joins(full_table_name.clone());
-                // projection
-                let projection = vec![SelectItem::Wildcard];
-                // selection
-                let selection = SQLExpr::BinaryOp {
-                    left: Box::new(SQLExpr::Identifier(Ident::new(
-                        meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_TABLES_TABLE_SCHEMA,
-                    ))),
-                    op: BinaryOperator::Eq,
-                    right: Box::new(SQLExpr::Value(Value::SingleQuotedString(
-                        db_name.to_string(),
-                    ))),
-                };
-                // select
-                let select = Select {
-                    distinct: false,
-                    top: None,
-                    projection,
-                    from: vec![table_with_joins],
-                    lateral_views: vec![],
-                    selection: Some(selection),
-                    group_by: vec![],
-                    cluster_by: vec![],
-                    distribute_by: vec![],
-                    sort_by: vec![],
-                    having: None,
-                };
-                // logical plan
-                let mut logical_plan =
-                    query_planner.select_to_plan(&select, &mut Default::default())?;
-                logical_plan = core_util::remove_rowid_from_projection(&logical_plan);
-
-                return Ok(CoreLogicalPlan::Select(logical_plan));
-            }
-            SQLStatement::Commit { .. } => Ok(CoreLogicalPlan::Commit),
-            _ => Err(MysqlError::new_global_error(
-                1105,
-                format!("Unknown error. The used command is not allowed with this MySQL version")
-                    .as_str(),
-            )),
-        }
-    }
-
-    pub async fn add_column(
-        &mut self,
-        table_name: ObjectName,
-        column_def: ColumnDef,
-    ) -> MysqlResult<u64> {
-        let mut add_column = AddColumn::new(
-            self.global_context.clone(),
-            self.session_context.clone(),
-            self.execution_context.clone(),
-        );
-        let result = add_column.execute(table_name, column_def);
-        result
-    }
-
-    pub async fn drop_column(
-        &mut self,
-        table_name: ObjectName,
-        column_name: Ident,
-    ) -> MysqlResult<u64> {
-        let mut drop_column = DropColumn::new(
-            self.global_context.clone(),
-            self.session_context.clone(),
-            self.execution_context.clone(),
-        );
-        let result = drop_column.execute(table_name, column_name).await;
-        result
-    }
-
-    pub async fn update_set(
-        &mut self,
-        table_name: ObjectName,
-        assignments: Vec<Assignment>,
-        selection: Option<SQLExpr>,
-    ) -> MysqlResult<u64> {
-        let mut delete_from = Update::new(
-            self.global_context.clone(),
-            self.session_context.clone(),
-            self.execution_context.clone(),
-        );
-        let result = delete_from
-            .execute(table_name, assignments, selection)
-            .await;
-        result
-    }
-
-    pub async fn delete_from(
-        &mut self,
-        table_name: ObjectName,
-        selection: Option<SQLExpr>,
-    ) -> MysqlResult<u64> {
-        let mut delete_from = DeleteFrom::new(
-            self.global_context.clone(),
-            self.session_context.clone(),
-            self.execution_context.clone(),
-        );
-        let result = delete_from.execute(table_name, selection).await;
-        result
-    }
-
-    pub async fn select_from(&mut self, query: &Query) -> MysqlResult<ResultSet> {
-        let mut select_from = SelectFrom::new(
-            self.global_context.clone(),
-            self.session_context.clone(),
-            self.execution_context.clone(),
-        );
-        let result = select_from.execute(query).await;
-        result
-    }
-
-    pub async fn execute_query3(&mut self, sql: &str) -> MysqlResult<CoreOutput> {
-        let mut new_sql = sql;
-        if sql.starts_with("SET NAMES") {
-            new_sql = "SET NAMES = utf8mb4"
-        }
-        let core_logical_plan = self.create_logical_plan(new_sql)?;
-        let core_logical_plan = self.optimize(&core_logical_plan)?;
-        let core_physical_plan = self.create_physical_plan(&core_logical_plan)?;
-        let core_output = self.execution(&core_physical_plan).await;
-        core_output
-    }
-
     pub async fn execute_query(&mut self, sql: &str) -> MysqlResult<CoreOutput> {
         let mut new_sql = sql;
         if sql.starts_with("SET NAMES") {
@@ -970,7 +787,12 @@ impl Execution {
                         let table_name = name;
                         match operation.clone() {
                             AlterTableOperation::DropColumn { column_name, .. } => {
-                                let result = self.drop_column(table_name, column_name).await;
+                                let mut drop_column = DropColumn::new(
+                                    self.global_context.clone(),
+                                    self.session_context.clone(),
+                                    self.execution_context.clone(),
+                                );
+                                let result = drop_column.execute(table_name, column_name).await;
                                 match result {
                                     Ok(count) => {
                                         Ok(CoreOutput::FinalCount(FinalCount::new(count, 0)))
@@ -979,7 +801,12 @@ impl Execution {
                                 }
                             }
                             AlterTableOperation::AddColumn { column_def } => {
-                                let result = self.add_column(table_name, column_def).await;
+                                let mut add_column = AddColumn::new(
+                                    self.global_context.clone(),
+                                    self.session_context.clone(),
+                                    self.execution_context.clone(),
+                                );
+                                let result = add_column.execute(table_name, column_def);
                                 match result {
                                     Ok(count) => {
                                         Ok(CoreOutput::FinalCount(FinalCount::new(count, 0)))
@@ -1005,7 +832,7 @@ impl Execution {
                             self.session_context.clone(),
                             self.execution_context.clone(),
                         );
-                        let result = create_db.execute(db_name).await;
+                        let result = create_db.execute(db_name);
                         match result {
                             Ok(count) => Ok(CoreOutput::FinalCount(FinalCount::new(count, 0))),
                             Err(mysql_error) => Err(mysql_error),
@@ -1026,8 +853,7 @@ impl Execution {
                             self.execution_context.clone(),
                         );
                         let result = create_table
-                            .execute(table_name, columns, constraints, with_options)
-                            .await;
+                            .execute(table_name, columns, constraints, with_options);
                         match result {
                             Ok(count) => Ok(CoreOutput::FinalCount(FinalCount::new(count, 0))),
                             Err(mysql_error) => Err(mysql_error),
@@ -1045,7 +871,7 @@ impl Execution {
                             self.session_context.clone(),
                             self.execution_context.clone(),
                         );
-                        let result = insert.execute(table_name, columns, overwrite, source).await;
+                        let result = insert.execute(table_name, columns, overwrite, source);
                         match result {
                             Ok(count) => Ok(CoreOutput::FinalCount(FinalCount::new(count, 0))),
                             Err(mysql_error) => Err(mysql_error),
@@ -1143,7 +969,7 @@ impl Execution {
                             self.session_context.clone(),
                             self.execution_context.clone(),
                         );
-                        let result = drop_schema.execute().await;
+                        let result = drop_schema.execute();
                         match result {
                             Ok(count) => Ok(CoreOutput::FinalCount(FinalCount::new(count, 0))),
                             Err(mysql_error) => Err(mysql_error),
@@ -1172,7 +998,7 @@ impl Execution {
                                 self.session_context.clone(),
                                 self.execution_context.clone(),
                             );
-                            let result = show_grants.execute().await;
+                            let result = show_grants.execute();
                             match result {
                                 Ok(result_set) => Ok(CoreOutput::ResultSet(result_set)),
                                 Err(mysql_error) => Err(mysql_error),
@@ -1185,7 +1011,7 @@ impl Execution {
                                 self.session_context.clone(),
                                 self.execution_context.clone(),
                             );
-                            let result = show_privileges.execute().await;
+                            let result = show_privileges.execute();
                             match result {
                                 Ok(result_set) => Ok(CoreOutput::ResultSet(result_set)),
                                 Err(mysql_error) => Err(mysql_error),
@@ -1198,7 +1024,7 @@ impl Execution {
                                 self.session_context.clone(),
                                 self.execution_context.clone(),
                             );
-                            let result = show_engines.execute().await;
+                            let result = show_engines.execute();
                             match result {
                                 Ok(result_set) => Ok(CoreOutput::ResultSet(result_set)),
                                 Err(mysql_error) => Err(mysql_error),
@@ -1211,7 +1037,7 @@ impl Execution {
                                 self.session_context.clone(),
                                 self.execution_context.clone(),
                             );
-                            let result = show_charset.execute().await;
+                            let result = show_charset.execute();
                             match result {
                                 Ok(result_set) => Ok(CoreOutput::ResultSet(result_set)),
                                 Err(mysql_error) => Err(mysql_error),
@@ -1224,7 +1050,7 @@ impl Execution {
                                 self.session_context.clone(),
                                 self.execution_context.clone(),
                             );
-                            let result = show_collation.execute().await;
+                            let result = show_collation.execute();
                             match result {
                                 Ok(result_set) => Ok(CoreOutput::ResultSet(result_set)),
                                 Err(mysql_error) => Err(mysql_error),
@@ -1260,13 +1086,13 @@ impl Execution {
                             Err(mysql_error) => Err(mysql_error),
                         }
                     }
-                    _ => {
-                        let core_logical_plan = self.create_logical_plan(new_sql)?;
-                        let core_logical_plan = self.optimize(&core_logical_plan)?;
-                        let core_physical_plan = self.create_physical_plan(&core_logical_plan)?;
-                        let core_output = self.execution(&core_physical_plan).await;
-                        core_output
+                    SQLStatement::Commit { .. } => {
+                        Ok(CoreOutput::FinalCount(FinalCount::new(0, 0)))
                     }
+                    _ => Err(MysqlError::new_global_error(
+                        1105,
+                        "Unknown error. The statement is not supported",
+                    )),
                 }
             }
             _ => Err(MysqlError::new_global_error(
@@ -1304,27 +1130,10 @@ impl Execution {
             self.session_context.clone(),
             self.execution_context.clone(),
         );
-        let result = com_field_list.execute(table_name.clone()).await;
+        let result = com_field_list.execute(table_name.clone());
         match result {
-            Ok(result_set) => Ok(CoreOutput::ResultSet(result_set)),
+            Ok((schema_name, table_name, table_def)) => Ok(CoreOutput::ComFieldList(schema_name, table_name, table_def)),
             Err(mysql_error) => Err(mysql_error),
-        }
-    }
-
-    pub fn create_logical_plan(&mut self, sql: &str) -> MysqlResult<CoreLogicalPlan> {
-        let dialect = &GenericDialect {};
-        let statements = DFParser::parse_sql_with_dialect(sql, dialect).unwrap();
-        let state = self.execution_context.state.lock().unwrap().clone();
-        let query_planner = SqlToRel::new(&state);
-
-        match &statements[0] {
-            Statement::Statement(statement) => {
-                self.build_logical_plan(statement.clone(), &query_planner)
-            }
-            _ => Err(MysqlError::new_global_error(
-                1105,
-                "Unknown error. The statement is not supported",
-            )),
         }
     }
 
@@ -1343,276 +1152,6 @@ impl Execution {
                 Ok(CoreLogicalPlan::Select(logical_plan))
             }
             _ => Ok(core_logical_plan.clone()),
-        }
-    }
-
-    pub fn create_physical_plan(
-        &mut self,
-        core_logical_plan: &CoreLogicalPlan,
-    ) -> MysqlResult<CorePhysicalPlan> {
-        match core_logical_plan {
-            CoreLogicalPlan::SetDefaultDb(object_name) => {
-                let set_default_db =
-                    physical_plan::set_default_schema::SetDefaultSchema::new(object_name.clone());
-                Ok(CorePhysicalPlan::SetDefaultSchema(set_default_db))
-            }
-            CoreLogicalPlan::CreateDb {
-                db_name: schema_name,
-            } => {
-                let create_schema = physical_plan::create_db::CreateDb::new(schema_name.clone());
-                Ok(CorePhysicalPlan::CreateDb(create_schema))
-            }
-            CoreLogicalPlan::CreateTable {
-                table_name,
-                columns,
-                constraints,
-                with_options,
-            } => {
-                let create_table = physical_plan::create_table::CreateTable::new(
-                    self.global_context.clone(),
-                    table_name.clone(),
-                    columns.clone(),
-                    constraints.clone(),
-                    with_options.clone(),
-                );
-                Ok(CorePhysicalPlan::CreateTable(create_table))
-            }
-            CoreLogicalPlan::Insert {
-                table,
-                column_name_list,
-                index_keys_list,
-                column_value_map_list,
-            } => {
-                let cd = PhysicalPlanInsert::new(
-                    self.global_context.clone(),
-                    table.clone(),
-                    column_name_list.clone(),
-                    index_keys_list.clone(),
-                    column_value_map_list.clone(),
-                );
-                Ok(CorePhysicalPlan::Insert(cd))
-            }
-            CoreLogicalPlan::Update {
-                logical_plan,
-                table,
-                assignments,
-            } => {
-                let execution_plan = self.execution_context.create_physical_plan(logical_plan)?;
-                let update = physical_plan::update::Update::new(
-                    self.global_context.clone(),
-                    table.clone(),
-                    assignments.clone(),
-                    execution_plan,
-                );
-                Ok(CorePhysicalPlan::Update(update))
-            }
-            CoreLogicalPlan::Delete {
-                logical_plan,
-                table,
-            } => {
-                let execution_plan = self.execution_context.create_physical_plan(logical_plan)?;
-                let delete = physical_plan::delete::PhysicalPlanDelete::new(
-                    self.global_context.clone(),
-                    table.clone(),
-                    execution_plan,
-                );
-                Ok(CorePhysicalPlan::Delete(delete))
-            }
-            CoreLogicalPlan::SetVariable { variable, value } => {
-                let set_variable =
-                    physical_plan::set_variable::SetVariable::new(variable.clone(), value.clone());
-                Ok(CorePhysicalPlan::SetVariable(set_variable))
-            }
-            CoreLogicalPlan::ShowGrants { user } => {
-                let show_grants = physical_plan::show_grants::ShowGrants::new(
-                    self.global_context.clone(),
-                    user.clone(),
-                );
-                Ok(CorePhysicalPlan::ShowGrants(show_grants))
-            }
-            CoreLogicalPlan::ShowPrivileges => {
-                let show_privileges = physical_plan::show_privileges::ShowPrivileges::new(
-                    self.global_context.clone(),
-                );
-                Ok(CorePhysicalPlan::ShowPrivileges(show_privileges))
-            }
-            CoreLogicalPlan::ShowEngines => {
-                let show_engines =
-                    physical_plan::show_engines::ShowEngines::new(self.global_context.clone());
-                Ok(CorePhysicalPlan::ShowEngines(show_engines))
-            }
-            CoreLogicalPlan::ShowCharset => {
-                let show_charset =
-                    physical_plan::show_charset::ShowCharset::new(self.global_context.clone());
-                Ok(CorePhysicalPlan::ShowCharset(show_charset))
-            }
-            CoreLogicalPlan::ShowCollation => {
-                let show_collation =
-                    physical_plan::show_collation::ShowCollation::new(self.global_context.clone());
-                Ok(CorePhysicalPlan::ShowCollation(show_collation))
-            }
-            CoreLogicalPlan::ComFieldList(table_name) => {
-                let com_field_list = physical_plan::com_field_list::ComFieldList::new(
-                    self.global_context.clone(),
-                    table_name.clone(),
-                );
-                Ok(CorePhysicalPlan::ComFieldList(com_field_list))
-            }
-            CoreLogicalPlan::Commit => Ok(CorePhysicalPlan::Commit),
-            _ => {}
-        }
-    }
-
-    pub async fn execution(
-        &mut self,
-        core_physical_plan: &CorePhysicalPlan,
-    ) -> MysqlResult<CoreOutput> {
-        match core_physical_plan {
-            CorePhysicalPlan::SetDefaultSchema(set_default_schema) => {
-                let result = set_default_schema.execute(
-                    &mut self.execution_context,
-                    self.global_context.clone(),
-                    &mut self.session_context,
-                );
-                match result {
-                    Ok(count) => Ok(CoreOutput::FinalCount(FinalCount::new_with_message(
-                        count,
-                        0,
-                        "Database changed",
-                    ))),
-                    Err(mysql_error) => Err(mysql_error),
-                }
-            }
-            CorePhysicalPlan::Delete(delete) => {
-                let result = delete.execute(&mut self.session_context).await;
-                match result {
-                    Ok(count) => Ok(CoreOutput::FinalCount(FinalCount::new(count, 0))),
-                    Err(mysql_error) => Err(mysql_error),
-                }
-            }
-            CorePhysicalPlan::Update(update) => {
-                let result = update.execute(&mut self.session_context).await;
-                match result {
-                    Ok(count) => Ok(CoreOutput::FinalCount(FinalCount::new(count, 0))),
-                    Err(mysql_error) => Err(mysql_error),
-                }
-            }
-            CorePhysicalPlan::CreateDb(create_db) => {
-                let result = create_db.execute(
-                    self.global_context.clone(),
-                    &mut self.execution_context,
-                    &mut self.session_context,
-                );
-                match result {
-                    Ok(count) => Ok(CoreOutput::FinalCount(FinalCount::new(count, 0))),
-                    Err(mysql_error) => Err(mysql_error),
-                }
-            }
-            CorePhysicalPlan::CreateTable(create_table) => {
-                let result =
-                    create_table.execute(&mut self.execution_context, &mut self.session_context);
-                match result {
-                    Ok(count) => Ok(CoreOutput::FinalCount(FinalCount::new(count, 0))),
-                    Err(mysql_error) => Err(mysql_error),
-                }
-            }
-            CorePhysicalPlan::DropDB(drop_db) => {
-                let result = drop_db.execute(&mut self.session_context);
-                match result {
-                    Ok(count) => Ok(CoreOutput::FinalCount(FinalCount::new(count, 0))),
-                    Err(mysql_error) => Err(mysql_error),
-                }
-            }
-            CorePhysicalPlan::Insert(physical_plan_insert) => {
-                let result = physical_plan_insert.execute();
-                match result {
-                    Ok(count) => Ok(CoreOutput::FinalCount(FinalCount::new(count, 0))),
-                    Err(mysql_error) => Err(mysql_error),
-                }
-            }
-            CorePhysicalPlan::SetVariable(set_variable) => {
-                let result = set_variable.execute(
-                    &mut self.execution_context,
-                    self.global_context.clone(),
-                    &mut self.session_context,
-                );
-                match result {
-                    Ok(count) => Ok(CoreOutput::FinalCount(FinalCount::new(count, 0))),
-                    Err(mysql_error) => Err(mysql_error),
-                }
-            }
-            CorePhysicalPlan::ShowColumnsFrom(
-                show_columns_from,
-                select_columns,
-                select_statistics,
-            ) => {
-                let result = select_columns.execute().await;
-                let columns_record = match result {
-                    Ok((_, records)) => records,
-                    Err(mysql_error) => return Err(mysql_error),
-                };
-
-                let result = select_statistics.execute().await;
-                let statistics_record = match result {
-                    Ok((_, records)) => records,
-                    Err(mysql_error) => return Err(mysql_error),
-                };
-
-                let result = show_columns_from.execute(columns_record, statistics_record);
-                match result {
-                    Ok(result_set) => Ok(CoreOutput::ResultSet(result_set)),
-                    Err(mysql_error) => Err(mysql_error),
-                }
-            }
-            CorePhysicalPlan::ShowGrants(show_grants) => {
-                let result = show_grants.execute();
-                match result {
-                    Ok(result_set) => Ok(CoreOutput::ResultSet(result_set)),
-                    Err(mysql_error) => Err(mysql_error),
-                }
-            }
-            CorePhysicalPlan::ShowPrivileges(show_privileges) => {
-                let result = show_privileges.execute();
-                match result {
-                    Ok(result_set) => Ok(CoreOutput::ResultSet(result_set)),
-                    Err(mysql_error) => Err(mysql_error),
-                }
-            }
-            CorePhysicalPlan::ShowEngines(show_engines) => {
-                let result = show_engines.execute();
-                match result {
-                    Ok(result_set) => Ok(CoreOutput::ResultSet(result_set)),
-                    Err(mysql_error) => Err(mysql_error),
-                }
-            }
-            CorePhysicalPlan::ShowCharset(show_charset) => {
-                let result = show_charset.execute();
-                match result {
-                    Ok(result_set) => Ok(CoreOutput::ResultSet(result_set)),
-                    Err(mysql_error) => Err(mysql_error),
-                }
-            }
-            CorePhysicalPlan::ShowCollation(show_collation) => {
-                let result = show_collation.execute();
-                match result {
-                    Ok(result_set) => Ok(CoreOutput::ResultSet(result_set)),
-                    Err(mysql_error) => Err(mysql_error),
-                }
-            }
-            CorePhysicalPlan::ComFieldList(com_field_list) => {
-                let result = com_field_list.execute(&mut self.session_context);
-                match result {
-                    Ok((schema_name, table_name, table_def)) => {
-                        Ok(CoreOutput::ComFieldList(schema_name, table_name, table_def))
-                    }
-                    Err(mysql_error) => Err(mysql_error),
-                }
-            }
-            CorePhysicalPlan::Commit => Ok(CoreOutput::FinalCount(FinalCount::new(0, 0))),
-            _ => Err(MysqlError::new_global_error(
-                1105,
-                "Unknown error. The statement is not supported",
-            )),
         }
     }
 }

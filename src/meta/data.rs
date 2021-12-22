@@ -5,6 +5,7 @@ use sqlparser::ast::{Ident, ObjectName};
 use crate::meta::{meta_def};
 use crate::mysql::error::{MysqlError, MysqlResult};
 use crate::meta::meta_def::TableDef;
+use crate::meta::meta_def::SchemaDef;
 
 #[derive(Debug, Clone)]
 pub struct MetaData {
@@ -33,7 +34,7 @@ impl MetaData {
         }
     }
 
-    pub fn add_all_schema(&mut self, schema_map: HashMap<ObjectName, meta_def::SchemaDef>) {
+    pub fn add_all_schema(&mut self, schema_map: HashMap<ObjectName, SchemaDef>) {
         for (full_schema_name, schema_def) in schema_map.iter() {
             self.add_schema(full_schema_name.clone(), schema_def.clone());
         }
@@ -44,7 +45,7 @@ impl MetaData {
         *t = table;
     }
 
-    pub fn add_schema(&mut self, full_schema_name: ObjectName, schema_def: meta_def::SchemaDef) {
+    pub fn add_schema(&mut self, full_schema_name: ObjectName, schema_def: SchemaDef) {
         self.schema_map.entry(full_schema_name.clone()).or_insert(schema_def.clone());
         ()
     }
@@ -55,6 +56,10 @@ impl MetaData {
 
     pub fn get_schema_map(&self) -> HashMap<ObjectName, meta_def::SchemaDef> {
         self.schema_map.clone()
+    }
+
+    pub fn get_schema(&self, full_schema_name: ObjectName) -> Option<&SchemaDef> {
+        self.schema_map.get(&full_schema_name)
     }
 
     pub fn get_table_map(&self) -> HashMap<ObjectName, meta_def::TableDef> {

@@ -43,7 +43,7 @@ impl CreateDb {
             return Err(e);
         }
 
-        core_util::register_schema(execution_context, meta_const::CATALOG_NAME, db_name.to_string().as_str());
+        core_util::register_schema(&mut self.execution_context, meta_const::CATALOG_NAME, db_name.to_string().as_str());
 
         Ok(1)
     }

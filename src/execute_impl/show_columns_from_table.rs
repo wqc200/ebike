@@ -19,7 +19,6 @@ use crate::meta::meta_util;
 use crate::meta::meta_util::load_all_table;
 use crate::meta::{initial, meta_const, scalar_value};
 use crate::mysql::error::{MysqlError, MysqlResult};
-use crate::physical_plan;
 use crate::util::convert::ToObjectName;
 use datafusion::arrow::datatypes::{DataType, Field, Schema};
 use std::collections::HashMap;
@@ -61,7 +60,7 @@ impl ShowColumns {
         let table_name = table.option.table_name.to_string();
 
         let columns = self.get_columns(catalog_name, schema_name, table_name)?;
-        let statistics = self.get_statistics(catalog_name.clone(), schema_name.clone(), table_name.clone());
+        let statistics = self.get_statistics(catalog_name.clone(), schema_name.clone(), table_name.clone()).await.unwrap();
 
         self.create_result(
             columns.record_batches,
@@ -69,7 +68,7 @@ impl ShowColumns {
         )
     }
 
-    fn get_statistics(&self, catalog_name: String, schema_name: String, table_name: String) -> MysqlResult<ResultSet> {
+    async fn get_statistics(&self, catalog_name: String, schema_name: String, table_name: String) -> MysqlResult<ResultSet> {
         let selection = core_util::build_find_table_sqlwhere(
             catalog_name.as_str(),
             schema_name.as_str(),

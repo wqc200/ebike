@@ -5,7 +5,7 @@ use arrow::datatypes::SchemaRef;
 use arrow::datatypes::{DataType, Field, Schema};
 use arrow::record_batch::RecordBatch;
 use datafusion::execution::context::ExecutionContext;
-use sqlparser::ast::{Ident, ObjectName, TableConstraint, SqlOption};
+use sqlparser::ast::{Ident, ObjectName, TableConstraint, SqlOption, ColumnDef};
 
 use crate::core::global_context::GlobalContext;
 use crate::core::output::ResultSet;
@@ -37,10 +37,10 @@ impl CreateTable {
     }
 
     pub fn execute(&mut self, table_name: ObjectName,
-                   sql_column_list: Vec<SQLColumnDef>,
+                   sql_column_list: Vec<ColumnDef>,
                    constraints: Vec<TableConstraint>,
                    table_options: Vec<SqlOption>) -> MysqlResult<u64> {
-        let full_table_name = meta_util::fill_up_table_name(session_context, table_name.clone()).unwrap();
+        let full_table_name = meta_util::fill_up_table_name(&mut self.session_context, table_name.clone()).unwrap();
 
         let catalog_name = meta_util::cut_out_catalog_name(full_table_name.clone());
         let schema_name = meta_util::cut_out_schema_name(full_table_name.clone());

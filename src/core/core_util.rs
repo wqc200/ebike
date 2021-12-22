@@ -175,7 +175,7 @@ pub fn register_all_table(
         catalog_map
             .entry(meta_const::CATALOG_NAME.to_string())
             .or_insert(HashMap::new())
-            .entry(schema.schema_option.schema_name.clone())
+            .entry(schema.option.schema_name.clone())
             .or_insert(HashMap::new());
     }
 

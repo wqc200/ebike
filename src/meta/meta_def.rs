@@ -12,21 +12,21 @@ use std::collections::HashMap;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SchemaDef {
     pub full_schema_name: ObjectName,
-    pub schema_option: SchemaOptionDef,
+    pub option: SchemaOptionDef,
 }
 
 impl SchemaDef {
     pub fn new(full_schema_name: ObjectName) -> Self {
         Self {
             full_schema_name,
-            schema_option: SchemaOptionDef::default(),
+            option: SchemaOptionDef::default(),
         }
     }
 }
 
 impl SchemaDef {
     pub fn with_schema_option(&mut self, schema_option: SchemaOptionDef) {
-        self.schema_option = schema_option
+        self.option = schema_option
     }
 }
 
