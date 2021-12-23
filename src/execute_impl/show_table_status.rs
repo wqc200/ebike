@@ -25,7 +25,6 @@ use crate::meta::meta_util;
 use crate::meta::meta_util::load_all_table;
 use crate::meta::{initial, meta_const, scalar_value};
 use crate::mysql::error::{MysqlError, MysqlResult};
-use crate::physical_plan;
 use crate::util::convert::ToObjectName;
 
 pub struct ShowTableStatus {

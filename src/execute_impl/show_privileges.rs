@@ -53,7 +53,7 @@ impl ShowPrivileges {
         let column_values2 = StringArray::from(vec![
             "To alter the table",
             "To alter or drop stored functions/procedures",
-            "To create new databases and tables",Show
+            "To create new databases and tables",
             "",
         ]);
         let record_batch = RecordBatch::try_new(

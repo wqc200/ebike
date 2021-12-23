@@ -72,8 +72,7 @@ impl SelectFrom {
         let result = collect(execution_plan).await;
         match result {
             Ok(batches) => {
-                let result_set = ResultSet::new(schema_ref, batches);
-                Ok(result_set)
+                Ok(ResultSet::new(schema_ref, batches))
             }
             Err(error) => {
                 Err(MysqlError::from(error))
