@@ -1,12 +1,16 @@
 use std::sync::{Arc, Mutex};
 
 use arrow::datatypes::SchemaRef;
+use datafusion::arrow::array::{Int32Array, StringArray};
 use datafusion::arrow::record_batch::RecordBatch;
 use datafusion::execution::context::ExecutionContext;
 use datafusion::logical_plan::LogicalPlan;
 use datafusion::physical_plan::{collect, ExecutionPlan};
 use datafusion::sql::planner::{ContextProvider, SqlToRel};
-use sqlparser::ast::{AlterTableOperation, Ident, ObjectName, OrderByExpr, Query, SetExpr, Statement, HiveDistributionStyle};
+use sqlparser::ast::{
+    AlterTableOperation, Expr as SQLExpr, HiveDistributionStyle, Ident, ObjectName, OrderByExpr,
+    Query, SetExpr, Statement,
+};
 
 use crate::core::core_util;
 use crate::core::core_util::{check_table_exists, register_all_table};
@@ -56,17 +60,17 @@ impl ShowCreateTable {
         let schema_name = table.option.schema_name.to_string();
         let table_name = table.option.table_name.to_string();
 
-        let columns = self.get_columns(catalog_name, schema_name, table_name)?;
+        let columns = self.get_columns(catalog_name.clone(), schema_name.clone(), table_name.clone()).await?;
         let statistics = self.get_statistics(
             catalog_name.clone(),
             schema_name.clone(),
             table_name.clone(),
-        )?;
+        ).await?;
         let tables = self.get_tables(
             catalog_name.clone(),
             schema_name.clone(),
             table_name.clone(),
-        )?;
+        ).await?;
 
         self.create_result(
             columns.record_batches,
@@ -75,7 +79,7 @@ impl ShowCreateTable {
         )
     }
 
-    fn get_tables(
+    async fn get_tables(
         &self,
         catalog_name: String,
         schema_name: String,
@@ -107,7 +111,7 @@ impl ShowCreateTable {
         select_from.execute(&query).await
     }
 
-    fn get_statistics(
+    async fn get_statistics(
         &self,
         catalog_name: String,
         schema_name: String,
@@ -139,7 +143,7 @@ impl ShowCreateTable {
         select_from.execute(&query).await
     }
 
-    fn get_columns(
+    async fn get_columns(
         &self,
         catalog_name: String,
         schema_name: String,

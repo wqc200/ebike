@@ -103,7 +103,7 @@ impl ShowVariables {
         let query = Box::new(Query {
             with: None,
             body: SetExpr::Select(Box::new(select)),
-            order_by: vec![order_by],
+            order_by: vec![],
             limit: None,
             offset: None,
             fetch: None,

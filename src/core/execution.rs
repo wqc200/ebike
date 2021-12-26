@@ -1055,12 +1055,12 @@ impl Execution {
                                 Ok(result_set) => Ok(CoreOutput::ResultSet(result_set)),
                                 Err(mysql_error) => Err(mysql_error),
                             }
+                        } else {
+                            let message =
+                                format!("Unsupported show statement, show variable: {:?}", variable);
+                            log::error!("{}", message);
+                            Err(MysqlError::new_global_error(67, message.as_str()))
                         }
-
-                        let message =
-                            format!("Unsupported show statement, show variable: {:?}", variable);
-                        log::error!("{}", message);
-                        Err(MysqlError::new_global_error(67, message.as_str()))
                     }
                     SQLStatement::ShowTables { full, db_name, .. } => {
                         let mut show_tables = ShowTables::new(

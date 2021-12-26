@@ -3,8 +3,8 @@ extern crate bitflags;
 #[macro_use]
 extern crate clap;
 
-use std::sync::{Arc, Mutex};
 use std::io;
+use std::sync::{Arc, Mutex};
 
 use arrow::datatypes::DataType as ArrowDataType;
 use log4rs;
@@ -12,12 +12,13 @@ use tokio::net::TcpListener;
 use tokio::signal::unix::{signal, SignalKind};
 
 use meta::initial;
+
+use crate::config::util::get_config_path;
+use crate::config::util::read_config;
 use crate::core::global_context::GlobalContext;
 use crate::meta::meta_util;
 use crate::mysql::handle;
 use crate::mysql::metadata::MysqlType;
-use crate::config::util::get_config_path;
-use crate::config::util::read_config;
 
 pub mod core;
 pub mod config;
@@ -29,6 +30,7 @@ pub mod util;
 pub mod test;
 pub mod variable;
 pub mod execute_impl;
+pub mod physical_plan;
 
 #[tokio::main]
 async fn main() {

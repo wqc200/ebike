@@ -6,6 +6,7 @@ use datafusion::scalar::ScalarValue;
 use sqlparser::ast::{ColumnDef as SQLColumnDef, ColumnOption, Ident, ObjectName, TableConstraint};
 
 use crate::core::global_context::GlobalContext;
+use crate::execute_impl::insert::Insert;
 use crate::meta::def::performance_schema;
 use crate::meta::def::{information_schema, mysql};
 use crate::meta::meta_def::{
@@ -14,6 +15,7 @@ use crate::meta::meta_def::{
 };
 use crate::meta::{def, meta_const, meta_util};
 use crate::mysql::error::{MysqlError, MysqlResult};
+use crate::physical_plan::insert::PhysicalPlanInsert;
 use crate::store::engine::engine_util;
 use crate::store::engine::engine_util::TableEngineFactory;
 use crate::util::convert::{ToIdent, ToObjectName};
@@ -89,15 +91,18 @@ pub fn create_schema(
     column_value_map_list.push(column_value_map);
 
     let table_def = def::information_schema::schemata(global_context.clone());
-    let insert = physical_plan::insert::PhysicalPlanInsert::new(
-        global_context.clone(),
-        table_def,
+
+    let physical_plan_insert = PhysicalPlanInsert::new(global_context.clone());
+    let result = physical_plan_insert.execute(
+        table_def.clone(),
         column_name_list.clone(),
         vec![],
         column_value_map_list.clone(),
     );
-    let total = insert.execute();
-    total
+    match result {
+        Ok(count) => Ok(count),
+        Err(mysql_error) => Err(mysql_error),
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -166,14 +171,13 @@ impl SaveTableConstraints {
             column_name_list.push(column_def.sql_column.name.to_string());
         }
 
-        let insert = PhysicalPlanInsert::new(
-            self.global_context.clone(),
+        let insert = PhysicalPlanInsert::new(self.global_context.clone());
+        let total = insert.execute(
             table_def,
             column_name_list.clone(),
             vec![],
             self.column_value_map_list.clone(),
         );
-        let total = insert.execute();
         total
     }
 }
@@ -259,14 +263,13 @@ impl SaveKeyColumnUsage {
             column_name_list.push(column_def.sql_column.name.to_string());
         }
 
-        let insert = physical_plan::insert::PhysicalPlanInsert::new(
-            self.global_context.clone(),
+        let insert = PhysicalPlanInsert::new(self.global_context.clone());
+        let total = insert.execute(
             table_def,
             column_name_list.clone(),
             vec![],
             self.column_value_map_list.clone(),
         );
-        let total = insert.execute();
         total
     }
 }
@@ -339,14 +342,13 @@ impl SaveStatistics {
             column_name_list.push(column_def.sql_column.name.to_string());
         }
 
-        let insert = physical_plan::insert::PhysicalPlanInsert::new(
-            self.global_context.clone(),
+        let insert = PhysicalPlanInsert::new(self.global_context.clone());
+        let total = insert.execute(
             table_def,
             column_name_list.clone(),
             vec![],
             self.column_value_map_list.clone(),
         );
-        let total = insert.execute();
         total
     }
 }
@@ -422,11 +424,11 @@ pub fn add_information_schema_tables(
     global_context: Arc<Mutex<GlobalContext>>,
     table_option: TableOptionDef,
 ) -> MysqlResult<u64> {
-    let table_of_def_information_schema_tables =
+    let table_def =
         def::information_schema::tables(global_context.clone());
 
     let mut column_name_list = vec![];
-    for sql_column in table_of_def_information_schema_tables
+    for sql_column in table_def
         .column
         .sql_column_list
         .clone()
@@ -485,15 +487,13 @@ pub fn add_information_schema_tables(
     );
     column_value_map_list.push(column_value_map);
 
-    let insert = physical_plan::insert::PhysicalPlanInsert::new(
-        global_context.clone(),
-        table_of_def_information_schema_tables,
+    let insert = PhysicalPlanInsert::new(global_context.clone());
+    let total = insert.execute(
+        table_def,
         column_name_list.clone(),
         vec![],
         column_value_map_list.clone(),
     );
-    let total = insert.execute();
-
     total
 }
 
@@ -674,14 +674,13 @@ pub fn add_information_schema_columns(
         return Err(e);
     }
 
-    let insert = physical_plan::insert::PhysicalPlanInsert::new(
-        global_context.clone(),
+    let insert = PhysicalPlanInsert::new(global_context.clone());
+    let total = insert.execute(
         meta_table,
         column_name_list.clone(),
         vec![],
         column_value_map_list.clone(),
     );
-    let total = insert.execute();
     total
 }
 
@@ -1394,16 +1393,14 @@ pub fn add_def_mysql_users(global_context: Arc<Mutex<GlobalContext>>) -> MysqlRe
     column_value_map.insert("User_attributes".to_ident(), ScalarValue::Utf8(None));
     column_value_map_list.push(column_value_map);
 
-    let insert = PhysicalPlanInsert::new(
-        global_context.clone(),
+    let insert = PhysicalPlanInsert::new(global_context.clone());
+    let total = insert.execute(
         table_of_def_mysql_users,
         column_name_list.clone(),
         vec![],
         column_value_map_list.clone(),
     );
-    let total = insert.execute().unwrap();
-
-    Ok(total)
+    total
 }
 
 pub fn add_def_performance_schmea_global_variables(
@@ -1455,16 +1452,14 @@ pub fn add_def_performance_schmea_global_variables(
 
     let table_def = performance_schema::global_variables(global_context.clone());
 
-    let insert = PhysicalPlanInsert::new(
-        global_context.clone(),
+    let insert = PhysicalPlanInsert::new(global_context.clone());
+    let total = insert.execute(
         table_def,
         column_name_list.clone(),
         vec![],
         column_value_map_list.clone(),
     );
-    let total = insert.execute().unwrap();
-
-    Ok(total)
+    total
 }
 
 pub fn get_full_table_name_list(

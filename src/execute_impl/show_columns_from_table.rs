@@ -1,6 +1,9 @@
+use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 use arrow::datatypes::SchemaRef;
+use datafusion::arrow::array::{Int32Array, StringArray};
+use datafusion::arrow::datatypes::{DataType, Field, Schema};
 use datafusion::arrow::record_batch::RecordBatch;
 use datafusion::execution::context::ExecutionContext;
 use datafusion::logical_plan::LogicalPlan;
@@ -20,8 +23,6 @@ use crate::meta::meta_util::load_all_table;
 use crate::meta::{initial, meta_const, scalar_value};
 use crate::mysql::error::{MysqlError, MysqlResult};
 use crate::util::convert::ToObjectName;
-use datafusion::arrow::datatypes::{DataType, Field, Schema};
-use std::collections::HashMap;
 
 pub struct ShowColumns {
     global_context: Arc<Mutex<GlobalContext>>,
@@ -59,16 +60,25 @@ impl ShowColumns {
         let schema_name = table.option.schema_name.to_string();
         let table_name = table.option.table_name.to_string();
 
-        let columns = self.get_columns(catalog_name, schema_name, table_name)?;
-        let statistics = self.get_statistics(catalog_name.clone(), schema_name.clone(), table_name.clone()).await.unwrap();
+        let columns = self.get_columns(catalog_name.clone(), schema_name.clone(), table_name.clone()).await?;
+        let statistics = self
+            .get_statistics(
+                catalog_name.clone(),
+                schema_name.clone(),
+                table_name.clone(),
+            )
+            .await
+            .unwrap();
 
-        self.create_result(
-            columns.record_batches,
-            statistics.record_batches,
-        )
+        self.create_result(columns.record_batches, statistics.record_batches)
     }
 
-    async fn get_statistics(&self, catalog_name: String, schema_name: String, table_name: String) -> MysqlResult<ResultSet> {
+    async fn get_statistics(
+        &self,
+        catalog_name: String,
+        schema_name: String,
+        table_name: String,
+    ) -> MysqlResult<ResultSet> {
         let selection = core_util::build_find_table_sqlwhere(
             catalog_name.as_str(),
             schema_name.as_str(),
@@ -95,7 +105,12 @@ impl ShowColumns {
         select_from.execute(&query).await
     }
 
-    fn get_columns(&self, catalog_name: String, schema_name: String, table_name: String) -> MysqlResult<ResultSet> {
+    async fn get_columns(
+        &self,
+        catalog_name: String,
+        schema_name: String,
+        table_name: String,
+    ) -> MysqlResult<ResultSet> {
         let selection = core_util::build_find_table_sqlwhere(
             catalog_name.as_str(),
             schema_name.as_str(),
@@ -208,7 +223,7 @@ impl ShowColumns {
                 Arc::new(column_keys),
             ],
         )
-            .unwrap();
+        .unwrap();
 
         Ok(ResultSet::new(schema, vec![record_batch]))
     }

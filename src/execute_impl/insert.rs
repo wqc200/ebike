@@ -23,6 +23,8 @@ use crate::mysql::error::{MysqlError, MysqlResult};
 use crate::store::engine::engine_util::StoreEngineFactory;
 use crate::util::convert::ToIdent;
 use crate::util::dbkey::{create_table_index_key, create_column_key, create_column_rowid_key};
+use datafusion::prelude::col;
+use crate::physical_plan::insert::PhysicalPlanInsert;
 
 pub struct Insert {
     global_context: Arc<Mutex<GlobalContext>>,
@@ -63,8 +65,10 @@ impl Insert {
         let store_engine = StoreEngineFactory::try_new_with_table_name(
             self.global_context.clone(),
             full_table_name.clone(),
-        )
-        .unwrap();
+        ).unwrap();
+
+        let state = self.execution_context.state.lock().unwrap().clone();
+        let query_planner = SqlToRel::new(&state);
 
         let mut column_values_list = vec![];
         match &source.body {
@@ -111,7 +115,7 @@ impl Insert {
 
         let dfschema = schema.clone().to_dfschema().unwrap();
 
-        let state = datafusion_context.state.lock().unwrap();
+        let state = self.execution_context.state.lock().unwrap();
         let planner = DefaultPhysicalPlanner::default();
 
         let mut column_value_map_list = vec![];
@@ -127,7 +131,7 @@ impl Insert {
                                 "Column name not found, row_index: {:?}, column_index: {:?}",
                                 row_index, column_index,
                             )
-                            .as_str(),
+                                .as_str(),
                         ));
                     }
                     Some(column_name) => column_name.to_ident(),
@@ -178,7 +182,7 @@ impl Insert {
                     table_index.clone(),
                     column_value_map.clone(),
                 )
-                .unwrap();
+                    .unwrap();
                 let index = IndexDef::new(
                     table_index.index_name.as_str(),
                     table_index.level,
@@ -206,7 +210,7 @@ impl Insert {
                                         table_name.clone(),
                                         row_index.index_name,
                                     )
-                                    .as_str(),
+                                        .as_str(),
                                 ));
                             }
                         }
@@ -215,96 +219,7 @@ impl Insert {
             }
         }
 
-        let store_engine =
-            StoreEngineFactory::try_new_with_table(self.global_context.clone(), table.clone())
-                .unwrap();
-
-        for row_number in 0..self.column_value_map_list.len() {
-            let rowid = Uuid::new_v4()
-                .to_simple()
-                .encode_lower(&mut Uuid::encode_buffer())
-                .to_string();
-            let column_value_map = self.column_value_map_list[row_number].clone();
-
-            let column_rowid_key = create_column_rowid_key(
-                self.table.option.full_table_name.clone(),
-                rowid.as_str(),
-            );
-            log::debug!("rowid_key: {:?}", column_rowid_key);
-            let result = store_engine.put_key(column_rowid_key, rowid.as_bytes());
-            if let Err(e) = result {
-                return Err(e);
-            }
-
-            if self.index_keys_list.len() > 0 {
-                let result = self.index_keys_list.get(row_number);
-                let index_keys = match result {
-                    None => {
-                        return Err(MysqlError::new_global_error(
-                            1105,
-                            format!("Index keys not found, row_index: {:?}", row_number,).as_str(),
-                        ));
-                    }
-                    Some(index_keys) => index_keys.clone(),
-                };
-
-                if index_keys.len() > 0 {
-                    for index in index_keys {
-                        let result = store_engine.put_key(index.index_key, rowid.as_bytes());
-                        if let Err(e) = result {
-                            return Err(e);
-                        }
-                    }
-                }
-            }
-
-            for column_index in 0..self.column_name_list.to_vec().len() {
-                let column_name = self.column_name_list[column_index].to_ident();
-                let result = column_value_map.get(&column_name);
-                let column_value = match result {
-                    None => {
-                        return Err(MysqlError::new_global_error(
-                            1105,
-                            format!(
-                                "Column value not found, row_index: {:?}, column_index: {:?}",
-                                row_number, column_index,
-                            )
-                            .as_str(),
-                        ));
-                    }
-                    Some(column_value) => column_value.clone(),
-                };
-
-                let sparrow_column = self
-                    .table
-                    .get_table_column()
-                    .get_sparrow_column(column_name)
-                    .unwrap();
-                let store_id = sparrow_column.store_id;
-
-                let column_key = create_column_key(
-                    self.table.option.full_table_name.clone(),
-                    store_id,
-                    rowid.as_str(),
-                );
-                log::debug!("column_key: {:?}", column_key);
-                let result = core_util::convert_scalar_value(column_value.clone()).unwrap();
-                log::debug!("column_value: {:?}", result);
-
-                let mut payload: Vec<u8> = Vec::new();
-                match result {
-                    None => payload.push(0x00),
-                    Some(v) => payload.extend_from_slice(v.as_bytes()),
-                }
-                let mem = Bytes::from(payload);
-
-                let result = store_engine.put_key(column_key, mem.bytes());
-                if let Err(e) = result {
-                    return Err(e);
-                }
-            }
-        }
-
-        Ok(self.column_value_map_list.len() as u64)
+        let insert = PhysicalPlanInsert::new(self.global_context.clone());
+        insert.execute(table.clone(), column_name_list.clone(), index_keys_list.clone(), column_value_map_list.clone())
     }
 }

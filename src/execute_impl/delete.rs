@@ -4,6 +4,7 @@ use arrow::array::{Array, StringArray};
 use arrow::record_batch::RecordBatch;
 use datafusion::execution::context::ExecutionContext;
 use datafusion::physical_plan::{collect, ExecutionPlan};
+use sqlparser::ast::{Expr as SQLExpr, ObjectName, Query, SetExpr};
 
 use crate::core::core_util;
 use crate::core::global_context::GlobalContext;
@@ -14,7 +15,6 @@ use crate::meta::{meta_const, meta_util};
 use crate::mysql::error::{MysqlError, MysqlResult};
 use crate::store::engine::engine_util::StoreEngineFactory;
 use crate::util;
-use sqlparser::ast::{ObjectName, Query, SetExpr, Expr as SQLExpr};
 
 pub struct DeleteFrom {
     global_context: Arc<Mutex<GlobalContext>>,
@@ -86,7 +86,11 @@ impl DeleteFrom {
         };
     }
 
-    fn delete_record_batches(&self, table_def: TableDef, record_batches: Vec<RecordBatch>) -> MysqlResult<u64> {
+    fn delete_record_batches(
+        &self,
+        table_def: TableDef,
+        record_batches: Vec<RecordBatch>,
+    ) -> MysqlResult<u64> {
         let mut total = 0;
         for record_batch in record_batches {
             let result = self.delete_record_batch(table_def.clone(), record_batch);
@@ -98,7 +102,11 @@ impl DeleteFrom {
         Ok(total)
     }
 
-    fn delete_record_batch(&self, table_def: TableDef, record_batch: RecordBatch) -> MysqlResult<u64> {
+    fn delete_record_batch(
+        &self,
+        table_def: TableDef,
+        record_batch: RecordBatch,
+    ) -> MysqlResult<u64> {
         let store_engine =
             StoreEngineFactory::try_new_with_table(self.global_context.clone(), table_def.clone())
                 .unwrap();

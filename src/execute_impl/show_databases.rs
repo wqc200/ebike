@@ -6,7 +6,10 @@ use datafusion::execution::context::ExecutionContext;
 use datafusion::logical_plan::LogicalPlan;
 use datafusion::physical_plan::{collect, ExecutionPlan};
 use datafusion::sql::planner::{ContextProvider, SqlToRel};
-use sqlparser::ast::{AlterTableOperation, ObjectName, Query, SetExpr, Statement, Ident, SelectItem, OrderByExpr, Select};
+use sqlparser::ast::{
+    AlterTableOperation, Expr as SQLExpr, Ident, ObjectName, OrderByExpr, Query, Select,
+    SelectItem, SetExpr, Statement,
+};
 
 use crate::core::core_util;
 use crate::core::core_util::{check_table_exists, register_all_table};
@@ -46,21 +49,17 @@ impl ShowDatabases {
         let table_name = meta_util::convert_to_object_name(
             meta_const::FULL_TABLE_NAME_OF_DEF_INFORMATION_SCHEMA_SCHEMATA,
         );
-        let full_table_name = meta_util::fill_up_table_name(
-            &mut self.session_context,
-            table_name.clone(),
-        ).unwrap();
+        let full_table_name =
+            meta_util::fill_up_table_name(&mut self.session_context, table_name.clone()).unwrap();
 
         let projection_column = SQLExpr::Identifier(Ident {
-            value:
-            meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_SCHEMATA_SCHEMA_NAME
+            value: meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_SCHEMATA_SCHEMA_NAME
                 .to_string(),
             quote_style: None,
         });
         let projection_column_alias = Ident::new("Database");
         // from
-        let table_with_joins =
-            core_util::build_table_with_joins(full_table_name.clone());
+        let table_with_joins = core_util::build_table_with_joins(full_table_name.clone());
         // projection
         let projection = vec![SelectItem::ExprWithAlias {
             expr: projection_column,

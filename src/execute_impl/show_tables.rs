@@ -6,7 +6,10 @@ use datafusion::execution::context::ExecutionContext;
 use datafusion::logical_plan::LogicalPlan;
 use datafusion::physical_plan::{collect, ExecutionPlan};
 use datafusion::sql::planner::{ContextProvider, SqlToRel};
-use sqlparser::ast::{AlterTableOperation, ObjectName, Query, SetExpr, Statement, Ident, SelectItem, OrderByExpr, Select, BinaryOperator, Value};
+use sqlparser::ast::{
+    AlterTableOperation, BinaryOperator, Expr as SQLExpr, Ident, ObjectName, OrderByExpr, Query,
+    Select, SelectItem, SetExpr, Statement, Value,
+};
 
 use crate::core::core_util;
 use crate::core::core_util::{check_table_exists, register_all_table};
@@ -42,7 +45,11 @@ impl ShowTables {
         }
     }
 
-    pub async fn execute(&mut self, full: bool, db_name: Option<ObjectName>) -> MysqlResult<ResultSet> {
+    pub async fn execute(
+        &mut self,
+        full: bool,
+        db_name: Option<ObjectName>,
+    ) -> MysqlResult<ResultSet> {
         let db_name = match db_name {
             None => {
                 let captured_name =
@@ -60,14 +67,11 @@ impl ShowTables {
                 schema_name
             }
             Some(db_name) => {
-                let full_schema_name = meta_util::fill_up_schema_name(
-                    &mut self.session_context,
-                    db_name.clone(),
-                )
-                    .unwrap();
+                let full_schema_name =
+                    meta_util::fill_up_schema_name(&mut self.session_context, db_name.clone())
+                        .unwrap();
 
-                let db_map =
-                    meta_util::read_all_schema(self.global_context.clone()).unwrap();
+                let db_map = meta_util::read_all_schema(self.global_context.clone()).unwrap();
                 if !db_map.contains_key(&full_schema_name) {
                     return Err(MysqlError::new_server_error(
                         1049,
@@ -81,8 +85,7 @@ impl ShowTables {
         };
 
         let column_expr = SQLExpr::Identifier(Ident {
-            value: meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_TABLES_TABLE_NAME
-                .to_string(),
+            value: meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_TABLES_TABLE_NAME.to_string(),
             quote_style: None,
         });
         let column_alias = Ident::new(format!("Tables_in_{}", db_name.as_str()));
