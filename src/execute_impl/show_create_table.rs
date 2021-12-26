@@ -51,14 +51,14 @@ impl ShowCreateTable {
             meta_util::fill_up_table_name(&mut self.session_context, table_name.clone()).unwrap();
 
         let result = meta_util::get_table(self.global_context.clone(), full_table_name.clone());
-        let table = match result {
+        let table_def = match result {
             Ok(table) => table.clone(),
             Err(mysql_error) => return Err(mysql_error),
         };
 
-        let catalog_name = table.option.catalog_name.to_string();
-        let schema_name = table.option.schema_name.to_string();
-        let table_name = table.option.table_name.to_string();
+        let catalog_name = table_def.option.catalog_name.to_string();
+        let schema_name = table_def.option.schema_name.to_string();
+        let table_name = table_def.option.table_name.to_string();
 
         let columns = self.get_columns(catalog_name.clone(), schema_name.clone(), table_name.clone()).await?;
         let statistics = self.get_statistics(
@@ -73,6 +73,7 @@ impl ShowCreateTable {
         ).await?;
 
         self.create_result(
+            table_def,
             columns.record_batches,
             statistics.record_batches,
             tables.record_batches,
@@ -185,12 +186,13 @@ impl ShowCreateTable {
 
     fn create_result(
         &self,
+        table_def: TableDef,
         columns: Vec<RecordBatch>,
         statistics: Vec<RecordBatch>,
         tables: Vec<RecordBatch>,
     ) -> MysqlResult<ResultSet> {
-        let table_name = self.table.option.table_name.clone();
-        let table_constraints = self.table.constraints.clone();
+        let table_name = table_def.option.table_name.clone();
+        let table_constraints = table_def.constraints.clone();
 
         let schema_of_columns =
             def::information_schema::columns(self.global_context.clone()).to_schema_ref();
