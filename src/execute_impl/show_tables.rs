@@ -112,7 +112,7 @@ impl ShowTables {
             });
         }
         // selection
-        let selection = SQLExpr::BinaryOp {
+        let selection = Some(SQLExpr::BinaryOp {
             left: Box::new(SQLExpr::Identifier(Ident::new(
                 meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_TABLES_TABLE_SCHEMA,
             ))),
@@ -120,7 +120,7 @@ impl ShowTables {
             right: Box::new(SQLExpr::Value(Value::SingleQuotedString(
                 db_name.to_string(),
             ))),
-        };
+        });
         // order by
         let order_by_column = SQLExpr::Identifier(column_alias);
         let order_by = OrderByExpr {
@@ -136,7 +136,7 @@ impl ShowTables {
             projection,
             from: vec![table_with_joins],
             lateral_views: vec![],
-            selection: None,
+            selection,
             group_by: vec![],
             cluster_by: vec![],
             distribute_by: vec![],

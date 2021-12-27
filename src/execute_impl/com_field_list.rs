@@ -44,14 +44,14 @@ impl ComFieldList {
         let schema_name = meta_util::cut_out_schema_name(full_table_name.clone());
         let table_name = meta_util::cut_out_table_name(full_table_name.clone());
 
-        let table_def = self
-            .global_context
-            .lock()
-            .unwrap()
-            .meta_data
-            .get_table(full_table_name.clone())
-            .unwrap()
-            .clone();
+        let result = meta_util::get_table(self.global_context.clone(), full_table_name.clone());
+        let table_def = match result {
+            Ok(table_def) => table_def.clone(),
+            Err(mysql_error) => {
+                return Err(mysql_error)
+            },
+        };
+
         Ok((schema_name, table_name, table_def))
     }
 }

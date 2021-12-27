@@ -52,7 +52,7 @@ impl ShowCreateTable {
 
         let result = meta_util::get_table(self.global_context.clone(), full_table_name.clone());
         let table_def = match result {
-            Ok(table) => table.clone(),
+            Ok(table_def) => table_def.clone(),
             Err(mysql_error) => return Err(mysql_error),
         };
 
@@ -60,23 +60,33 @@ impl ShowCreateTable {
         let schema_name = table_def.option.schema_name.to_string();
         let table_name = table_def.option.table_name.to_string();
 
-        let columns = self.get_columns(catalog_name.clone(), schema_name.clone(), table_name.clone()).await?;
-        let statistics = self.get_statistics(
-            catalog_name.clone(),
-            schema_name.clone(),
-            table_name.clone(),
-        ).await?;
-        let tables = self.get_tables(
-            catalog_name.clone(),
-            schema_name.clone(),
-            table_name.clone(),
-        ).await?;
+        let result_set_columns = self
+            .get_columns(
+                catalog_name.clone(),
+                schema_name.clone(),
+                table_name.clone(),
+            )
+            .await?;
+        let result_set_statistics = self
+            .get_statistics(
+                catalog_name.clone(),
+                schema_name.clone(),
+                table_name.clone(),
+            )
+            .await?;
+        let result_set_tables = self
+            .get_tables(
+                catalog_name.clone(),
+                schema_name.clone(),
+                table_name.clone(),
+            )
+            .await?;
 
-        self.create_result(
+        self.merge_result(
             table_def,
-            columns.record_batches,
-            statistics.record_batches,
-            tables.record_batches,
+            result_set_columns,
+            result_set_statistics,
+            result_set_tables,
         )
     }
 
@@ -184,27 +194,27 @@ impl ShowCreateTable {
         select_from.execute(&query).await
     }
 
-    fn create_result(
+    fn merge_result(
         &self,
         table_def: TableDef,
-        columns: Vec<RecordBatch>,
-        statistics: Vec<RecordBatch>,
-        tables: Vec<RecordBatch>,
+        result_set_columns: ResultSet,
+        result_set_statistics: ResultSet,
+        result_set_tables: ResultSet,
     ) -> MysqlResult<ResultSet> {
         let table_name = table_def.option.table_name.clone();
         let table_constraints = table_def.constraints.clone();
 
-        let schema_of_columns =
-            def::information_schema::columns(self.global_context.clone()).to_schema_ref();
-
-        let record_batch = columns.get(0).unwrap();
-        let column_index_of_column_name = schema_of_columns
+        let record_batch = result_set_columns.record_batches.get(0).unwrap();
+        let column_index_of_column_name = result_set_columns
+            .schema_ref
             .index_of(meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_COLUMNS_COLUMN_NAME)
             .unwrap();
-        let column_index_of_data_type = schema_of_columns
+        let column_index_of_data_type = result_set_columns
+            .schema_ref
             .index_of(meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_COLUMNS_DATA_TYPE)
             .unwrap();
-        let column_index_of_is_nullable = schema_of_columns
+        let column_index_of_is_nullable = result_set_columns
+            .schema_ref
             .index_of(meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_COLUMNS_IS_NULLABLE)
             .unwrap();
         let columns_rows = core_util::convert_record_to_scalar_value(record_batch.clone());

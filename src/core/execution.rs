@@ -46,6 +46,7 @@ use crate::execute_impl::set_variable::SetVariable;
 use crate::execute_impl::show_charset::ShowCharset;
 use crate::execute_impl::show_collation::ShowCollation;
 use crate::execute_impl::show_columns_from_table::ShowColumns;
+use crate::execute_impl::show_create_table::ShowCreateTable;
 use crate::execute_impl::show_databases::ShowDatabases;
 use crate::execute_impl::show_engines::ShowEngines;
 use crate::execute_impl::show_grants::ShowGrants;
@@ -975,6 +976,31 @@ impl Execution {
                             Err(mysql_error) => Err(mysql_error),
                         }
                     }
+                    SQLStatement::ShowCreate { obj_type, obj_name } => match obj_type {
+                        ShowCreateObject::Table => {
+                            let table_name = obj_name;
+
+                            let mut show_create_table = ShowCreateTable::new(
+                                self.global_context.clone(),
+                                self.session_context.clone(),
+                                self.execution_context.clone(),
+                            );
+                            let result = show_create_table.execute(&table_name).await;
+                            match result {
+                                Ok(result_set) => Ok(CoreOutput::ResultSet(result_set)),
+                                Err(mysql_error) => Err(mysql_error),
+                            }
+                        }
+                        _ => {
+                            let message = format!(
+                                "Unsupported show create statement, show type: {:?}, show name: {:?}",
+                                obj_type.clone(),
+                                obj_name.clone()
+                            );
+                            log::error!("{}", message);
+                            return Err(MysqlError::new_global_error(67, message.as_str()));
+                        }
+                    },
                     SQLStatement::ShowVariable { variable } => {
                         let first_variable = variable.get(0).unwrap();
                         if first_variable.to_string().to_uppercase()

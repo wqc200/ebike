@@ -146,7 +146,7 @@ impl Handle {
                     break;
                 }
             };
-            log::debug!("sql: {}", sql);
+            log::debug!("start sql: {}", sql);
 
             let command_id = request_payload.get_command_id();
             log::debug!("command id: {}", command_id);
