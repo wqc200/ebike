@@ -1,27 +1,37 @@
 use std::sync::{Mutex, Arc};
 
-use arrow::array::{StringArray};
-use arrow::datatypes::{SchemaRef};
+use arrow::array::StringArray;
+use arrow::datatypes::SchemaRef;
 use arrow::datatypes::{DataType, Field, Schema};
 use arrow::record_batch::RecordBatch;
+use datafusion::execution::context::ExecutionContext;
+use sqlparser::ast::Ident;
 
 use crate::core::global_context::GlobalContext;
-use crate::mysql::error::{MysqlResult};
+use crate::core::output::ResultSet;
+use crate::core::session_context::SessionContext;
+use crate::mysql::error::MysqlResult;
 
 pub struct ShowCharset {
     global_context: Arc<Mutex<GlobalContext>>,
+    session_context: SessionContext,
+    execution_context: ExecutionContext,
 }
 
 impl ShowCharset {
     pub fn new(
-        core_context: Arc<Mutex<GlobalContext>>,
+        global_context: Arc<Mutex<GlobalContext>>,
+        session_context: SessionContext,
+        execution_context: ExecutionContext,
     ) -> Self {
         Self {
-            global_context: core_context,
+            global_context,
+            session_context,
+            execution_context,
         }
     }
 
-    pub fn execute(&self) -> MysqlResult<(SchemaRef, Vec<RecordBatch>)> {
+    pub fn execute(&self) -> MysqlResult<ResultSet> {
         let schema = SchemaRef::new(Schema::new(vec![
             Field::new("Charset", DataType::Utf8, false),
             Field::new("Description", DataType::Utf8, false),
@@ -48,6 +58,6 @@ impl ShowCharset {
             Arc::new(column_values_of_maxlen),
         ]).unwrap();
 
-        Ok((schema.clone(), vec![record_batch]))
+        Ok(ResultSet::new(schema, vec![record_batch]))
     }
 }

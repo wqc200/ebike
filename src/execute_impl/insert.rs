@@ -1,63 +1,84 @@
+use bytes::{Buf, Bytes};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
-use arrow::datatypes::{Schema};
+use arrow::datatypes::Schema;
 use arrow::record_batch::RecordBatch;
-use datafusion::execution::context::{ExecutionContext};
+use datafusion::execution::context::ExecutionContext;
 use datafusion::logical_plan::{Expr, ToDFSchema};
-use datafusion::physical_plan::{ColumnarValue};
 use datafusion::physical_plan::planner::DefaultPhysicalPlanner;
-use sqlparser::ast::{ObjectName, Ident};
-use sqlparser::ast::{
-    Query, SetExpr
-};
+use datafusion::physical_plan::ColumnarValue;
+use datafusion::scalar::ScalarValue;
+use datafusion::sql::planner::{ContextProvider, SqlToRel};
+use sqlparser::ast::{Ident, ObjectName};
+use sqlparser::ast::{Query, SetExpr};
+use uuid::Uuid;
 
+use crate::core::core_util;
 use crate::core::global_context::GlobalContext;
 use crate::core::session_context::SessionContext;
-use crate::meta::meta_def::{IndexDef};
+use crate::meta::meta_def::{IndexDef, TableDef};
 use crate::meta::meta_util;
 use crate::mysql::error::{MysqlError, MysqlResult};
-
-use crate::util;
-use crate::util::convert::ToIdent;
-use crate::core::logical_plan::CoreLogicalPlan;
-use datafusion::sql::planner::{SqlToRel, ContextProvider};
 use crate::store::engine::engine_util::StoreEngineFactory;
+use crate::util::convert::ToIdent;
+use crate::util::dbkey::{create_table_index_key, create_column_key, create_column_rowid_key};
+use datafusion::prelude::col;
+use crate::physical_plan::insert::PhysicalPlanInsert;
 
-pub struct LogicalPlanInsert {
+pub struct Insert {
     global_context: Arc<Mutex<GlobalContext>>,
-    table_name: ObjectName,
-    columns: Vec<Ident>,
-    overwrite: bool,
-    source: Box<Query>,
+    session_context: SessionContext,
+    execution_context: ExecutionContext,
 }
 
-impl LogicalPlanInsert {
-    pub fn new(global_context: Arc<Mutex<GlobalContext>>, table_name: ObjectName, columns: Vec<Ident>, overwrite: bool, source: Box<Query>) -> Self {
+impl Insert {
+    pub fn new(
+        global_context: Arc<Mutex<GlobalContext>>,
+        session_context: SessionContext,
+        execution_context: ExecutionContext,
+    ) -> Self {
         Self {
             global_context,
-            table_name,
-            columns,
-            overwrite,
-            source,
+            session_context,
+            execution_context,
         }
     }
 
-    pub fn create_logical_plan<S: ContextProvider>(&self, datafusion_context: &mut ExecutionContext, session_context: &mut SessionContext, query_planner: &SqlToRel<S>) -> MysqlResult<CoreLogicalPlan> {
-        let full_table_name = meta_util::fill_up_table_name(session_context, self.table_name.clone()).unwrap();
+    pub fn execute(
+        &mut self,
+        origin_table_name: ObjectName,
+        columns: Vec<Ident>,
+        overwrite: bool,
+        source: Box<Query>,
+    ) -> MysqlResult<u64> {
+        let full_table_name =
+            meta_util::fill_up_table_name(&mut self.session_context, origin_table_name.clone()).unwrap();
 
-        let store_engine = StoreEngineFactory::try_new_with_table_name(self.global_context.clone(), full_table_name.clone()).unwrap();
+        let table =
+            meta_util::get_table(self.global_context.clone(), full_table_name.clone()).unwrap();
 
-        let table = meta_util::get_table(self.global_context.clone(), full_table_name.clone()).unwrap();
+        let catalog_name = table.option.catalog_name.to_string();
+        let schema_name = table.option.schema_name.to_string();
+        let table_name = table.option.table_name.to_string();
+
+        let store_engine = StoreEngineFactory::try_new_with_table_name(
+            self.global_context.clone(),
+            full_table_name.clone(),
+        ).unwrap();
+
+        let state = self.execution_context.state.lock().unwrap().clone();
+        let query_planner = SqlToRel::new(&state);
 
         let mut column_values_list = vec![];
-        match &self.source.body {
+        match &source.body {
             SetExpr::Values(values) => {
                 for row_value_ast in &values.0 {
                     let mut row_value: Vec<Expr> = vec![];
                     for column_value_ast in row_value_ast {
                         let datafusion_dfschema = table.to_datafusion_dfschema().unwrap();
-                        let result = query_planner.sql_expr_to_logical_expr(&column_value_ast, &datafusion_dfschema);
+                        let result = query_planner
+                            .sql_expr_to_logical_expr(&column_value_ast, &datafusion_dfschema);
                         let expr = match result {
                             Ok(v) => v,
                             Err(e) => {
@@ -79,14 +100,14 @@ impl LogicalPlanInsert {
         }
 
         let mut column_name_list: Vec<String> = vec![];
-        if self.columns.len() < 1 {
+        if columns.len() < 1 {
             for column_def in table.get_columns() {
                 column_name_list.push(column_def.sql_column.name.to_string())
-            };
+            }
         } else {
-            for column in &self.columns {
+            for column in &columns {
                 column_name_list.push(column.to_string())
-            };
+            }
         }
 
         let schema = Schema::empty();
@@ -94,7 +115,7 @@ impl LogicalPlanInsert {
 
         let dfschema = schema.clone().to_dfschema().unwrap();
 
-        let state = datafusion_context.state.lock().unwrap();
+        let state = self.execution_context.state.lock().unwrap();
         let planner = DefaultPhysicalPlanner::default();
 
         let mut column_value_map_list = vec![];
@@ -104,11 +125,14 @@ impl LogicalPlanInsert {
                 let result = column_name_list.get(column_index);
                 let column_name = match result {
                     None => {
-                        return Err(MysqlError::new_global_error(1105, format!(
-                            "Column name not found, row_index: {:?}, column_index: {:?}",
-                            row_index,
-                            column_index,
-                        ).as_str()));
+                        return Err(MysqlError::new_global_error(
+                            1105,
+                            format!(
+                                "Column name not found, row_index: {:?}, column_index: {:?}",
+                                row_index, column_index,
+                            )
+                                .as_str(),
+                        ));
                     }
                     Some(column_name) => column_name.to_ident(),
                 };
@@ -143,9 +167,9 @@ impl LogicalPlanInsert {
             column_value_map_list.push(column_value_map);
         }
 
-        let table_name = table.option.table_name.clone();
-
-        let table_index_list = meta_util::get_table_index_list(self.global_context.clone(), full_table_name.clone()).unwrap();
+        let table_index_list =
+            meta_util::get_table_index_list(self.global_context.clone(), full_table_name.clone())
+                .unwrap();
 
         let mut index_keys_list = vec![];
         for row_number in 0..column_value_map_list.len() {
@@ -153,8 +177,17 @@ impl LogicalPlanInsert {
 
             let mut index_keys = vec![];
             for table_index in table_index_list.clone() {
-                let index_key = util::dbkey::create_table_index_key(table.clone(), table_index.clone(), column_value_map.clone()).unwrap();
-                let index = IndexDef::new(table_index.index_name.as_str(), table_index.level, index_key.as_str());
+                let index_key = create_table_index_key(
+                    table.clone(),
+                    table_index.clone(),
+                    column_value_map.clone(),
+                )
+                    .unwrap();
+                let index = IndexDef::new(
+                    table_index.index_name.as_str(),
+                    table_index.level,
+                    index_key.as_str(),
+                );
                 index_keys.push(index);
             }
 
@@ -167,16 +200,17 @@ impl LogicalPlanInsert {
                     match store_engine.get_key(row_index.index_key.clone()).unwrap() {
                         None => {}
                         Some(_) => {
-                            if !self.overwrite {
+                            if !overwrite {
                                 return Err(MysqlError::new_server_error(
                                     1062,
                                     "23000",
                                     format!(
                                         "Duplicate entry '{:?}' for key '{:?}.{:?}'",
                                         row_index.index_key,
-                                        table_name,
+                                        table_name.clone(),
                                         row_index.index_name,
-                                    ).as_str(),
+                                    )
+                                        .as_str(),
                                 ));
                             }
                         }
@@ -185,6 +219,7 @@ impl LogicalPlanInsert {
             }
         }
 
-        Ok(CoreLogicalPlan::Insert { table, column_name_list, index_keys_list, column_value_map_list })
+        let insert = PhysicalPlanInsert::new(self.global_context.clone());
+        insert.execute(table.clone(), column_name_list.clone(), index_keys_list.clone(), column_value_map_list.clone())
     }
 }

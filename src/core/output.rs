@@ -2,13 +2,13 @@ use std::error;
 use std::fmt::{Display, Formatter};
 use std::result;
 
-use arrow::datatypes::{SchemaRef};
+use arrow::datatypes::SchemaRef;
 use arrow::record_batch::RecordBatch;
 use datafusion::error::DataFusionError;
-
-use crate::mysql::error::MysqlError;
-use crate::meta::meta_def::TableDef;
 use sqlparser::ast::ObjectName;
+
+use crate::meta::meta_def::TableDef;
+use crate::mysql::error::MysqlError;
 
 pub struct FinalCount {
     pub affect_rows: u64,
@@ -30,9 +30,23 @@ impl FinalCount {
     }
 }
 
+pub struct ResultSet {
+    pub schema_ref: SchemaRef,
+    pub record_batches: Vec<RecordBatch>,
+}
+
+impl ResultSet {
+    pub fn new(schema_ref: SchemaRef, record_batches: Vec<RecordBatch>) -> Self {
+        Self {
+            schema_ref,
+            record_batches,
+        }
+    }
+}
+
 pub enum CoreOutput {
     FinalCount(FinalCount),
-    ResultSet(SchemaRef, Vec<RecordBatch>),
+    ResultSet(ResultSet),
     MultiResultSet(Vec<Vec<RecordBatch>>),
     ComFieldList(ObjectName, ObjectName, TableDef),
 }
@@ -62,7 +76,9 @@ impl Display for OutputError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match *self {
             OutputError::DataFusionError(ref desc) => write!(f, "DataFusion error: {}", desc),
-            OutputError::MysqlError(ref desc) => { write!(f, "Mysql error: {}", desc) }
+            OutputError::MysqlError(ref desc) => {
+                write!(f, "Mysql error: {}", desc)
+            }
         }
     }
 }

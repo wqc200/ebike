@@ -146,7 +146,7 @@ impl Handle {
                     break;
                 }
             };
-            log::debug!("sql: {}", sql);
+            log::debug!("start sql: {}", sql);
 
             let command_id = request_payload.get_command_id();
             log::debug!("command id: {}", command_id);
@@ -167,7 +167,7 @@ impl Handle {
                 0x04 => {
                     // ComFieldList
                     let table_name = sql.trim_end_matches("\x00").to_string();
-                    self.core_execution.field_list(table_name.as_str()).await
+                    self.core_execution.com_field_list(table_name.as_str()).await
                 }
                 _ => {
                     log::error!("Unknown error. The command is not support, command id: {:?}", command_id.to_string());
@@ -196,7 +196,10 @@ impl Handle {
                 let ok_message = message::ok_message(affect_rows, last_insert_id, metadata::StatusFlags::SERVER_STATUS_AUTOCOMMIT, 0, message);
                 self.write_packet(ok_message).await;
             }
-            CoreOutput::ResultSet(schema_ref, results) => {
+            CoreOutput::ResultSet(result_set) => {
+                let schema_ref = result_set.schema_ref;
+                let batches = result_set.record_batches;
+
                 let payload = message::column_count_message(schema_ref.fields().len());
                 self.write_packet(payload).await;
                 for field in schema_ref.fields() {
@@ -206,7 +209,7 @@ impl Handle {
                 }
                 self.write_packet(message::eof_message(0, 0)).await;
 
-                for record_batch in results {
+                for record_batch in batches {
                     let rows = core_util::convert_record_to_scalar_value(record_batch.clone());
                     for row_index in 0..record_batch.num_rows() {
                         let payload = message::row_message(rows.get(row_index).unwrap().clone());

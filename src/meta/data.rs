@@ -5,6 +5,7 @@ use sqlparser::ast::{Ident, ObjectName};
 use crate::meta::{meta_def};
 use crate::mysql::error::{MysqlError, MysqlResult};
 use crate::meta::meta_def::TableDef;
+use crate::meta::meta_def::SchemaDef;
 
 #[derive(Debug, Clone)]
 pub struct MetaData {
@@ -28,14 +29,14 @@ impl MetaData {
     }
 
     pub fn add_all_table(&mut self, table_def_map: HashMap<ObjectName, meta_def::TableDef>) {
-        for (schema_name, table_def) in table_def_map.iter() {
-            self.add_table(schema_name.clone(), table_def.clone());
+        for (full_table_name, table_def) in table_def_map.iter() {
+            self.add_table(full_table_name.clone(), table_def.clone());
         }
     }
 
-    pub fn add_all_schema(&mut self, schema_map: HashMap<ObjectName, meta_def::SchemaDef>) {
-        for (schema_name, schema_def) in schema_map.iter() {
-            self.add_schema(schema_name.clone(), schema_def.clone());
+    pub fn add_all_schema(&mut self, schema_map: HashMap<ObjectName, SchemaDef>) {
+        for (full_schema_name, schema_def) in schema_map.iter() {
+            self.add_schema(full_schema_name.clone(), schema_def.clone());
         }
     }
 
@@ -44,33 +45,21 @@ impl MetaData {
         *t = table;
     }
 
-    pub fn add_schema(&mut self, full_schema_name: ObjectName, schema_def: meta_def::SchemaDef) {
+    pub fn add_schema(&mut self, full_schema_name: ObjectName, schema_def: SchemaDef) {
         self.schema_map.entry(full_schema_name.clone()).or_insert(schema_def.clone());
         ()
     }
 
-    pub fn delete_serial_number(&mut self, full_table_name: ObjectName, column_name: Ident) {
-        self.serial_number_map.entry(full_table_name.clone()).or_insert(HashMap::new()).remove(&column_name);
-    }
-
-    pub fn get_serial_number(&self, full_table_name: ObjectName, column_name: Ident) -> MysqlResult<usize> {
-        match self.serial_number_map.get(&full_table_name) {
-            None => {
-                Err(MysqlError::new_global_error(1105, format!("Unknown error, Table not found, schema name: {:?}.", full_table_name).as_str()))
-            },
-            Some(map) => {
-                match map.get(&column_name) {
-                    None => Err(MysqlError::new_global_error(1105, format!("Unknown error, Serial number not found, column name: {:?}.", column_name).as_str())),
-                    Some(value) => {
-                        Ok(value.clone())
-                    }
-                }
-            }
-        }
+    pub fn delete_schema(&mut self, full_schema_name: ObjectName) {
+        self.schema_map.remove(&full_schema_name).unwrap();
     }
 
     pub fn get_schema_map(&self) -> HashMap<ObjectName, meta_def::SchemaDef> {
         self.schema_map.clone()
+    }
+
+    pub fn get_schema(&self, full_schema_name: ObjectName) -> Option<&SchemaDef> {
+        self.schema_map.get(&full_schema_name)
     }
 
     pub fn get_table_map(&self) -> HashMap<ObjectName, meta_def::TableDef> {
@@ -81,7 +70,7 @@ impl MetaData {
         self.table_map.get(&full_table_name)
     }
 
-    pub fn delete_table(&mut self, schema_name: ObjectName) {
-        self.table_map.remove(&schema_name).unwrap();
+    pub fn delete_table(&mut self, full_table_name: ObjectName) {
+        self.table_map.remove(&full_table_name).unwrap();
     }
 }

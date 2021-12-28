@@ -54,7 +54,7 @@ impl SledReader {
 
                 Arc::new(Schema::new(projected_fields))
             }
-            None => schema_ref.clone(),
+            None => table.to_schema_ref().clone(),
         };
 
         let table_index_prefix = reader_util::get_seek_prefix(

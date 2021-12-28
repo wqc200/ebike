@@ -16,10 +16,24 @@ use crate::meta::def::information_schema::{key_column_usage, table_constraints};
 use crate::meta::initial::{
     get_full_table_name_list, SaveKeyColumnUsage, SaveStatistics, SaveTableConstraints,
 };
-use crate::meta::meta_def::{SchemaDef, SparrowColumnDef, TableDef, TableIndexDef, TableOptionDef};
+use crate::meta::meta_def::{SparrowColumnDef, SchemaDef, TableDef, TableIndexDef, TableOptionDef};
 use crate::meta::{def, initial, meta_const, meta_util};
 use crate::mysql::error::{MysqlError, MysqlResult};
 use crate::util::convert::ToObjectName;
+
+pub fn get_schema(
+    global_context: Arc<Mutex<GlobalContext>>,
+    full_schema_name: ObjectName,
+) -> MysqlResult<SchemaDef> {
+    let gc = global_context.lock().unwrap();
+    let result = gc.meta_data.get_schema(full_schema_name.clone());
+    match result {
+        Some(schema_def) => Ok(schema_def.clone()),
+        None => {
+            return Err(error_of_schema_doesnt_exists(full_schema_name.clone()));
+        }
+    }
+}
 
 pub fn get_table(
     global_context: Arc<Mutex<GlobalContext>>,
@@ -704,6 +718,12 @@ pub fn check_table_exists_with_full_name(
 
 pub fn error_of_table_doesnt_exists(full_table_name: ObjectName) -> MysqlError {
     let message = format!("Table '{}' doesn't exist", full_table_name.to_string());
+    log::error!("{}", message);
+    MysqlError::new_server_error(1146, "42S02", message.as_str())
+}
+
+pub fn error_of_schema_doesnt_exists(full_schema_name: ObjectName) -> MysqlError {
+    let message = format!("Schema '{}' doesn't exist", full_schema_name.to_string());
     log::error!("{}", message);
     MysqlError::new_server_error(1146, "42S02", message.as_str())
 }
