@@ -39,7 +39,12 @@ pub fn check_table_exists(
             for from in &select.from {
                 match from.relation.clone() {
                     TableFactor::Table { name, .. } => {
-                        return check_table_exists_with_name(global_context.clone(), session_context, execution_context, &name);
+                        return check_table_exists_with_name(
+                            global_context.clone(),
+                            session_context,
+                            execution_context,
+                            &name,
+                        );
                     }
                     _ => {}
                 }
@@ -47,7 +52,12 @@ pub fn check_table_exists(
                 for i in 0..from.joins.clone().len() {
                     match from.joins[i].relation.clone() {
                         TableFactor::Table { name, .. } => {
-                            return check_table_exists_with_name(global_context.clone(), session_context, execution_context, &name);
+                            return check_table_exists_with_name(
+                                global_context.clone(),
+                                session_context,
+                                execution_context,
+                                &name,
+                            );
                         }
                         _ => {}
                     }
@@ -336,88 +346,6 @@ pub fn projection_has_rowid(projection: Vec<SelectItem>) -> bool {
         _ => false,
     });
     has_rowid
-}
-
-pub fn remove_rowid_from_projection(plan: &LogicalPlan) -> LogicalPlan {
-    match plan.clone() {
-        LogicalPlan::Projection {
-            expr,
-            input,
-            schema,
-        } => {
-            let mut projected_expr = vec![];
-            let mut dffields = vec![];
-
-            for i in 0..expr.len() {
-                match expr[i] {
-                    Expr::Column(ref column) => {
-                        if column.name.to_string() != meta_const::COLUMN_ROWID.to_string() {
-                            projected_expr.push(expr[i].clone());
-                            dffields.push(schema.field(i).clone());
-                        }
-                    }
-                    _ => {
-                        projected_expr.push(expr[i].clone());
-                        dffields.push(schema.field(i).clone());
-                    }
-                }
-            }
-
-            LogicalPlan::Projection {
-                expr: projected_expr,
-                input: Arc::new(remove_rowid_from_projection(&input)),
-                schema: Arc::new(DFSchema::new(dffields).unwrap()),
-            }
-        }
-        LogicalPlan::Explain {
-            verbose,
-            plan,
-            stringified_plans,
-            schema,
-        } => {
-            let plan = Arc::new(remove_rowid_from_projection(&plan));
-            LogicalPlan::Explain {
-                verbose,
-                plan,
-                stringified_plans,
-                schema,
-            }
-        }
-        LogicalPlan::Filter { predicate, input } => LogicalPlan::Filter {
-            predicate,
-            input: Arc::new(remove_rowid_from_projection(&input)),
-        },
-        LogicalPlan::TableScan {
-            table_name,
-            source,
-            projection,
-            projected_schema,
-            filters,
-            limit,
-        } => {
-            let mut dffields = vec![];
-            for i in 0..projected_schema.fields().len() {
-                let field = projected_schema.field(i).clone();
-                if field.name() != &meta_const::COLUMN_ROWID.to_string() {
-                    dffields.push(projected_schema.field(i).clone());
-                }
-            }
-
-            LogicalPlan::TableScan {
-                table_name,
-                source,
-                projection,
-                projected_schema: Arc::new(DFSchema::new(dffields).unwrap()),
-                filters,
-                limit,
-            }
-        }
-        LogicalPlan::Limit { n, input } => LogicalPlan::Limit {
-            n,
-            input: Arc::new(remove_rowid_from_projection(&input)),
-        },
-        _ => plan.clone(),
-    }
 }
 
 pub fn create_table_dual() -> Arc<dyn TableProvider> {
@@ -744,10 +672,7 @@ pub fn build_find_table_sqlwhere(
     selection
 }
 
-pub fn selection_information_schema_schemata(
-    catalog_name: &str,
-    schema_name: &str,
-) -> SQLExpr {
+pub fn selection_information_schema_schemata(catalog_name: &str, schema_name: &str) -> SQLExpr {
     let selection_catalog_name = SQLExpr::BinaryOp {
         left: Box::new(SQLExpr::Identifier(Ident::new(
             meta_const::COLUMN_NAME_OF_DEF_INFORMATION_SCHEMA_SCHEMATA_CATALOG_NAME,

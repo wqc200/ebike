@@ -4,7 +4,7 @@ version = "0.1.1"
 description = "Fast, lightweight and schema-less database backend."
 readme = "README.md"
 license = "Apache-2.0"
-edition = "2018"
+edition = "2021"
 homepage = "https://github.com/wqc200/ebike"
 repository = "https://github.com/wqc200/ebike.git"
 keywords = ["olap", "database", "rust", "cell"]
@@ -43,8 +43,8 @@ byteorder = "1.2.7"
 sqlparser = { path = "components/sqlparser-rs" }
 sled = { version = "0.34" }
 datafusion = { path = "components/arrow-datafusion/datafusion" }
-arrow = { version = "5.1", features = ["prettyprint"] }
-parquet = { version = "5.1", features = ["arrow"] }
+arrow = { version = "6.1.0", features = ["prettyprint"] }
+parquet = { version = "6.1.0", features = ["arrow"] }
 libc = "0.2"
 packed_simd = { version = "0.3.1", optional = true }
 hex = "0.4"

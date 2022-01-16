@@ -10,7 +10,7 @@ use arrow::record_batch::RecordBatch;
 use datafusion::execution::context::{ExecutionConfig, ExecutionContext};
 use datafusion::logical_plan::create_udf;
 use datafusion::logical_plan::LogicalPlan;
-use datafusion::physical_plan::functions::make_scalar_function;
+use datafusion::physical_plan::functions::{make_scalar_function, Volatility};
 use datafusion::sql::parser::{DFParser, Statement};
 use datafusion::sql::planner::{ContextProvider, SqlToRel};
 use datafusion::variable::VarType;
@@ -133,6 +133,7 @@ impl Execution {
                 "database",               // function name
                 vec![],                   // input argument types
                 Arc::new(DataType::Utf8), // output type
+                Volatility::Volatile,
                 make_scalar_function(database_function),
             ), // function implementation
         );

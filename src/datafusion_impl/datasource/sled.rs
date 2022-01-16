@@ -3,16 +3,18 @@ use std::sync::{Arc, Mutex};
 use bitflags::_core::any::Any;
 
 use arrow::datatypes::Schema;
-use datafusion::datasource::datasource::{TableProviderFilterPushDown};
+use async_trait::async_trait;
+use datafusion::datasource::datasource::TableProviderFilterPushDown;
 use datafusion::datasource::TableProvider;
 use datafusion::error::Result;
 use datafusion::logical_plan::Expr;
 use datafusion::physical_plan::ExecutionPlan;
 
-use crate::datafusion_impl::physical_plan::sled::SledExec;
 use crate::core::global_context::GlobalContext;
+use crate::datafusion_impl::physical_plan::sled::SledExec;
 use crate::meta::meta_def::TableDef;
 
+#[derive(Clone)]
 pub struct SledTable {
     global_context: Arc<Mutex<GlobalContext>>,
     table: TableDef,
@@ -28,6 +30,7 @@ impl SledTable {
     }
 }
 
+#[async_trait]
 impl TableProvider for SledTable {
     fn as_any(&self) -> &dyn Any {
         self
@@ -37,7 +40,7 @@ impl TableProvider for SledTable {
         self.table.to_schema_ref()
     }
 
-    fn scan(
+    async fn scan(
         &self,
         projection: &Option<Vec<usize>>,
         batch_size: usize,
@@ -49,14 +52,8 @@ impl TableProvider for SledTable {
             self.table.clone(),
             projection.clone(),
             batch_size,
-            &[])?;
+            &[],
+        )?;
         Ok(Arc::new(exec))
-    }
-
-    fn supports_filter_pushdown(
-        &self,
-        _filter: &Expr,
-    ) -> Result<TableProviderFilterPushDown> {
-        Ok(TableProviderFilterPushDown::Inexact)
     }
 }

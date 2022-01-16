@@ -60,7 +60,7 @@ impl SelectFrom {
             }
         };
 
-        let result = self.execution_context.create_physical_plan(&logical_plan);
+        let result = self.execution_context.create_physical_plan(&logical_plan).await;
         let execution_plan = match result {
             Ok(execution_plan) => execution_plan,
             Err(error) => {
