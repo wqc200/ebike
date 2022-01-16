@@ -1437,6 +1437,10 @@ pub fn add_def_performance_schmea_global_variables(
         "variable_name".to_ident(),
         ScalarValue::Utf8(Some("transaction_isolation".to_string())),
     );
+    column_value_map.insert(
+        "variable_value".to_ident(),
+        ScalarValue::Utf8(Some("REPEATABLE-READ".to_string())),
+    );
     column_value_map.insert("variable_value".to_ident(), ScalarValue::Utf8(None));
     column_value_map_list.push(column_value_map);
     let mut column_value_map = HashMap::new();
