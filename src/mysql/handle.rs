@@ -280,7 +280,7 @@ impl Handle {
                 columns,
                 params,
             }) => {
-                let payload = message::com_stmt_prepare_first_message(1, 0, 1, 0);
+                let payload = message::com_stmt_prepare_first_message(1, 0, 2, 0);
                 self.write_packet(payload).await;
 
                 for column_def in params {

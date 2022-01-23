@@ -36,7 +36,7 @@ pub enum ArrayCell<'a> {
     Float64Array(&'a Float64Array),
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct Column {
     schema: String,
     table: String,

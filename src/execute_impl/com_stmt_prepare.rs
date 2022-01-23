@@ -52,7 +52,7 @@ impl ComStmtPrepare {
 
         let column = Column::new(schema_name.clone(), table_name.clone(), &sparrow_column_def);
 
-        let stmt_prepare = StmtPrepare::new(1, vec![], vec![column]);
+        let stmt_prepare = StmtPrepare::new(1, vec![], vec![column.clone(), column.clone()]);
 
         Ok(stmt_prepare)
     }
