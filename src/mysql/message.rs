@@ -7,10 +7,19 @@ use super::response::ResponsePayload;
 use super::{mysql_util, metadata};
 use datafusion::scalar::ScalarValue;
 
-pub enum MessageType {
-    ResponsePayload(ResponsePayload),
-    ResultSet(Vec<RecordBatch>),
-    MultiResultSet(Vec<MessageType>),
+///
+/// https://dev.mysql.com/doc/internals/en/com-stmt-prepare-response.html
+///
+pub fn com_stmt_prepare_first_message( statement_id: u64, num_columns: u64, num_params: u64, warning_count: u64) -> ResponsePayload {
+    let mut payload = ResponsePayload::new(128 as usize);
+    payload.bytes.push(0x00);
+    payload.dump_uint32(statement_id as u32);
+    payload.dump_uint16(num_columns as u16);
+    payload.dump_uint16(num_params as u16);
+    payload.bytes.push(0x00);
+    payload.dump_uint16(warning_count as u16);
+
+    return payload;
 }
 
 pub fn row_message(columns: Vec<ScalarValue>) -> ResponsePayload {

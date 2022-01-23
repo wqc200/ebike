@@ -1,5 +1,6 @@
 pub mod add_column;
 pub mod com_field_list;
+pub mod com_stmt_prepare;
 pub mod create_db;
 pub mod create_table;
 pub mod delete;

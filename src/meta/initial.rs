@@ -424,15 +424,10 @@ pub fn add_information_schema_tables(
     global_context: Arc<Mutex<GlobalContext>>,
     table_option: TableOptionDef,
 ) -> MysqlResult<u64> {
-    let table_def =
-        def::information_schema::tables(global_context.clone());
+    let table_def = def::information_schema::tables(global_context.clone());
 
     let mut column_name_list = vec![];
-    for sql_column in table_def
-        .column
-        .sql_column_list
-        .clone()
-    {
+    for sql_column in table_def.column.sql_column_list.clone() {
         column_name_list.push(sql_column.name.to_string());
     }
 
@@ -1412,6 +1407,8 @@ pub fn add_def_performance_schmea_global_variables(
     }
 
     let mut column_value_map_list: Vec<HashMap<Ident, ScalarValue>> = vec![];
+
+    // auto_increment_increment
     let mut column_value_map = HashMap::new();
     column_value_map.insert(
         "variable_name".to_ident(),
@@ -1422,6 +1419,8 @@ pub fn add_def_performance_schmea_global_variables(
         ScalarValue::Utf8(Some("0".to_string())),
     );
     column_value_map_list.push(column_value_map);
+
+    // lower_case_table_names
     let mut column_value_map = HashMap::new();
     column_value_map.insert(
         "variable_name".to_ident(),
@@ -1432,6 +1431,8 @@ pub fn add_def_performance_schmea_global_variables(
         ScalarValue::Utf8(Some("1".to_string())),
     );
     column_value_map_list.push(column_value_map);
+
+    // transaction_isolation
     let mut column_value_map = HashMap::new();
     column_value_map.insert(
         "variable_name".to_ident(),
@@ -1441,8 +1442,9 @@ pub fn add_def_performance_schmea_global_variables(
         "variable_value".to_ident(),
         ScalarValue::Utf8(Some("REPEATABLE-READ".to_string())),
     );
-    column_value_map.insert("variable_value".to_ident(), ScalarValue::Utf8(None));
     column_value_map_list.push(column_value_map);
+
+    // transaction_read_only
     let mut column_value_map = HashMap::new();
     column_value_map.insert(
         "variable_name".to_ident(),
@@ -1451,6 +1453,30 @@ pub fn add_def_performance_schmea_global_variables(
     column_value_map.insert(
         "variable_value".to_ident(),
         ScalarValue::Utf8(Some("0".to_string())),
+    );
+    column_value_map_list.push(column_value_map);
+
+    // max_allowed_packet
+    let mut column_value_map = HashMap::new();
+    column_value_map.insert(
+        "variable_name".to_ident(),
+        ScalarValue::Utf8(Some("max_allowed_packet".to_string())),
+    );
+    column_value_map.insert(
+        "variable_value".to_ident(),
+        ScalarValue::Utf8(Some("67108864".to_string())),
+    );
+    column_value_map_list.push(column_value_map);
+
+    // time_zone
+    let mut column_value_map = HashMap::new();
+    column_value_map.insert(
+        "variable_name".to_ident(),
+        ScalarValue::Utf8(Some("time_zone".to_string())),
+    );
+    column_value_map.insert(
+        "variable_value".to_ident(),
+        ScalarValue::Utf8(Some("SYSTEM".to_string())),
     );
     column_value_map_list.push(column_value_map);
 

@@ -28,10 +28,11 @@ use crate::core::core_util as CoreUtil;
 use crate::core::core_util::register_all_table;
 use crate::core::global_context::GlobalContext;
 use crate::core::logical_plan::{CoreLogicalPlan, CoreSelectFrom, CoreSelectFromWithAssignment};
-use crate::core::output::{CoreOutput, FinalCount, ResultSet};
+use crate::core::output::{CoreOutput, FinalCount, ResultSet, StmtPrepare};
 use crate::core::session_context::SessionContext;
 use crate::execute_impl::add_column::AddColumn;
 use crate::execute_impl::com_field_list::ComFieldList;
+use crate::execute_impl::com_stmt_prepare::ComStmtPrepare;
 use crate::execute_impl::create_db::CreateDb;
 use crate::execute_impl::create_table::CreateTable;
 use crate::execute_impl::delete::DeleteFrom;
@@ -772,6 +773,30 @@ impl Execution {
         Ok(())
     }
 
+    pub async fn com_stmt_prepare(&mut self, sql: &str) -> MysqlResult<CoreOutput> {
+        let dialect = &GenericDialect {};
+        let statements = DFParser::parse_sql_with_dialect(sql, dialect).unwrap();
+
+        match &statements[0] {
+            Statement::Statement(statement) => {
+                let mut com_stmt_prepare = ComStmtPrepare::new(
+                    self.global_context.clone(),
+                    self.session_context.clone(),
+                    self.execution_context.clone(),
+                );
+                let result = com_stmt_prepare.execute().await;
+                match result {
+                    Ok(stmt_prepare) => Ok(CoreOutput::ComStmtPrepare(stmt_prepare)),
+                    Err(mysql_error) => Err(mysql_error),
+                }
+            }
+            _ => Err(MysqlError::new_global_error(
+                1105,
+                "Unknown error. The statement is not supported",
+            )),
+        }
+    }
+
     pub async fn execute_query(&mut self, sql: &str) -> MysqlResult<CoreOutput> {
         let mut new_sql = sql;
         if sql.starts_with("SET NAMES") {
@@ -854,8 +879,8 @@ impl Execution {
                             self.session_context.clone(),
                             self.execution_context.clone(),
                         );
-                        let result = create_table
-                            .execute(table_name, columns, constraints, with_options);
+                        let result =
+                            create_table.execute(table_name, columns, constraints, with_options);
                         match result {
                             Ok(count) => Ok(CoreOutput::FinalCount(FinalCount::new(count, 0))),
                             Err(mysql_error) => Err(mysql_error),
@@ -1083,8 +1108,10 @@ impl Execution {
                                 Err(mysql_error) => Err(mysql_error),
                             }
                         } else {
-                            let message =
-                                format!("Unsupported show statement, show variable: {:?}", variable);
+                            let message = format!(
+                                "Unsupported show statement, show variable: {:?}",
+                                variable
+                            );
                             log::error!("{}", message);
                             Err(MysqlError::new_global_error(67, message.as_str()))
                         }
@@ -1159,7 +1186,9 @@ impl Execution {
         );
         let result = com_field_list.execute(table_name.clone());
         match result {
-            Ok((schema_name, table_name, table_def)) => Ok(CoreOutput::ComFieldList(schema_name, table_name, table_def)),
+            Ok((schema_name, table_name, table_def)) => {
+                Ok(CoreOutput::ComFieldList(schema_name, table_name, table_def))
+            }
             Err(mysql_error) => Err(mysql_error),
         }
     }
