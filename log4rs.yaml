@@ -17,7 +17,15 @@ appenders:
       pattern: "{d} {l} [{T}] [{M}] [{t} {L}] {m} {n}"
 # 对全局 log 进行配置
 root:
-  level: info
+  level: debug
   appenders:
     - stdout
-    - file
+
+loggers:
+  # Route log events sent to the "app" logger to the "file" appender,
+  # and *not* the normal appenders installed at the root
+  app:
+    level: info
+    appenders:
+      - file
+    additive: false
