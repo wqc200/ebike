@@ -849,11 +849,11 @@ impl Execution {
                 param_type_pos += 1;
 
                 match mysql_type {
-                    type_code::TYPE_NULL => {},
-                    type_code::TYPE_LONG_LONG => {
+                    mysql_type_code::TYPE_NULL => {},
+                    mysql_type_code::TYPE_LONG_LONG => {
                         SQLExpr::Value(Value::Number());
                     },
-                    type_code::TYPE_VARCHAR => {
+                    mysql_type_code::TYPE_VARCHAR => {
                         let result = parse_length_encoded_bytes(param_values[param_value_pos..].to_owned());
                         match result {
                             None => {
