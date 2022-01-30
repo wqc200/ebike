@@ -78,7 +78,7 @@ impl Column {
             name: column_name.to_string(),
             org_name: column_name.to_string(),
             character_set: 46,
-            column_length: column_length,
+            column_length,
             column_type: mysql_type,
             flags,
             decimals: 8,

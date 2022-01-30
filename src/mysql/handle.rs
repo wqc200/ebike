@@ -168,15 +168,6 @@ impl Handle {
             let bytes = &buf[0..n];
 
             let request_payload = self.payload_packet(bytes);
-            let sql = match request_payload.get_query_sql().to_str() {
-                Ok(sql) => sql.to_string(),
-                Err(e) => {
-                    log::error!("Unknown error, Error reading SQL, error: {:?}", e);
-                    break;
-                }
-            };
-            log::debug!("start sql: {}", sql);
-
             let command_id = request_payload.get_command_id();
             log::debug!("command id: {}", command_id);
 
@@ -187,22 +178,61 @@ impl Handle {
                 }
                 0x02 => {
                     // ComInitDb
-                    self.core_execution.set_default_schema(sql.as_str()).await
+                    let db_name = match request_payload.get_query_sql().to_str() {
+                        Ok(sql) => sql.to_string(),
+                        Err(e) => {
+                            log::error!("Unknown error, Error reading REQUEST, error: {:?}", e);
+                            break;
+                        }
+                    };
+                    log::debug!("set db name: {}", db_name);
+
+                    self.core_execution.set_default_schema(db_name.as_str()).await
                 }
                 0x03 => {
                     // ComQuery
+                    let sql = match request_payload.get_query_sql().to_str() {
+                        Ok(sql) => sql.to_string(),
+                        Err(e) => {
+                            log::error!("Unknown error, Error reading REQUEST, error: {:?}", e);
+                            break;
+                        }
+                    };
+                    log::debug!("start sql: {}", sql);
+
                     self.core_execution.execute_query(sql.as_str()).await
                 }
                 0x04 => {
                     // ComFieldList
-                    let table_name = sql.trim_end_matches("\x00").to_string();
+                    let table_name = match request_payload.get_query_sql().to_str() {
+                        Ok(table_name) => table_name.to_string(),
+                        Err(e) => {
+                            log::error!("Unknown error, Error reading REQUEST, error: {:?}", e);
+                            break;
+                        }
+                    };
+                    log::debug!("set db name: {}", table_name);
+
+                    let table_name = table_name.trim_end_matches("\x00").to_string();
                     self.core_execution
                         .com_field_list(table_name.as_str())
                         .await
                 }
                 0x16 => {
                     // StmpPrepare
+                    let sql = match request_payload.get_query_sql().to_str() {
+                        Ok(sql) => sql.to_string(),
+                        Err(e) => {
+                            log::error!("Unknown error, Error reading REQUEST, error: {:?}", e);
+                            break;
+                        }
+                    };
+                    log::debug!("start sql: {}", sql);
+
                     self.core_execution.com_stmt_prepare(sql.as_str()).await
+                }
+                0x17 => {
+
                 }
                 _ => {
                     log::error!(

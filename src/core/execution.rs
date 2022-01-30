@@ -2,6 +2,7 @@
 
 use std::string::String;
 use std::sync::{Arc, Mutex};
+use byteorder::{ByteOrder, LittleEndian};
 
 use arrow::array::{ArrayRef, StringArray};
 use arrow::datatypes::DataType;
@@ -61,6 +62,10 @@ use crate::mysql::error::{MysqlError, MysqlResult};
 use crate::util::convert::{convert_ident_to_lowercase, ToIdent, ToLowercase, ToObjectName};
 use crate::variable::system::SystemVar;
 use crate::variable::user_defined::UserDefinedVar;
+use crate::mysql::mysql_error_code;
+use crate::mysql::mysql_type_code;
+use crate::mysql::mysql_util::parse_length_encoded_bytes;
+use bstr::ByteSlice;
 
 /// Execution context for registering data sources and executing queries
 pub struct Execution {
@@ -771,6 +776,111 @@ impl Execution {
             _ => {}
         }
         Ok(())
+    }
+
+    pub async fn com_stmt_execute(&mut self, bytes: Vec<u8>) -> MysqlResult<CoreOutput> {
+        let mut pos = 0;
+
+        // stmt id
+        let end = pos + 4;
+        let slice = self.bytes[pos..end];
+        if end > self.bytes.len() {
+            return Err(MysqlError::new_global_error(
+                error_code::CR_MALFORMED_PACKET as u16,
+                format!("reading statement ID failed").as_str(),
+            ));
+        }
+        let stmtID = LittleEndian::read_u32(&slice);
+        pos += 4;
+
+        // tmp
+        let num_params = 2;
+
+        // cursor type flag
+        let cursor_type_flag = self.bytes[pos];
+        pos += 1;
+
+        // iteration-count, always 1
+        let iteration_count_offset = 4;
+        pos += iteration_count_offset;
+
+        if num_params > 0 {
+            // null bitmaps
+            let nullBitmapLen = (num_params + 7) / 8;
+            if self.bytes.len() < (pos + nullBitmapLen + 1) {
+                return Err(MysqlError::new_global_error(
+                    mysql_error_code::CR_MALFORMED_PACKET as u16,
+                    format!("malformed packet error").as_str(),
+                ));
+            }
+            let end = pos + nullBitmapLen;
+            nullBitmaps = self.bytes[pos..end];
+            pos += nullBitmapLen;
+
+            let mut param_types:Vec<u8> = vec![];
+            let mut param_values:Vec<u8> = vec![];
+
+            // new params bound flag
+            let newParamsBoundFlag = self.bytes[pos];
+            pos += 1;
+            if (newParamsBoundFlag == 0x01) {
+                let length = num_params * 2;
+
+                let start = pos;
+                let end = pos + length;
+                param_types = self.bytes[start..end].to_owned();
+                pos += length;
+
+                let start = pos;
+                param_values = self.bytes[start..].to_owned();
+            }
+
+            let mut param_type_pos = 0;
+            let mut param_value_pos = 0;
+            for i in 0..num_params {
+                if (nullBitmaps[i/8] & (1 << (i%8) as u64)) > 0 {
+                    SQLExpr::Value(Value::Null);
+                }
+
+                let mysql_type = param_types[param_type_pos] as u64;
+                param_type_pos += 1;
+
+                let type_flag = param_types[param_type_pos];
+                param_type_pos += 1;
+
+                match mysql_type {
+                    type_code::TYPE_NULL => {},
+                    type_code::TYPE_LONG_LONG => {
+                        SQLExpr::Value(Value::Number());
+                    },
+                    type_code::TYPE_VARCHAR => {
+                        let result = parse_length_encoded_bytes(param_values[param_value_pos..].to_owned());
+                        match result {
+                            None => {
+                                return Err(MysqlError::new_global_error(
+                                    mysql_error_code::CR_MALFORMED_PACKET as u16,
+                                    format!("malformed packet error").as_str(),
+                                ));
+                            }
+                            Some(bytes) => {
+                                let val = match bytes.to_str() {
+                                    Ok(val) => val.to_string(),
+                                    Err(err) => {
+                                        log::error!("Unknown error, Error reading REQUEST, error: {:?}", err);
+                                        break;
+                                    }
+                                };
+
+                                SQLExpr::Value(Value::SingleQuotedString(val));
+                            }
+                        }
+                    },
+                    _ => {}
+                }
+            }
+        }
+
+        Ok()
     }
 
     pub async fn com_stmt_prepare(&mut self, sql: &str) -> MysqlResult<CoreOutput> {
