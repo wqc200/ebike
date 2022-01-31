@@ -1,8 +1,9 @@
 //! ExecutionContext contains methods for registering data sources and executing queries
 
+use bstr::ByteSlice;
+use byteorder::{ByteOrder, LittleEndian};
 use std::string::String;
 use std::sync::{Arc, Mutex};
-use byteorder::{ByteOrder, LittleEndian};
 
 use arrow::array::{ArrayRef, StringArray};
 use arrow::datatypes::DataType;
@@ -59,13 +60,13 @@ use crate::execute_impl::update::Update;
 use crate::meta::meta_util::load_all_table;
 use crate::meta::{meta_const, meta_util};
 use crate::mysql::error::{MysqlError, MysqlResult};
-use crate::util::convert::{convert_ident_to_lowercase, ToIdent, ToLowercase, ToObjectName};
-use crate::variable::system::SystemVar;
-use crate::variable::user_defined::UserDefinedVar;
 use crate::mysql::mysql_error_code;
 use crate::mysql::mysql_type_code;
 use crate::mysql::mysql_util::parse_length_encoded_bytes;
-use bstr::ByteSlice;
+use crate::mysql::mysql_util::parse_stmt_execute_args;
+use crate::util::convert::{convert_ident_to_lowercase, ToIdent, ToLowercase, ToObjectName};
+use crate::variable::system::SystemVar;
+use crate::variable::user_defined::UserDefinedVar;
 
 /// Execution context for registering data sources and executing queries
 pub struct Execution {
@@ -783,8 +784,8 @@ impl Execution {
 
         // stmt id
         let end = pos + 4;
-        let slice = self.bytes[pos..end];
-        if end > self.bytes.len() {
+        let slice = bytes[pos..end];
+        if end > bytes.len() {
             return Err(MysqlError::new_global_error(
                 error_code::CR_MALFORMED_PACKET as u16,
                 format!("reading statement ID failed").as_str(),
@@ -814,11 +815,11 @@ impl Execution {
                 ));
             }
             let end = pos + nullBitmapLen;
-            nullBitmaps = self.bytes[pos..end];
+            null_bitmap = self.bytes[pos..end];
             pos += nullBitmapLen;
 
-            let mut param_types:Vec<u8> = vec![];
-            let mut param_values:Vec<u8> = vec![];
+            let mut param_types: Vec<u8> = vec![];
+            let mut param_values: Vec<u8> = vec![];
 
             // new params bound flag
             let newParamsBoundFlag = self.bytes[pos];
@@ -835,52 +836,69 @@ impl Execution {
                 param_values = self.bytes[start..].to_owned();
             }
 
-            let mut param_type_pos = 0;
-            let mut param_value_pos = 0;
-            for i in 0..num_params {
-                if (nullBitmaps[i/8] & (1 << (i%8) as u64)) > 0 {
-                    SQLExpr::Value(Value::Null);
-                }
+            let values = parse_stmt_execute_args(null_bitmap, param_types, param_values);
 
-                let mysql_type = param_types[param_type_pos] as u64;
-                param_type_pos += 1;
+            let dialect = &GenericDialect {};
+            let statements = DFParser::parse_sql_with_dialect(new_sql, dialect).unwrap();
 
-                let type_flag = param_types[param_type_pos];
-                param_type_pos += 1;
-
-                match mysql_type {
-                    mysql_type_code::TYPE_NULL => {},
-                    mysql_type_code::TYPE_LONG_LONG => {
-                        SQLExpr::Value(Value::Number());
-                    },
-                    mysql_type_code::TYPE_VARCHAR => {
-                        let result = parse_length_encoded_bytes(param_values[param_value_pos..].to_owned());
-                        match result {
-                            None => {
-                                return Err(MysqlError::new_global_error(
-                                    mysql_error_code::CR_MALFORMED_PACKET as u16,
-                                    format!("malformed packet error").as_str(),
-                                ));
-                            }
-                            Some(bytes) => {
-                                let val = match bytes.to_str() {
-                                    Ok(val) => val.to_string(),
-                                    Err(err) => {
-                                        log::error!("Unknown error, Error reading REQUEST, error: {:?}", err);
-                                        break;
-                                    }
-                                };
-
-                                SQLExpr::Value(Value::SingleQuotedString(val));
+            match &statements[0] {
+                Statement::Statement(statement) => {
+                    match statement {
+                        SQLStatement::Insert {
+                            table_name,
+                            columns,
+                            overwrite,
+                            source,
+                            ..
+                        } => {
+                            let mut insert = Insert::new(
+                                self.global_context.clone(),
+                                self.session_context.clone(),
+                                self.execution_context.clone(),
+                            );
+                            let result = insert.execute(table_name, columns, overwrite, source);
+                            match result {
+                                Ok(count) => Ok(CoreOutput::FinalCount(FinalCount::new(count, 0))),
+                                Err(mysql_error) => Err(mysql_error),
                             }
                         }
-                    },
-                    _ => {}
+                        SQLStatement::Query(query) => {
+                            let mut new_query = query.clone();
+
+                            match &query.body {
+                                SetExpr::Select(select) => {
+                                    let mut new_select = select.clone();
+
+                                    match new_select.selection.clone() {
+                                        None => {}
+                                        Some(sql_expr) => {
+                                            let result = self
+                                                .fix_column_name(table_alias_vec.clone(), &sql_expr)
+                                                .unwrap();
+                                            if let Some(new_sql_expr) = result {
+                                                new_select.selection = Some(new_sql_expr)
+                                            }
+                                        }
+                                    }
+
+                                    new_query.body = SetExpr::Select(new_select.clone());
+                                }
+                            }
+                        }
+                        _ => Err(MysqlError::new_global_error(
+                            1105,
+                            "Unknown error. The statement is not supported",
+                        )),
+                    }
                 }
+                _ => Err(MysqlError::new_global_error(
+                    1105,
+                    "Unknown error. The statement is not supported",
+                )),
             }
         }
 
-        Ok()
+        Ok(())
     }
 
     pub async fn com_stmt_prepare(&mut self, sql: &str) -> MysqlResult<CoreOutput> {

@@ -28,6 +28,56 @@ use crate::meta::{meta_const, meta_util};
 use crate::mysql::error::{MysqlError, MysqlResult};
 use crate::store::engine::engine_util::TableEngineFactory;
 
+pub struct StmtPrepareValue {
+    pub index: i64,
+    pub values: Vec<SQLExpr>,
+}
+
+impl StmtPrepareValue {
+    pub fn new(values: Vec<SQLExpr>) -> Self {
+        let index = 0;
+        Self {
+            index,
+            values,
+        }
+    }
+
+    pub fn set_value(
+        &mut self,
+        sql_expr: SQLExpr,
+    ) -> MysqlResult<SQLExpr> {
+        match sql_expr.clone() {
+            SQLExpr::Value(value) => {
+                match value {
+                    Value::OnlyString(val) => {
+                        let new_value = values[self.index];
+                        self.index+=1;
+
+                        return Ok(SQLExpr::Value(new_value));
+                    }
+                    _ => {}
+                }
+            }
+            SQLExpr::BinaryOp { left, op, right } => {
+                let result_left = self.set_value(left)
+                    .unwrap();
+                let result_right = self.set_value(right)
+                    .unwrap();
+
+                let new_sql_expr = SQLExpr::BinaryOp {
+                    left: new_left,
+                    op,
+                    right: new_right,
+                };
+                return Ok(new_sql_expr);
+            }
+            _ => {}
+        }
+
+        Ok(sql_expr)
+    }
+}
+
 pub fn check_table_exists(
     global_context: Arc<Mutex<GlobalContext>>,
     session_context: &mut SessionContext,

@@ -1,12 +1,13 @@
-
 use datafusion::scalar::ScalarValue;
 use sqlparser::ast::{Expr as SQLExpr, Value};
 
+use crate::core::output::OutputError::MysqlError;
+use crate::mysql::error::{MysqlError, MysqlResult};
+use crate::mysql::mysql_error_code;
+use crate::mysql::mysql_type_code;
 use crate::ArrowDataType;
 use crate::MysqlType;
-use crate::mysql::error::{MysqlResult, MysqlError};
-use crate::core::output::OutputError::MysqlError;
-
+use bstr::ByteSlice;
 
 pub fn length_encoded_int_size(n: u64) -> i32 {
     if n <= 250 {
@@ -35,20 +36,73 @@ pub fn convert_arrow_data_type_to_mysql_type(data_type: &ArrowDataType) -> Mysql
     }
 }
 
+pub fn parse_stmt_execute_args(
+    null_bitmap: Vec<u8>,
+    param_types: Vec<u8>,
+    param_values: Vec<u8>,
+) -> MysqlResult<Vec<SQLExpr>> {
+    let num_params = 2;
 
-pub fn parse_exec_args(sc *stmtctx.StatementContext, boundParams [][]byte,
-                       nullBitmap: Vec<u8>, paramTypes, paramValues []byte, enc *inputDecoder) -> MysqlResult<()> {
-    let mut args = vec![];
-    for i in 0..2 {
-        if nullBitmap[i>>3]&(1<<((i as i64)%8)) > 0 {
-            args[i] = SQLExpr::Value(Value::Null);
-            continue
+    let mut values = vec![];
+
+    let mut param_type_pos = 0;
+    let mut param_value_pos = 0;
+    for i in 0..num_params {
+        if (null_bitmap[i / 8] & (1 << (i % 8) as u64)) > 0 {
+            SQLExpr::Value(Value::Null);
+            continue;
         }
 
+        let mysql_type = param_types[param_type_pos] as u64;
+        param_type_pos += 1;
 
+        let type_flag = param_types[param_type_pos];
+        param_type_pos += 1;
+
+        let value = match mysql_type {
+            mysql_type_code::TYPE_NULL => {
+                SQLExpr::Value(Value::Null)
+            }
+            mysql_type_code::TYPE_LONG_LONG => {
+                SQLExpr::Value(Value::Number(1, false))
+            }
+            mysql_type_code::TYPE_VARCHAR => {
+                let result = parse_length_encoded_bytes(param_values[param_value_pos..].to_owned());
+                match result {
+                    None => {
+                        return Err(MysqlError::new_global_error(
+                            mysql_error_code::CR_MALFORMED_PACKET as u16,
+                            format!("malformed packet error").as_str(),
+                        ));
+                    }
+                    Some(bytes) => {
+                        let val = match bytes.to_str() {
+                            Ok(val) => val.to_string(),
+                            Err(err) => {
+                                log::error!(
+                                    "Unknown error, Error reading REQUEST, error: {:?}",
+                                    err
+                                );
+                                break;
+                            }
+                        };
+
+                        SQLExpr::Value(Value::SingleQuotedString(val))
+                    }
+                }
+            }
+            _ => {
+                return Err(MysqlError::new_global_error(
+                    mysql_error_code::CR_MALFORMED_PACKET as u16,
+                    format!("unsupported mysql type: {:?}", mysql_type).as_str(),
+                ));
+            }
+        };
+
+        values.push(value);
     }
 
-    Ok(())
+    Ok(values)
 }
 
 pub fn parse_length_encoded_bytes(bytes: Vec<u8>) -> Option<Vec<u8>> {
@@ -59,20 +113,20 @@ pub fn parse_length_encoded_bytes(bytes: Vec<u8>) -> Option<Vec<u8>> {
             let end_pos = start_pos + len;
 
             if bytes.len() <= (end_pos - 1) as usize {
-                return None
+                return None;
             }
 
             return Some((bytes[start_pos..end_pos].to_owned()));
         }
     }
 
-    return None
+    return None;
 }
 
 /// https://dev.mysql.com/doc/internals/en/integer.html#length-encoded-integer
 pub fn parse_length_encoded_int(bytes: Vec<u8>) -> Option<(u64, i32)> {
     if bytes.len() < 1 {
-        return None
+        return None;
     }
 
     let mut len = 0;
@@ -88,9 +142,14 @@ pub fn parse_length_encoded_int(bytes: Vec<u8>) -> Option<(u64, i32)> {
             start_pos = 4;
         }
         0xfe => {
-            len = (bytes[1] as u64) | (bytes[2] as u64) << 8 | (bytes[3] as u64) << 16 |
-                (bytes[4] as u64) << 24 | (bytes[5] as u64) << 32 | (bytes[6] as u64) << 40 |
-                (bytes[7] as u64) << 48 | (bytes[8] as u64) << 56;
+            len = (bytes[1] as u64)
+                | (bytes[2] as u64) << 8
+                | (bytes[3] as u64) << 16
+                | (bytes[4] as u64) << 24
+                | (bytes[5] as u64) << 32
+                | (bytes[6] as u64) << 40
+                | (bytes[7] as u64) << 48
+                | (bytes[8] as u64) << 56;
             start_pos = 9;
         }
         _ => {
