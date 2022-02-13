@@ -8,3 +8,4 @@ pub const TYPE_FLOAT64:u64 = 5;
 pub const TYPE_NULL:u64 = 6;
 pub const TYPE_INT64:u64 = 8;
 pub const TYPE_VARCHAR:u64 = 15;
+pub const TYPE_VARCHAR2:u64 = 253;

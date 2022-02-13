@@ -38,7 +38,7 @@ impl RequestPayload {
     }
 
     pub fn get_stmt_execute_data(&self) -> MysqlResult<&[u8]> {
-        let a = &self.bytes[1..];
+        let a = &self.bytes[5..];
         Ok(a)
     }
 

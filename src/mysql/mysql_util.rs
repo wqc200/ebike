@@ -62,13 +62,21 @@ pub fn parse_stmt_execute_args(
 
         let value = match mysql_type {
             mysql_type_code::TYPE_NULL => SQLExpr::Value(Value::Null),
-            mysql_type_code::TYPE_INT64 => {
-                let end = param_value_pos+8;
-                let val = LittleEndian::read_u64(param_values[param_value_pos..end].as_bytes());
+            mysql_type_code::TYPE_INT32 => {
+                let end = param_value_pos+4;
+                let val = LittleEndian::read_u32(param_values[param_value_pos..end].as_bytes());
+                param_value_pos = end;
 
                 SQLExpr::Value(Value::Number(val.to_string(), false))
             }
-            mysql_type_code::TYPE_VARCHAR => {
+            mysql_type_code::TYPE_INT64 => {
+                let end = param_value_pos+8;
+                let val = LittleEndian::read_u64(param_values[param_value_pos..end].as_bytes());
+                param_value_pos = end;
+
+                SQLExpr::Value(Value::Number(val.to_string(), false))
+            }
+            mysql_type_code::TYPE_VARCHAR2 => {
                 let result = parse_length_encoded_bytes(&param_values[param_value_pos..]);
                 match result {
                     None => {
@@ -109,7 +117,7 @@ pub fn parse_stmt_execute_args(
     Ok(values)
 }
 
-pub fn parse_length_encoded_bytes(bytes: &[u8]) -> Option<&[u8]> {
+pub fn parse_length_encoded_bytes(bytes: &[u8]) -> Option<(&[u8])> {
     let result = parse_length_encoded_int(bytes);
     match result {
         None => {}

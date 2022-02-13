@@ -840,7 +840,7 @@ impl Execution {
                 let start = pos;
                 let param_values = &bytes[start..];
 
-                let stmt_values = parse_stmt_execute_args(null_bitmap, param_types, param_values)?;
+                let stmt_values = parse_stmt_execute_args(null_bitmap, param_types, param_values).unwrap();
                 statements = stmt_value(stmt_values, statements);
             }
         }
