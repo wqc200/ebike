@@ -1,13 +1,14 @@
+use bstr::ByteSlice;
+use byteorder::{ByteOrder, LittleEndian};
+
 use datafusion::scalar::ScalarValue;
 use sqlparser::ast::{Expr as SQLExpr, Value};
 
-use crate::core::output::OutputError::MysqlError;
 use crate::mysql::error::{MysqlError, MysqlResult};
 use crate::mysql::mysql_error_code;
 use crate::mysql::mysql_type_code;
 use crate::ArrowDataType;
 use crate::MysqlType;
-use bstr::ByteSlice;
 
 pub fn length_encoded_int_size(n: u64) -> i32 {
     if n <= 250 {
@@ -38,8 +39,8 @@ pub fn convert_arrow_data_type_to_mysql_type(data_type: &ArrowDataType) -> Mysql
 
 pub fn parse_stmt_execute_args(
     null_bitmap: Vec<u8>,
-    param_types: Vec<u8>,
-    param_values: Vec<u8>,
+    param_types: &[u8],
+    param_values: &[u8],
 ) -> MysqlResult<Vec<SQLExpr>> {
     let num_params = 2;
 
@@ -60,14 +61,15 @@ pub fn parse_stmt_execute_args(
         param_type_pos += 1;
 
         let value = match mysql_type {
-            mysql_type_code::TYPE_NULL => {
-                SQLExpr::Value(Value::Null)
-            }
-            mysql_type_code::TYPE_LONG_LONG => {
-                SQLExpr::Value(Value::Number(1, false))
+            mysql_type_code::TYPE_NULL => SQLExpr::Value(Value::Null),
+            mysql_type_code::TYPE_INT64 => {
+                let end = param_value_pos+8;
+                let val = LittleEndian::read_u64(param_values[param_value_pos..end].as_bytes());
+
+                SQLExpr::Value(Value::Number(val.to_string(), false))
             }
             mysql_type_code::TYPE_VARCHAR => {
-                let result = parse_length_encoded_bytes(param_values[param_value_pos..].to_owned());
+                let result = parse_length_encoded_bytes(&param_values[param_value_pos..]);
                 match result {
                     None => {
                         return Err(MysqlError::new_global_error(
@@ -87,6 +89,8 @@ pub fn parse_stmt_execute_args(
                             }
                         };
 
+                        param_value_pos += bytes.len();
+
                         SQLExpr::Value(Value::SingleQuotedString(val))
                     }
                 }
@@ -105,18 +109,18 @@ pub fn parse_stmt_execute_args(
     Ok(values)
 }
 
-pub fn parse_length_encoded_bytes(bytes: Vec<u8>) -> Option<Vec<u8>> {
+pub fn parse_length_encoded_bytes(bytes: &[u8]) -> Option<&[u8]> {
     let result = parse_length_encoded_int(bytes);
     match result {
         None => {}
         Some((len, start_pos)) => {
-            let end_pos = start_pos + len;
+            let end_pos = start_pos + len as usize;
 
             if bytes.len() <= (end_pos - 1) as usize {
                 return None;
             }
 
-            return Some((bytes[start_pos..end_pos].to_owned()));
+            return Some((&bytes[start_pos..end_pos]));
         }
     }
 
@@ -124,7 +128,7 @@ pub fn parse_length_encoded_bytes(bytes: Vec<u8>) -> Option<Vec<u8>> {
 }
 
 /// https://dev.mysql.com/doc/internals/en/integer.html#length-encoded-integer
-pub fn parse_length_encoded_int(bytes: Vec<u8>) -> Option<(u64, i32)> {
+pub fn parse_length_encoded_int(bytes: &[u8]) -> Option<(u64, usize)> {
     if bytes.len() < 1 {
         return None;
     }

@@ -36,7 +36,7 @@ impl Handle {
         Ok(Handle {
             socket,
             packet_message,
-            core_context: core_context.clone(),
+            core_context,
             core_execution,
         })
     }
@@ -232,7 +232,7 @@ impl Handle {
                     self.core_execution.com_stmt_prepare(sql.as_str()).await
                 }
                 0x17 => {
-
+                    self.core_execution.com_stmt_execute(request_payload.get_stmt_execute_data().unwrap()).await
                 }
                 _ => {
                     log::error!(
