@@ -42,6 +42,11 @@ impl RequestPayload {
         Ok(a)
     }
 
+    pub fn get_stmt_close(&self) -> MysqlResult<&[u8]> {
+        let a = &self.bytes[5..];
+        Ok(a)
+    }
+
     pub fn get_command_id(&self) -> u8 {
         self.bytes[4]
     }

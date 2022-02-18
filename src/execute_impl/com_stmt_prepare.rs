@@ -5,22 +5,26 @@ use arrow::datatypes::SchemaRef;
 use arrow::datatypes::{DataType, Field, Schema};
 use arrow::record_batch::RecordBatch;
 use datafusion::execution::context::ExecutionContext;
-use sqlparser::ast::{Ident, ColumnDef, DataType as SQLDataType};
+use datafusion::sql::parser::Statement as DatafusionStatement;
 use sqlparser::ast::ObjectName;
+use sqlparser::ast::{ColumnDef, DataType as SQLDataType, Ident};
 
 use crate::core::global_context::GlobalContext;
-use crate::core::output::{ResultSet, CoreOutput, StmtPrepare};
+use crate::core::output::{CoreOutput, ResultSet, StmtPrepare};
 use crate::core::session_context::SessionContext;
-use crate::meta::meta_def::{TableDef, SparrowColumnDef};
-use crate::mysql::error::MysqlResult;
+use crate::core::stmt_context::StmtContext;
+use crate::meta::meta_def::{SparrowColumnDef, TableDef};
 use crate::meta::meta_util;
+use crate::mysql::error::MysqlResult;
 use crate::mysql::metadata::Column;
 use crate::util::convert::ToObjectName;
+use crate::core::core_def::StmtCacheDef;
 
 pub struct ComStmtPrepare {
     global_context: Arc<Mutex<GlobalContext>>,
     session_context: SessionContext,
     execution_context: ExecutionContext,
+    stmt_context: StmtContext,
 }
 
 impl ComStmtPrepare {
@@ -28,17 +32,21 @@ impl ComStmtPrepare {
         global_context: Arc<Mutex<GlobalContext>>,
         session_context: SessionContext,
         execution_context: ExecutionContext,
+        stmt_context: StmtContext,
     ) -> Self {
         Self {
             global_context,
             session_context,
             execution_context,
+            stmt_context,
         }
     }
 
-    pub async fn execute(
-        &mut self,
-    ) -> MysqlResult<StmtPrepare> {
+    pub async fn execute(&mut self, statements: Vec<DatafusionStatement>) -> MysqlResult<StmtPrepare> {
+        let stmt_cache = StmtCacheDef::new(statements);
+        self.stmt_context.add_stmt(stmt_cache);
+        let stmt_id = self.stmt_context.get_stmt_id();
+
         let schema_name = "a".to_object_name();
         let table_name = "b".to_object_name();
 
@@ -52,7 +60,7 @@ impl ComStmtPrepare {
 
         let column = Column::new(schema_name.clone(), table_name.clone(), &sparrow_column_def);
 
-        let stmt_prepare = StmtPrepare::new(1, vec![], vec![column.clone(), column.clone()]);
+        let stmt_prepare = StmtPrepare::new(stmt_id, vec![], vec![column.clone(), column.clone()]);
 
         Ok(stmt_prepare)
     }

@@ -71,6 +71,7 @@ pub enum CoreOutput {
     MultiResultSet(Vec<Vec<RecordBatch>>),
     ComFieldList(ObjectName, ObjectName, TableDef),
     ComStmtPrepare(StmtPrepare),
+    ComStmtClose,
 }
 
 pub type Result<T> = result::Result<T, OutputError>;

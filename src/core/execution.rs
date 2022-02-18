@@ -26,6 +26,7 @@ use sqlparser::ast::{FunctionArg, Ident, OrderByExpr, ShowCreateObject, ShowStat
 use sqlparser::dialect::GenericDialect;
 use uuid::Uuid;
 
+use crate::core::core_def::StmtCacheDef;
 use crate::core::core_util;
 use crate::core::core_util as CoreUtil;
 use crate::core::core_util::register_all_table;
@@ -69,14 +70,15 @@ use crate::mysql::mysql_util::parse_stmt_execute_args;
 use crate::util::convert::{convert_ident_to_lowercase, ToIdent, ToLowercase, ToObjectName};
 use crate::variable::system::SystemVar;
 use crate::variable::user_defined::UserDefinedVar;
+use crate::core::stmt_context::StmtContext;
 
 /// Execution context for registering data sources and executing queries
 pub struct Execution {
     global_context: Arc<Mutex<GlobalContext>>,
     session_context: SessionContext,
+    stmt_context: StmtContext,
     datafusion_context: ExecutionContext,
     client_id: String,
-    stmts: HashMap<u32, Vec<Statement>>,
 }
 
 impl Execution {
@@ -98,14 +100,14 @@ impl Execution {
             .encode_lower(&mut Uuid::encode_buffer())
             .to_string();
 
-        let stmts = HashMap::new();
+        let stmt_context = StmtContext::new();
 
         Self {
             global_context,
             session_context,
             datafusion_context,
             client_id,
-            stmts,
+            stmt_context,
         }
     }
 }
@@ -785,6 +787,13 @@ impl Execution {
         Ok(())
     }
 
+    pub async fn com_stmt_close(&mut self, bytes: &[u8]) -> MysqlResult<CoreOutput> {
+        let stmtID = LittleEndian::read_u32(&bytes);
+        self.stmts.remove(&stmtID);
+
+        Ok(CoreOutput::ComStmtClose)
+    }
+
     pub async fn com_stmt_execute(&mut self, bytes: &[u8]) -> MysqlResult<CoreOutput> {
         let mut pos = 0;
 
@@ -840,7 +849,8 @@ impl Execution {
                 let start = pos;
                 let param_values = &bytes[start..];
 
-                let stmt_values = parse_stmt_execute_args(null_bitmap, param_types, param_values).unwrap();
+                let stmt_values =
+                    parse_stmt_execute_args(null_bitmap, param_types, param_values).unwrap();
                 statements = stmt_value(stmt_values, statements);
             }
         }
@@ -859,10 +869,12 @@ impl Execution {
                     self.session_context.clone(),
                     self.datafusion_context.clone(),
                 );
-                let result = com_stmt_prepare.execute().await;
+                let result = com_stmt_prepare.execute(statement).await;
                 match result {
                     Ok(stmt_prepare) => {
-                        self.stmts.insert(stmt_prepare.statement_id as u32, statements);
+                        let stmt_cache = StmtCacheDef::new(statements);
+                        self.stmt_context.add(stmt_cache);
+                        let stmt_id = self.stmt_context.get_stmt_id();
                         Ok(CoreOutput::ComStmtPrepare(stmt_prepare))
                     }
                     Err(mysql_error) => Err(mysql_error),

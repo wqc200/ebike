@@ -97,7 +97,7 @@ pub fn parse_stmt_execute_args(
                             }
                         };
 
-                        param_value_pos += bytes.len();
+                         param_value_pos += bytes.len();
 
                         SQLExpr::Value(Value::SingleQuotedString(val))
                     }

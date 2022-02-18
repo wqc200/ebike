@@ -234,6 +234,9 @@ impl Handle {
                 0x17 => {
                     self.core_execution.com_stmt_execute(request_payload.get_stmt_execute_data().unwrap()).await
                 }
+                0x19 => {
+                    self.core_execution.com_stmt_close(request_payload.get_stmt_close().unwrap()).await
+                }
                 _ => {
                     log::error!(
                         "Unknown error. The command is not support, command id: {:?}",
