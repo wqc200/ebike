@@ -29,10 +29,10 @@ use crate::meta::{meta_const, meta_util};
 use crate::mysql::error::{MysqlError, MysqlResult};
 use crate::store::engine::engine_util::TableEngineFactory;
 
-pub fn stmt_value(stmt_values: Vec<SQLExpr>, statements: Vec<DFStatement>) -> Vec<DFStatement> {
+pub fn stmt_value(stmt_values: Vec<SQLExpr>, df_statements: Vec<DFStatement>) -> Vec<DFStatement> {
     let mut new_statements = vec![];
-    for sql_statement in statements {
-        match sql_statement.clone() {
+    for sql_statement in df_statements {
+        let new_sql_statement = match sql_statement.clone() {
             DFStatement::Statement(statement) => match statement {
                 SQLStatement::Insert {
                     table_name,
@@ -54,13 +54,14 @@ pub fn stmt_value(stmt_values: Vec<SQLExpr>, statements: Vec<DFStatement>) -> Ve
                         table: false,
                     };
 
-                    let sql_statement = DFStatement::Statement(insert);
-                    new_statements.push(sql_statement);
+                    DFStatement::Statement(insert)
                 }
-                _ => new_statements.push(sql_statement.clone()),
+                _ => sql_statement,
             },
-            _ => new_statements.push(sql_statement),
-        }
+            _ => sql_statement,
+        };
+
+        new_statements.push(new_sql_statement)
     }
 
     new_statements

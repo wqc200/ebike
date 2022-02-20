@@ -35,6 +35,7 @@ use crate::core::global_context::GlobalContext;
 use crate::core::logical_plan::{CoreLogicalPlan, CoreSelectFrom, CoreSelectFromWithAssignment};
 use crate::core::output::{CoreOutput, FinalCount, ResultSet, StmtPrepare};
 use crate::core::session_context::SessionContext;
+use crate::core::stmt_context::StmtContext;
 use crate::execute_impl::add_column::AddColumn;
 use crate::execute_impl::com_field_list::ComFieldList;
 use crate::execute_impl::com_stmt_prepare::ComStmtPrepare;
@@ -70,7 +71,6 @@ use crate::mysql::mysql_util::parse_stmt_execute_args;
 use crate::util::convert::{convert_ident_to_lowercase, ToIdent, ToLowercase, ToObjectName};
 use crate::variable::system::SystemVar;
 use crate::variable::user_defined::UserDefinedVar;
-use crate::core::stmt_context::StmtContext;
 
 /// Execution context for registering data sources and executing queries
 pub struct Execution {
@@ -789,17 +789,19 @@ impl Execution {
 
     pub async fn com_stmt_close(&mut self, bytes: &[u8]) -> MysqlResult<CoreOutput> {
         let stmtID = LittleEndian::read_u32(&bytes);
-        self.stmts.remove(&stmtID);
+        self.stmt_context.remove_stmt(stmtID);
 
         Ok(CoreOutput::ComStmtClose)
     }
 
-    pub async fn com_stmt_execute(&mut self, bytes: &[u8]) -> MysqlResult<CoreOutput> {
+    pub async fn com_stmt_execute(&mut self, bytes: Vec<u8>) -> MysqlResult<CoreOutput> {
+        let mut stmt_context = &self.stmt_context;
+
         let mut pos = 0;
 
         // stmt id
         let end = pos + 4;
-        let slice = &bytes[pos..end];
+        let slice = bytes[pos..end].to_vec();
         if end > bytes.len() {
             return Err(MysqlError::new_global_error(
                 mysql_error_code::CR_MALFORMED_PACKET as u16,
@@ -820,70 +822,64 @@ impl Execution {
         let iteration_count_offset = 4;
         pos += iteration_count_offset;
 
-        let mut statements = self.stmts.get(&stmtID).unwrap().clone();
+        let mut stmt_cache = self.stmt_context.stmts.get_mut(&stmtID).unwrap();
+        let mut sql_statements = stmt_cache.get_statements();
 
         if num_params > 0 {
+            let mut param_values;
+            let mut param_types;
+
             // null bitmaps
-            let nullBitmapLen = (num_params + 7) / 8;
-            if bytes.len() < (pos + nullBitmapLen + 1) {
+            let null_bitmap_len = (num_params + 7) / 8;
+            if bytes.len() < (pos + null_bitmap_len + 1) {
                 return Err(MysqlError::new_global_error(
                     mysql_error_code::CR_MALFORMED_PACKET as u16,
                     format!("malformed packet error").as_str(),
                 ));
             }
-            let end = pos + nullBitmapLen;
+            let end = pos + null_bitmap_len;
             let null_bitmap = bytes[pos..end].to_vec();
-            pos += nullBitmapLen;
+            pos += null_bitmap_len;
 
             // new params bound flag
-            let newParamsBoundFlag = bytes[pos];
+            let new_params_bound_flag = bytes[pos];
             pos += 1;
-            if (newParamsBoundFlag == 0x01) {
+            if (new_params_bound_flag == 0x01) {
                 let length = num_params * 2;
 
-                let start = pos;
                 let end = pos + length;
-                let param_types = &bytes[start..end];
+                param_types = bytes[pos..end].to_vec();
                 pos += length;
+                stmt_cache.set_param_types(param_types.as_slice());
 
-                let start = pos;
-                let param_values = &bytes[start..];
-
-                let stmt_values =
-                    parse_stmt_execute_args(null_bitmap, param_types, param_values).unwrap();
-                statements = stmt_value(stmt_values, statements);
+                param_values = bytes[pos..].to_vec();
+            } else {
+                param_types = stmt_cache.get_param_types();
+                param_values = bytes[pos..].to_vec();
             }
+
+            let stmt_values =
+                parse_stmt_execute_args(null_bitmap, param_types, param_values).unwrap();
+            sql_statements = stmt_value(stmt_values, sql_statements);
         }
 
-        self.execute_statement(statements).await
+        self.execute_statement(sql_statements.clone()).await
     }
 
     pub async fn com_stmt_prepare(&mut self, sql: &str) -> MysqlResult<CoreOutput> {
         let dialect = &GenericDialect {};
-        let statements = DFParser::parse_sql_with_dialect(sql, dialect).unwrap();
+        let df_statements = DFParser::parse_sql_with_dialect(sql, dialect).unwrap();
 
-        match &statements[0] {
-            Statement::Statement(statement) => {
-                let mut com_stmt_prepare = ComStmtPrepare::new(
-                    self.global_context.clone(),
-                    self.session_context.clone(),
-                    self.datafusion_context.clone(),
-                );
-                let result = com_stmt_prepare.execute(statement).await;
-                match result {
-                    Ok(stmt_prepare) => {
-                        let stmt_cache = StmtCacheDef::new(statements);
-                        self.stmt_context.add(stmt_cache);
-                        let stmt_id = self.stmt_context.get_stmt_id();
-                        Ok(CoreOutput::ComStmtPrepare(stmt_prepare))
-                    }
-                    Err(mysql_error) => Err(mysql_error),
-                }
-            }
-            _ => Err(MysqlError::new_global_error(
-                1105,
-                "Unknown error. The statement is not supported",
-            )),
+        let mut com_stmt_prepare = ComStmtPrepare::new(
+            self.global_context.clone(),
+            self.session_context.clone(),
+            self.datafusion_context.clone(),
+            self.stmt_context.clone(),
+        );
+        let result = com_stmt_prepare.execute(&mut self.stmt_context, df_statements).await;
+        match result {
+            Ok(stmt_prepare) => Ok(CoreOutput::ComStmtPrepare(stmt_prepare)),
+            Err(mysql_error) => Err(mysql_error),
         }
     }
 

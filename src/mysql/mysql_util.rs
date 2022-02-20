@@ -39,8 +39,8 @@ pub fn convert_arrow_data_type_to_mysql_type(data_type: &ArrowDataType) -> Mysql
 
 pub fn parse_stmt_execute_args(
     null_bitmap: Vec<u8>,
-    param_types: &[u8],
-    param_values: &[u8],
+    param_types: Vec<u8>,
+    param_values: Vec<u8>,
 ) -> MysqlResult<Vec<SQLExpr>> {
     let num_params = 2;
 

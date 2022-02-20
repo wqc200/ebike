@@ -5,11 +5,12 @@ use crate::meta::variable::Variable;
 use std::collections::HashMap;
 
 use crate::core::core_def::StmtCacheDef;
+use std::collections::hash_map::RandomState;
 
 #[derive(Clone, Debug)]
 pub struct StmtContext {
-    stmt_id: u64,
-    stmts: HashMap<u64, StmtCacheDef>,
+    pub stmt_id: u32,
+    pub stmts: HashMap<u32, StmtCacheDef>,
 }
 
 impl StmtContext {
@@ -23,12 +24,8 @@ impl StmtContext {
         }
     }
 
-    pub fn get_stmt(&self, stmt_id: u64) -> Option<&StmtCacheDef> {
-        self.stmts.get(&stmt_id)
-    }
-
-    pub fn get_stmt_id(&self) -> u64 {
-        self.stmt_id
+    pub fn remove_stmt(&mut self, stmt_id: u32) {
+        self.stmts.remove(&stmt_id);
     }
 
     pub fn add_stmt(&mut self, stmt_cache: StmtCacheDef){

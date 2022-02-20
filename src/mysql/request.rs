@@ -37,9 +37,9 @@ impl RequestPayload {
         slice
     }
 
-    pub fn get_stmt_execute_data(&self) -> MysqlResult<&[u8]> {
-        let a = &self.bytes[5..];
-        Ok(a)
+    pub fn get_stmt_execute(&self) -> MysqlResult<Vec<u8>> {
+        let value = self.bytes[5..].to_vec();
+        Ok(value)
     }
 
     pub fn get_stmt_close(&self) -> MysqlResult<&[u8]> {

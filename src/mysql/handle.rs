@@ -232,7 +232,7 @@ impl Handle {
                     self.core_execution.com_stmt_prepare(sql.as_str()).await
                 }
                 0x17 => {
-                    self.core_execution.com_stmt_execute(request_payload.get_stmt_execute_data().unwrap()).await
+                    self.core_execution.com_stmt_execute(request_payload.get_stmt_execute().unwrap()).await
                 }
                 0x19 => {
                     self.core_execution.com_stmt_close(request_payload.get_stmt_close().unwrap()).await

@@ -12,17 +12,17 @@ use crate::mysql::error::MysqlError;
 use crate::mysql::metadata::Column;
 
 pub struct StmtPrepare {
-    pub statement_id: u64,
+    pub statement_id: u32,
     pub columns: Vec<Column>,
     pub params: Vec<Column>,
 }
 
 impl StmtPrepare {
-    pub fn new(statement_id: u64, columns: Vec<Column>, params: Vec<Column>) -> Self {
+    pub fn new(statement_id: u32, columns: Vec<Column>, params: Vec<Column>) -> Self {
         StmtPrepare::new_with_message(statement_id, columns, params)
     }
 
-    pub fn new_with_message(statement_id: u64, columns: Vec<Column>, params: Vec<Column>) -> Self {
+    pub fn new_with_message(statement_id: u32, columns: Vec<Column>, params: Vec<Column>) -> Self {
         Self {
             statement_id,
             columns,
