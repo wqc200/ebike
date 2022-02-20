@@ -795,8 +795,6 @@ impl Execution {
     }
 
     pub async fn com_stmt_execute(&mut self, bytes: Vec<u8>) -> MysqlResult<CoreOutput> {
-        let mut stmt_context = &self.stmt_context;
-
         let mut pos = 0;
 
         // stmt id
@@ -811,9 +809,6 @@ impl Execution {
         let stmtID = LittleEndian::read_u32(&slice);
         pos += 4;
 
-        // tmp
-        let num_params = 2;
-
         // cursor type flag
         let cursor_type_flag = bytes[pos];
         pos += 1;
@@ -823,7 +818,9 @@ impl Execution {
         pos += iteration_count_offset;
 
         let mut stmt_cache = self.stmt_context.stmts.get_mut(&stmtID).unwrap();
+
         let mut sql_statements = stmt_cache.get_statements();
+        let num_params = stmt_cache.get_num_params();
 
         if num_params > 0 {
             let mut param_values;
@@ -874,7 +871,6 @@ impl Execution {
             self.global_context.clone(),
             self.session_context.clone(),
             self.datafusion_context.clone(),
-            self.stmt_context.clone(),
         );
         let result = com_stmt_prepare.execute(&mut self.stmt_context, df_statements).await;
         match result {

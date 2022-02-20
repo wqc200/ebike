@@ -24,7 +24,6 @@ pub struct ComStmtPrepare {
     global_context: Arc<Mutex<GlobalContext>>,
     session_context: SessionContext,
     execution_context: ExecutionContext,
-    stmt_context: StmtContext,
 }
 
 impl ComStmtPrepare {
@@ -32,20 +31,16 @@ impl ComStmtPrepare {
         global_context: Arc<Mutex<GlobalContext>>,
         session_context: SessionContext,
         execution_context: ExecutionContext,
-        stmt_context: StmtContext,
     ) -> Self {
         Self {
             global_context,
             session_context,
             execution_context,
-            stmt_context,
         }
     }
 
     pub async fn execute(&mut self, stmt_context: &mut StmtContext, df_statements: Vec<DFStatement>) -> MysqlResult<StmtPrepare> {
-        let stmt_cache = StmtCacheDef::new(df_statements.clone());
-        stmt_context.add_stmt(stmt_cache);
-        let stmt_id = stmt_context.stmt_id;
+        let mut stmt_cache = StmtCacheDef::new(df_statements.clone());
 
         let schema_name = "schema".to_object_name();
         let table_name = "table".to_object_name();
@@ -88,6 +83,10 @@ impl ComStmtPrepare {
                 _ => {}
             };
         }
+
+        stmt_cache.set_num_params(params.len());
+        stmt_context.add_stmt(stmt_cache);
+        let stmt_id = stmt_context.stmt_id;
 
         let stmt_prepare = StmtPrepare::new(stmt_id, vec![], params);
 
