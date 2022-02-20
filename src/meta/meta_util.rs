@@ -400,7 +400,7 @@ pub async fn init_meta(global_context: Arc<Mutex<GlobalContext>>) -> MysqlResult
         }
 
         let result =
-            meta::initial::add_def_performance_schmea_global_variables(global_context.clone());
+            meta::initial::add_def_performance_schema_global_variables(global_context.clone());
         if let Err(e) = result {
             return Err(e);
         }

@@ -1398,7 +1398,7 @@ pub fn add_def_mysql_users(global_context: Arc<Mutex<GlobalContext>>) -> MysqlRe
     total
 }
 
-pub fn add_def_performance_schmea_global_variables(
+pub fn add_def_performance_schema_global_variables(
     global_context: Arc<Mutex<GlobalContext>>,
 ) -> MysqlResult<u64> {
     let mut column_name_list = vec![];
@@ -1465,6 +1465,17 @@ pub fn add_def_performance_schmea_global_variables(
     column_value_map.insert(
         "variable_value".to_ident(),
         ScalarValue::Utf8(Some("67108864".to_string())),
+    );
+    column_value_map_list.push(column_value_map);
+
+    let mut column_value_map = HashMap::new();
+    column_value_map.insert(
+        "variable_name".to_ident(),
+        ScalarValue::Utf8(Some("system_time_zone".to_string())),
+    );
+    column_value_map.insert(
+        "variable_value".to_ident(),
+        ScalarValue::Utf8(Some("CST".to_string())),
     );
     column_value_map_list.push(column_value_map);
 

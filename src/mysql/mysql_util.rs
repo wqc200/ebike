@@ -9,6 +9,7 @@ use crate::mysql::mysql_error_code;
 use crate::mysql::mysql_type_code;
 use crate::ArrowDataType;
 use crate::MysqlType;
+use datafusion::logical_plan::Literal;
 
 pub fn length_encoded_int_size(n: u64) -> i32 {
     if n <= 250 {
@@ -49,16 +50,18 @@ pub fn parse_stmt_execute_args(
     let mut param_type_pos = 0;
     let mut param_value_pos = 0;
     for i in 0..num_params {
-        if (null_bitmap[i / 8] & (1 << (i % 8) as u64)) > 0 {
-            SQLExpr::Value(Value::Null);
-            continue;
-        }
-
         let mysql_type = param_types[param_type_pos] as u64;
         param_type_pos += 1;
 
         let type_flag = param_types[param_type_pos];
         param_type_pos += 1;
+
+        if (null_bitmap[i / 8] & (1 << (i % 8) as u64)) > 0 {
+            SQLExpr::Value(Value::Null);
+            continue;
+        }
+
+        let is_unsigned = (type_flag & 0x80) > 0;
 
         let value = match mysql_type {
             mysql_type_code::TYPE_NULL => SQLExpr::Value(Value::Null),
@@ -74,10 +77,15 @@ pub fn parse_stmt_execute_args(
                 let val = LittleEndian::read_u64(param_values[param_value_pos..end].as_bytes());
                 param_value_pos = end;
 
-                SQLExpr::Value(Value::Number(val.to_string(), false))
+                if is_unsigned {
+                    SQLExpr::Value(Value::Number(val.to_string(), false))
+                } else {
+                    SQLExpr::Value(Value::Number((val as i64).to_string(), false))
+                }
             }
             mysql_type_code::TYPE_VARCHAR2 => {
-                let result = parse_length_encoded_bytes(&param_values[param_value_pos..]);
+                let last_bytes = param_values[param_value_pos..].to_vec();
+                let result = parse_length_encoded_bytes(last_bytes);
                 match result {
                     None => {
                         return Err(MysqlError::new_global_error(
@@ -85,8 +93,8 @@ pub fn parse_stmt_execute_args(
                             format!("malformed packet error").as_str(),
                         ));
                     }
-                    Some(bytes) => {
-                        let val = match bytes.to_str() {
+                    Some((start, content)) => {
+                        let val = match content.to_str() {
                             Ok(val) => val.to_string(),
                             Err(err) => {
                                 log::error!(
@@ -97,7 +105,7 @@ pub fn parse_stmt_execute_args(
                             }
                         };
 
-                         param_value_pos += bytes.len();
+                        param_value_pos += start + content.len();
 
                         SQLExpr::Value(Value::SingleQuotedString(val))
                     }
@@ -117,18 +125,20 @@ pub fn parse_stmt_execute_args(
     Ok(values)
 }
 
-pub fn parse_length_encoded_bytes(bytes: &[u8]) -> Option<(&[u8])> {
-    let result = parse_length_encoded_int(bytes);
+pub fn parse_length_encoded_bytes(bytes: Vec<u8>) -> Option<(usize, Vec<u8>)> {
+    let result = parse_length_encoded_int(bytes.clone());
     match result {
         None => {}
-        Some((len, start_pos)) => {
-            let end_pos = start_pos + len as usize;
+        Some((start, len)) => {
+            let end = start + len as usize;
 
-            if bytes.len() <= (end_pos - 1) as usize {
+            if bytes.len() <= (end - 1) as usize {
                 return None;
             }
 
-            return Some((&bytes[start_pos..end_pos]));
+            let content = bytes[start..end].to_vec();
+
+            return Some((start, content));
         }
     }
 
@@ -136,22 +146,22 @@ pub fn parse_length_encoded_bytes(bytes: &[u8]) -> Option<(&[u8])> {
 }
 
 /// https://dev.mysql.com/doc/internals/en/integer.html#length-encoded-integer
-pub fn parse_length_encoded_int(bytes: &[u8]) -> Option<(u64, usize)> {
+pub fn parse_length_encoded_int(bytes: Vec<u8>) -> Option<(usize, u64)> {
     if bytes.len() < 1 {
         return None;
     }
 
     let mut len = 0;
-    let mut start_pos = 0;
+    let mut start = 0;
 
     match bytes[0] {
         0xfc => {
             len = (bytes[1] as u64) | (bytes[2] as u64) << 8;
-            start_pos = 3;
+            start = 3;
         }
         0xfd => {
             len = (bytes[1] as u64) | (bytes[2] as u64) << 8 | (bytes[3] as u64) << 16;
-            start_pos = 4;
+            start = 4;
         }
         0xfe => {
             len = (bytes[1] as u64)
@@ -162,13 +172,13 @@ pub fn parse_length_encoded_int(bytes: &[u8]) -> Option<(u64, usize)> {
                 | (bytes[6] as u64) << 40
                 | (bytes[7] as u64) << 48
                 | (bytes[8] as u64) << 56;
-            start_pos = 9;
+            start = 9;
         }
         _ => {
             len = (bytes[0] as u64);
-            start_pos = 1;
+            start = 1;
         }
     }
 
-    Some((len, start_pos))
+    Some((start, len))
 }
