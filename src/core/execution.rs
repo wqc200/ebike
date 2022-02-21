@@ -993,6 +993,39 @@ impl Execution {
                             Err(mysql_error) => Err(mysql_error),
                         }
                     }
+                    SQLStatement::Update {
+                        table_name,
+                        assignments,
+                        selection,
+                    } => {
+                        let mut update_set = Update::new(
+                            self.global_context.clone(),
+                            self.session_context.clone(),
+                            self.datafusion_context.clone(),
+                        );
+                        let result = update_set.execute(table_name, assignments, selection).await;
+                        match result {
+                            Ok(count) => Ok(CoreOutput::FinalCount(FinalCount::new(count, 0))),
+                            Err(mysql_error) => Err(mysql_error),
+                        }
+                    }
+                    SQLStatement::Delete {
+                        table_name,
+                        selection,
+                    } => {
+                        let mut delete_from = DeleteFrom::new(
+                            self.global_context.clone(),
+                            self.session_context.clone(),
+                            self.datafusion_context.clone(),
+                        );
+                        let result = delete_from
+                            .execute(table_name, selection)
+                            .await;
+                        match result {
+                            Ok(count) => Ok(CoreOutput::FinalCount(FinalCount::new(count, 0))),
+                            Err(mysql_error) => Err(mysql_error),
+                        }
+                    }
                     SQLStatement::Query(ref query) => {
                         let mut select_from = SelectFrom::new(
                             self.global_context.clone(),
