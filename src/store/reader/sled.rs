@@ -245,7 +245,7 @@ impl Iterator for SledReader {
                                 }
                                 Err(error) => {
                                     return Some(Err(ArrowError::CastError(format!(
-                                        "Error parsing '{:?}' as utf8: {:?}",
+                                        "Error parsing '{:?}' as utf8, error: {:?}",
                                         value, error
                                     ))));
                                 }
@@ -263,7 +263,17 @@ impl Iterator for SledReader {
                                         }
                                     }
                                     Err(err) => {
-                                        let error = format!("{}, rowid: {}, column name: {}, value: {:?}", err, rowid, column_name.clone(), value);
+                                        let content = match std::str::from_utf8(value.as_ref()) {
+                                            Ok(value) => value,
+                                            Err(error) => {
+                                                return Some(Err(ArrowError::CastError(format!(
+                                                    "Error parsing '{:?}' as int, error: {:?}",
+                                                    value, error
+                                                ))));
+                                            }
+                                        };
+
+                                        let error = format!("convert to int error, rowid: {}, column name: {}, column value: {}, {}", rowid, column_name.clone(), content, err);
                                         return Some(Err(ArrowError::ParseError(error)));
                                     }
                                 }
@@ -281,7 +291,18 @@ impl Iterator for SledReader {
                                         }
                                     }
                                     Err(err) => {
-                                        return Some(Err(ArrowError::ParseError(err.to_string())));
+                                        let content = match std::str::from_utf8(value.as_ref()) {
+                                            Ok(value) => value,
+                                            Err(error) => {
+                                                return Some(Err(ArrowError::CastError(format!(
+                                                    "Error parsing '{:?}' as float, error: {:?}",
+                                                    value, error
+                                                ))));
+                                            }
+                                        };
+
+                                        let error = format!("convert to float error, rowid: {}, column name: {}, column value: {}, {}", rowid, column_name.clone(), content, err);
+                                        return Some(Err(ArrowError::ParseError(error)));
                                     }
                                 }
                             }
