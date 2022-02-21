@@ -70,7 +70,11 @@ pub fn parse_stmt_execute_args(
                 let val = LittleEndian::read_u32(param_values[param_value_pos..end].as_bytes());
                 param_value_pos = end;
 
-                SQLExpr::Value(Value::Number(val.to_string(), false))
+                if is_unsigned {
+                    SQLExpr::Value(Value::Number(val.to_string(), false))
+                } else {
+                    SQLExpr::Value(Value::Number((val as i32).to_string(), false))
+                }
             }
             mysql_type_code::TYPE_INT64 => {
                 let end = param_value_pos+8;
@@ -83,7 +87,7 @@ pub fn parse_stmt_execute_args(
                     SQLExpr::Value(Value::Number((val as i64).to_string(), false))
                 }
             }
-            mysql_type_code::TYPE_VARCHAR2 => {
+            mysql_type_code::TYPE_VARCHAR_2 | mysql_type_code::TYPE_FLOAT64_2 => {
                 let last_bytes = param_values[param_value_pos..].to_vec();
                 let result = parse_length_encoded_bytes(last_bytes);
                 match result {
