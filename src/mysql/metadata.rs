@@ -36,7 +36,7 @@ pub enum ArrayCell<'a> {
     Float64Array(&'a Float64Array),
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct Column {
     schema: String,
     table: String,
@@ -78,7 +78,7 @@ impl Column {
             name: column_name.to_string(),
             org_name: column_name.to_string(),
             character_set: 46,
-            column_length: column_length,
+            column_length,
             column_type: mysql_type,
             flags,
             decimals: 8,

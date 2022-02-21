@@ -2,7 +2,7 @@ use bstr::ByteSlice;
 use std::sync::{Arc, Mutex};
 
 use arrow::array::StructBuilder;
-use arrow::array::{Int32Builder, Int64Builder, Float32Builder, Float64Builder, StringBuilder};
+use arrow::array::{Float32Builder, Float64Builder, Int32Builder, Int64Builder, StringBuilder};
 use arrow::datatypes::{DataType, Field, Schema, SchemaRef};
 use arrow::error::{ArrowError, Result};
 use arrow::record_batch::RecordBatch;
@@ -19,6 +19,7 @@ use crate::store::reader::reader_util::{PointType, SeekType};
 use crate::util;
 use crate::util::convert::ToIdent;
 use crate::util::dbkey::CreateScanKey;
+use lexical::Error;
 
 pub struct Seek {
     iter: SledIter,
@@ -63,7 +64,7 @@ impl SledReader {
             table.clone(),
             filters.clone(),
         )
-            .unwrap();
+        .unwrap();
         let seek = match table_index_prefix {
             SeekType::FullTableScan { start, end } => {
                 let iter = global_context
@@ -197,7 +198,7 @@ impl Iterator for SledReader {
                 }
             } else {
                 let column_name = field_name.to_ident();
-                let sparrow_column = table_column.get_sparrow_column(column_name).unwrap();
+                let sparrow_column = table_column.get_sparrow_column(column_name.clone()).unwrap();
                 let sql_data_type = sparrow_column.sql_column.data_type;
 
                 for rowid in rowids.clone() {
@@ -220,7 +221,7 @@ impl Iterator for SledReader {
                                     db_value = Some(bytes)
                                 }
                             }
-                            None => db_value = None
+                            None => db_value = None,
                         },
                         Err(error) => {
                             return Some(Err(ArrowError::IoError(format!(
@@ -244,29 +245,65 @@ impl Iterator for SledReader {
                                 }
                                 Err(error) => {
                                     return Some(Err(ArrowError::CastError(format!(
-                                        "Error parsing '{:?}' as utf8: {:?}",
+                                        "Error parsing '{:?}' as utf8, error: {:?}",
                                         value, error
                                     ))));
                                 }
                             },
                             SQLDataType::Int(_) => {
-                                let value = lexical::parse::<i64, _>(value.as_bytes()).unwrap();
-                                let result = struct_builder
-                                    .field_builder::<Int64Builder>(i)
-                                    .unwrap()
-                                    .append_value(value);
-                                if let Err(e) = result {
-                                    return Some(Err(e));
+                                let result = lexical::parse::<i64, _>(value.as_bytes());
+                                match result {
+                                    Ok(value) => {
+                                        let result = struct_builder
+                                            .field_builder::<Int64Builder>(i)
+                                            .unwrap()
+                                            .append_value(value);
+                                        if let Err(e) = result {
+                                            return Some(Err(e));
+                                        }
+                                    }
+                                    Err(err) => {
+                                        let content = match std::str::from_utf8(value.as_ref()) {
+                                            Ok(value) => value,
+                                            Err(error) => {
+                                                return Some(Err(ArrowError::CastError(format!(
+                                                    "Error parsing '{:?}' as int, error: {:?}",
+                                                    value, error
+                                                ))));
+                                            }
+                                        };
+
+                                        let error = format!("convert to int error, rowid: {}, column name: {}, column value: {}, {}", rowid, column_name.clone(), content, err);
+                                        return Some(Err(ArrowError::ParseError(error)));
+                                    }
                                 }
                             }
                             SQLDataType::Float(_) => {
-                                let value = lexical::parse::<f64, _>(value.as_bytes()).unwrap();
-                                let result = struct_builder
-                                    .field_builder::<Float64Builder>(i)
-                                    .unwrap()
-                                    .append_value(value);
-                                if let Err(e) = result {
-                                    return Some(Err(e));
+                                let result = lexical::parse::<f64, _>(value.as_bytes());
+                                match result {
+                                    Ok(value) => {
+                                        let result = struct_builder
+                                            .field_builder::<Float64Builder>(i)
+                                            .unwrap()
+                                            .append_value(value);
+                                        if let Err(e) = result {
+                                            return Some(Err(e));
+                                        }
+                                    }
+                                    Err(err) => {
+                                        let content = match std::str::from_utf8(value.as_ref()) {
+                                            Ok(value) => value,
+                                            Err(error) => {
+                                                return Some(Err(ArrowError::CastError(format!(
+                                                    "Error parsing '{:?}' as float, error: {:?}",
+                                                    value, error
+                                                ))));
+                                            }
+                                        };
+
+                                        let error = format!("convert to float error, rowid: {}, column name: {}, column value: {}, {}", rowid, column_name.clone(), content, err);
+                                        return Some(Err(ArrowError::ParseError(error)));
+                                    }
                                 }
                             }
                             _ => {
@@ -275,7 +312,7 @@ impl Iterator for SledReader {
                                     sql_data_type,
                                 ))));
                             }
-                        }
+                        },
                         None => match sql_data_type {
                             SQLDataType::Char(_) => {
                                 let result = struct_builder
@@ -310,7 +347,7 @@ impl Iterator for SledReader {
                                     sql_data_type,
                                 ))));
                             }
-                        }
+                        },
                     }
                 }
             }

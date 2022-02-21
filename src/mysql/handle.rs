@@ -1,20 +1,21 @@
-use bytes::{Buf};
+use bytes::Buf;
 
 use std::io;
 use std::sync::{Arc, Mutex};
 
-use tokio::net::{TcpStream};
-use tokio::io::{AsyncWriteExt, AsyncReadExt};
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::net::TcpStream;
 
-use crate::core::global_context::GlobalContext;
-use crate::core::execution::Execution;
-use crate::core::output::{CoreOutput};
-use crate::core::output::FinalCount;
-use crate::mysql::{error::MysqlError, packet, request, response, message, metadata};
-use crate::mysql::error::MysqlResult;
 use crate::core::core_util;
-use bstr::ByteSlice;
+use crate::core::execution::Execution;
+use crate::core::global_context::GlobalContext;
+use crate::core::output::CoreOutput;
+use crate::core::output::FinalCount;
+use crate::core::output::StmtPrepare;
+use crate::mysql::error::MysqlResult;
 use crate::mysql::metadata::Column;
+use crate::mysql::{error::MysqlError, message, metadata, packet, request, response};
+use bstr::ByteSlice;
 
 /// The state for each connected client.
 pub struct Handle {
@@ -32,7 +33,12 @@ impl Handle {
     ) -> io::Result<Handle> {
         let core_execution = Execution::new(core_context.clone());
         let packet_message = packet::PacketMessage::new();
-        Ok(Handle { socket, packet_message, core_context: core_context.clone(), core_execution })
+        Ok(Handle {
+            socket,
+            packet_message,
+            core_context,
+            core_execution,
+        })
     }
 
     pub fn payload_packet(&mut self, buf: &[u8]) -> request::RequestPayload {
@@ -85,20 +91,35 @@ impl Handle {
             Ok(n) if n == 0 => return Ok(()),
             Ok(n) => n,
             Err(error) => {
-                return Err(MysqlError::new_global_error(1105, format!("Unknown error. Failed to read from socket, error: {:?}", error).as_str()));
+                return Err(MysqlError::new_global_error(
+                    1105,
+                    format!(
+                        "Unknown error. Failed to read from socket, error: {:?}",
+                        error
+                    )
+                    .as_str(),
+                ));
             }
         };
         let bytes = &buf[0..n];
         let _rp = self.payload_packet(bytes);
 
-        self.write_packet(message::handshark_auth_switch_request()).await;
+        self.write_packet(message::handshark_auth_switch_request())
+            .await;
 
         let mut buf = [0; 1024];
         let n = match self.socket.read(&mut buf).await {
             Ok(n) if n == 0 => return Ok(()),
             Ok(n) => n,
             Err(error) => {
-                return Err(MysqlError::new_global_error(1105, format!("Unknown error. Failed to read from socket, error: {:?}", error).as_str()));
+                return Err(MysqlError::new_global_error(
+                    1105,
+                    format!(
+                        "Unknown error. Failed to read from socket, error: {:?}",
+                        error
+                    )
+                    .as_str(),
+                ));
             }
         };
         let bytes = &buf[0..n];
@@ -109,7 +130,13 @@ impl Handle {
             return Err(mysql_error);
         }
 
-        let ok_message = message::ok_message(0, 0, metadata::StatusFlags::SERVER_STATUS_AUTOCOMMIT, 0, "success".to_string());
+        let ok_message = message::ok_message(
+            0,
+            0,
+            metadata::StatusFlags::SERVER_STATUS_AUTOCOMMIT,
+            0,
+            "success".to_string(),
+        );
         self.write_packet(ok_message).await;
 
         self.packet_message.sequence_init();
@@ -118,7 +145,11 @@ impl Handle {
     }
 
     pub async fn write_packet_error(&mut self, mysql_error: MysqlError) {
-        let payload = message::error_message(mysql_error.error_number(), mysql_error.sql_state().as_str(), mysql_error.message().as_str());
+        let payload = message::error_message(
+            mysql_error.error_number(),
+            mysql_error.sql_state().as_str(),
+            mysql_error.message().as_str(),
+        );
         self.write_packet(payload).await;
     }
 
@@ -137,17 +168,6 @@ impl Handle {
             let bytes = &buf[0..n];
 
             let request_payload = self.payload_packet(bytes);
-            let sql = match request_payload.get_query_sql().to_str() {
-                Ok(sql) => {
-                    sql.to_string()
-                }
-                Err(e) => {
-                    log::error!("Unknown error, Error reading SQL, error: {:?}", e);
-                    break;
-                }
-            };
-            log::debug!("start sql: {}", sql);
-
             let command_id = request_payload.get_command_id();
             log::debug!("command id: {}", command_id);
 
@@ -158,19 +178,70 @@ impl Handle {
                 }
                 0x02 => {
                     // ComInitDb
-                    self.core_execution.set_default_schema(sql.as_str()).await
+                    let db_name = match request_payload.get_query_sql().to_str() {
+                        Ok(sql) => sql.to_string(),
+                        Err(e) => {
+                            log::error!("Unknown error, Error reading REQUEST, error: {:?}", e);
+                            break;
+                        }
+                    };
+                    log::debug!("set db name: {}", db_name);
+
+                    self.core_execution.set_default_schema(db_name.as_str()).await
                 }
                 0x03 => {
                     // ComQuery
+                    let sql = match request_payload.get_query_sql().to_str() {
+                        Ok(sql) => sql.to_string(),
+                        Err(e) => {
+                            log::error!("Unknown error, Error reading REQUEST, error: {:?}", e);
+                            break;
+                        }
+                    };
+                    log::debug!("start sql: {}", sql);
+
                     self.core_execution.execute_query(sql.as_str()).await
                 }
                 0x04 => {
                     // ComFieldList
-                    let table_name = sql.trim_end_matches("\x00").to_string();
-                    self.core_execution.com_field_list(table_name.as_str()).await
+                    let table_name = match request_payload.get_query_sql().to_str() {
+                        Ok(table_name) => table_name.to_string(),
+                        Err(e) => {
+                            log::error!("Unknown error, Error reading REQUEST, error: {:?}", e);
+                            break;
+                        }
+                    };
+                    log::debug!("set db name: {}", table_name);
+
+                    let table_name = table_name.trim_end_matches("\x00").to_string();
+                    self.core_execution
+                        .com_field_list(table_name.as_str())
+                        .await
+                }
+                0x16 => {
+                    // StmpPrepare
+                    let sql = match request_payload.get_query_sql().to_str() {
+                        Ok(sql) => sql.to_string(),
+                        Err(e) => {
+                            log::error!("Unknown error, Error reading REQUEST, error: {:?}", e);
+                            break;
+                        }
+                    };
+                    log::debug!("start sql: {}", sql);
+
+                    self.core_execution.com_stmt_prepare(sql.as_str()).await
+                }
+                0x17 => {
+                    self.core_execution.com_stmt_execute(request_payload.get_stmt_execute().unwrap()).await
+                }
+                0x19 => {
+                    self.core_execution.com_stmt_close(request_payload.get_stmt_close().unwrap()).await
                 }
                 _ => {
-                    log::error!("Unknown error. The command is not support, command id: {:?}", command_id.to_string());
+                    log::error!(
+                        "Unknown error. The command is not support, command id: {:?}",
+                        command_id.to_string()
+                    );
                     break;
                 }
             };
@@ -192,8 +263,18 @@ impl Handle {
 
     async fn send_message(&mut self, core_output: CoreOutput) {
         match core_output {
-            CoreOutput::FinalCount(FinalCount { affect_rows, last_insert_id, message }) => {
-                let ok_message = message::ok_message(affect_rows, last_insert_id, metadata::StatusFlags::SERVER_STATUS_AUTOCOMMIT, 0, message);
+            CoreOutput::FinalCount(FinalCount {
+                affect_rows,
+                last_insert_id,
+                message,
+            }) => {
+                let ok_message = message::ok_message(
+                    affect_rows,
+                    last_insert_id,
+                    metadata::StatusFlags::SERVER_STATUS_AUTOCOMMIT,
+                    0,
+                    message,
+                );
                 self.write_packet(ok_message).await;
             }
             CoreOutput::ResultSet(result_set) => {
@@ -227,8 +308,21 @@ impl Handle {
                 }
                 self.write_packet(message::eof_message(0, 0)).await;
             }
+            CoreOutput::ComStmtPrepare(StmtPrepare {
+                statement_id,
+                columns,
+                params,
+            }) => {
+                let payload = message::com_stmt_prepare_first_message(1, 0, 2, 0);
+                self.write_packet(payload).await;
+
+                for column_def in params {
+                    let payload = column_def.to_response_payload(true);
+                    self.write_packet(payload).await;
+                }
+                self.write_packet(message::eof_message(0, 0)).await;
+            }
             _ => {}
         }
     }
 }
-

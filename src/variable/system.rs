@@ -61,7 +61,7 @@ impl VarProvider for SystemVar {
                 Ok(ScalarValue::Utf8(Option::from(s)))
             }
             Some(value) => {
-                Ok(ScalarValue::Utf8(Option::from(value.clone())))
+                Ok(value.clone())
             }
         }
     }

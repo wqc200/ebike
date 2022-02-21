@@ -14,9 +14,10 @@ use datafusion::execution::context::ExecutionContext;
 use datafusion::logical_plan::DFSchema;
 use datafusion::logical_plan::{Expr, LogicalPlan};
 use datafusion::scalar::ScalarValue;
+use datafusion::sql::parser::{DFParser, Statement as DFStatement};
 use sqlparser::ast::{
     Assignment, BinaryOperator, Expr as SQLExpr, Ident, ObjectName, Query, Select, SelectItem,
-    SetExpr, TableFactor, TableWithJoins, Value,
+    SetExpr, Statement as SQLStatement, TableFactor, TableWithJoins, Value, Values,
 };
 
 use crate::core::global_context::GlobalContext;
@@ -27,6 +28,117 @@ use crate::meta::meta_util::read_all_schema;
 use crate::meta::{meta_const, meta_util};
 use crate::mysql::error::{MysqlError, MysqlResult};
 use crate::store::engine::engine_util::TableEngineFactory;
+
+pub fn stmt_value(stmt_values: Vec<SQLExpr>, df_statements: Vec<DFStatement>) -> Vec<DFStatement> {
+    let mut new_statements = vec![];
+    for sql_statement in df_statements {
+        let new_sql_statement = match sql_statement.clone() {
+            DFStatement::Statement(statement) => match statement {
+                SQLStatement::Insert {
+                    table_name,
+                    columns,
+                    overwrite,
+                    source,
+                    ..
+                } => {
+                    let source = stmt_value_insert(stmt_values.clone(), source);
+
+                    let insert = SQLStatement::Insert {
+                        or: None,
+                        table_name,
+                        columns,
+                        overwrite,
+                        source,
+                        partitioned: None,
+                        after_columns: vec![],
+                        table: false,
+                    };
+
+                    DFStatement::Statement(insert)
+                }
+                _ => sql_statement,
+            },
+            _ => sql_statement,
+        };
+
+        new_statements.push(new_sql_statement)
+    }
+
+    new_statements
+}
+
+pub fn stmt_value_insert(stmt_values: Vec<SQLExpr>, source: Box<Query>) -> Box<Query> {
+    let mut new_source = source.clone();
+    match &source.body {
+        SetExpr::Values(values) => {
+            let mut current = 0;
+
+            let values = values
+                .0
+                .iter()
+                .map(|row| {
+                    row.iter()
+                        .map(|v| match v {
+                            SQLExpr::Value(Value::OnlyString(_)) => {
+                                let new_value = stmt_values.get(current).unwrap();
+                                current += 1;
+                                new_value.clone()
+                            }
+                            _ => v.clone(),
+                        })
+                        .collect::<Vec<_>>()
+                })
+                .collect::<Vec<_>>();
+
+            let new_values = Values(values);
+
+            new_source.body = SetExpr::Values(new_values);
+        }
+        _ => {}
+    }
+
+    new_source
+}
+//
+// pub struct StmtPrepareValue {
+//     pub index: i64,
+//     pub values: Vec<SQLExpr>,
+// }
+//
+// impl StmtPrepareValue {
+//     pub fn new(values: Vec<SQLExpr>) -> Self {
+//         let index = 0;
+//         Self { index, values }
+//     }
+//
+//     pub fn set_value(&mut self, sql_expr: SQLExpr) -> MysqlResult<SQLExpr> {
+//         match sql_expr.clone() {
+//             SQLExpr::Value(value) => match value {
+//                 Value::OnlyString(val) => {
+//                     let new_value = self.values[self.index];
+//                     self.index += 1;
+//
+//                     return Ok(SQLExpr::Value(new_value));
+//                 }
+//                 _ => {}
+//             },
+//             SQLExpr::BinaryOp { left, op, right } => {
+//                 let result_left = self.set_value(left).unwrap();
+//                 let result_right = self.set_value(right).unwrap();
+//
+//                 let new_sql_expr = SQLExpr::BinaryOp {
+//                     left: result_left,
+//                     op,
+//                     right: result_right,
+//                 };
+//                 return Ok(new_sql_expr);
+//             }
+//             _ => {}
+//         }
+//
+//         Ok(sql_expr)
+//     }
+// }
 
 pub fn check_table_exists(
     global_context: Arc<Mutex<GlobalContext>>,

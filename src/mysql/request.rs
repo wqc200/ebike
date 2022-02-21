@@ -1,7 +1,14 @@
-use bstr::{ByteSlice};
+use bstr::ByteSlice;
+use byteorder::{ByteOrder, LittleEndian};
 
-use super::packet::PacketType;
+use sqlparser::ast::{Expr as SQLExpr, Value};
+
 use crate::mysql::error::{MysqlError, MysqlResult};
+use crate::mysql::mysql_error_code;
+use crate::mysql::mysql_type_code;
+use crate::mysql::packet::PacketType;
+use crate::mysql::mysql_util::parse_length_encoded_bytes;
+use crate::core::output::CoreOutput;
 
 /// A payload is just a wrapper for a Vec<u8>
 #[derive(Debug, PartialEq)]
@@ -30,25 +37,14 @@ impl RequestPayload {
         slice
     }
 
-    pub fn get_query_sql2(&self) -> MysqlResult<&str> {
-        let a = self.bytes[0] as u32;
-        let b = self.bytes[1] as u32;
-        let c = self.bytes[2] as u32;
+    pub fn get_stmt_execute(&self) -> MysqlResult<Vec<u8>> {
+        let value = self.bytes[5..].to_vec();
+        Ok(value)
+    }
 
-        let len = a | b << 8 | c << 16;
-        let start = 1 as usize + 4;
-        let end = len as usize + 4;
-        let slice = &self.bytes[start..end];
-
-        let sql = slice.to_str();
-        match sql {
-            Ok(a) => {
-                Ok(a)
-            }
-            Err(error) => {
-                Err(MysqlError::new_global_error(1105, format!("Unknown error, Error reading SQL, error: {:?}.", error).as_str()))
-            }
-        }
+    pub fn get_stmt_close(&self) -> MysqlResult<&[u8]> {
+        let a = &self.bytes[5..];
+        Ok(a)
     }
 
     pub fn get_command_id(&self) -> u8 {
@@ -88,9 +84,14 @@ impl RequestPayload {
             0x1d => Ok(PacketType::ComDaemon),
             0x1e => Ok(PacketType::ComBinlogDumpGtid),
             0x1f => Ok(PacketType::ComResetConnection),
-            _ => {
-                Err(MysqlError::new_global_error(1105, format!("Unknown error, The packet type is not supported, packet type: {:?}.", a).as_str()))
-            }
+            _ => Err(MysqlError::new_global_error(
+                1105,
+                format!(
+                    "Unknown error, The packet type is not supported, packet type: {:?}.",
+                    a
+                )
+                .as_str(),
+            )),
         }
     }
 }

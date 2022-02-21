@@ -9,6 +9,27 @@ use sqlparser::ast::ObjectName;
 
 use crate::meta::meta_def::TableDef;
 use crate::mysql::error::MysqlError;
+use crate::mysql::metadata::Column;
+
+pub struct StmtPrepare {
+    pub statement_id: u32,
+    pub columns: Vec<Column>,
+    pub params: Vec<Column>,
+}
+
+impl StmtPrepare {
+    pub fn new(statement_id: u32, columns: Vec<Column>, params: Vec<Column>) -> Self {
+        StmtPrepare::new_with_message(statement_id, columns, params)
+    }
+
+    pub fn new_with_message(statement_id: u32, columns: Vec<Column>, params: Vec<Column>) -> Self {
+        Self {
+            statement_id,
+            columns,
+            params,
+        }
+    }
+}
 
 pub struct FinalCount {
     pub affect_rows: u64,
@@ -49,6 +70,8 @@ pub enum CoreOutput {
     ResultSet(ResultSet),
     MultiResultSet(Vec<Vec<RecordBatch>>),
     ComFieldList(ObjectName, ObjectName, TableDef),
+    ComStmtPrepare(StmtPrepare),
+    ComStmtClose,
 }
 
 pub type Result<T> = result::Result<T, OutputError>;

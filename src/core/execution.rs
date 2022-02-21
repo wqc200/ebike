@@ -1,5 +1,8 @@
 //! ExecutionContext contains methods for registering data sources and executing queries
 
+use bstr::ByteSlice;
+use byteorder::{ByteOrder, LittleEndian};
+use std::collections::HashMap;
 use std::string::String;
 use std::sync::{Arc, Mutex};
 
@@ -23,15 +26,19 @@ use sqlparser::ast::{FunctionArg, Ident, OrderByExpr, ShowCreateObject, ShowStat
 use sqlparser::dialect::GenericDialect;
 use uuid::Uuid;
 
+use crate::core::core_def::StmtCacheDef;
 use crate::core::core_util;
 use crate::core::core_util as CoreUtil;
 use crate::core::core_util::register_all_table;
+use crate::core::core_util::stmt_value;
 use crate::core::global_context::GlobalContext;
 use crate::core::logical_plan::{CoreLogicalPlan, CoreSelectFrom, CoreSelectFromWithAssignment};
-use crate::core::output::{CoreOutput, FinalCount, ResultSet};
+use crate::core::output::{CoreOutput, FinalCount, ResultSet, StmtPrepare};
 use crate::core::session_context::SessionContext;
+use crate::core::stmt_context::StmtContext;
 use crate::execute_impl::add_column::AddColumn;
 use crate::execute_impl::com_field_list::ComFieldList;
+use crate::execute_impl::com_stmt_prepare::ComStmtPrepare;
 use crate::execute_impl::create_db::CreateDb;
 use crate::execute_impl::create_table::CreateTable;
 use crate::execute_impl::delete::DeleteFrom;
@@ -57,6 +64,10 @@ use crate::execute_impl::update::Update;
 use crate::meta::meta_util::load_all_table;
 use crate::meta::{meta_const, meta_util};
 use crate::mysql::error::{MysqlError, MysqlResult};
+use crate::mysql::mysql_error_code;
+use crate::mysql::mysql_type_code;
+use crate::mysql::mysql_util::parse_length_encoded_bytes;
+use crate::mysql::mysql_util::parse_stmt_execute_args;
 use crate::util::convert::{convert_ident_to_lowercase, ToIdent, ToLowercase, ToObjectName};
 use crate::variable::system::SystemVar;
 use crate::variable::user_defined::UserDefinedVar;
@@ -65,7 +76,8 @@ use crate::variable::user_defined::UserDefinedVar;
 pub struct Execution {
     global_context: Arc<Mutex<GlobalContext>>,
     session_context: SessionContext,
-    execution_context: ExecutionContext,
+    stmt_context: StmtContext,
+    datafusion_context: ExecutionContext,
     client_id: String,
 }
 
@@ -88,11 +100,14 @@ impl Execution {
             .encode_lower(&mut Uuid::encode_buffer())
             .to_string();
 
+        let stmt_context = StmtContext::new();
+
         Self {
             global_context,
             session_context,
-            execution_context: datafusion_context,
+            datafusion_context,
             client_id,
+            stmt_context,
         }
     }
 }
@@ -101,13 +116,13 @@ impl Execution {
     /// Create a new execution context for in-memory queries
     pub fn try_init(&mut self) -> MysqlResult<()> {
         let variable = UserDefinedVar::new(self.global_context.clone());
-        self.execution_context
+        self.datafusion_context
             .register_variable(VarType::UserDefined, Arc::new(variable));
         let variable = SystemVar::new(self.global_context.clone());
-        self.execution_context
+        self.datafusion_context
             .register_variable(VarType::System, Arc::new(variable));
 
-        core_util::register_all_table(self.global_context.clone(), &mut self.execution_context)
+        core_util::register_all_table(self.global_context.clone(), &mut self.datafusion_context)
             .unwrap();
 
         self.init_udf();
@@ -128,7 +143,7 @@ impl Execution {
             Ok(Arc::new(res) as ArrayRef)
         };
 
-        self.execution_context.register_udf(
+        self.datafusion_context.register_udf(
             create_udf(
                 "database",               // function name
                 vec![],                   // input argument types
@@ -728,7 +743,7 @@ impl Execution {
             .eq(meta_const::SCHEMA_NAME_OF_DEF_INFORMATION_SCHEMA)
         {
             let schema_provider = core_util::get_schema_provider(
-                &mut self.execution_context,
+                &mut self.datafusion_context,
                 meta_const::CATALOG_NAME,
                 meta_const::SCHEMA_NAME_OF_DEF_INFORMATION_SCHEMA,
             );
@@ -772,6 +787,98 @@ impl Execution {
         Ok(())
     }
 
+    pub async fn com_stmt_close(&mut self, bytes: &[u8]) -> MysqlResult<CoreOutput> {
+        let stmtID = LittleEndian::read_u32(&bytes);
+        self.stmt_context.remove_stmt(stmtID);
+
+        Ok(CoreOutput::ComStmtClose)
+    }
+
+    pub async fn com_stmt_execute(&mut self, bytes: Vec<u8>) -> MysqlResult<CoreOutput> {
+        let mut pos = 0;
+
+        // stmt id
+        let end = pos + 4;
+        let slice = bytes[pos..end].to_vec();
+        if end > bytes.len() {
+            return Err(MysqlError::new_global_error(
+                mysql_error_code::CR_MALFORMED_PACKET as u16,
+                format!("reading statement ID failed").as_str(),
+            ));
+        }
+        let stmtID = LittleEndian::read_u32(&slice);
+        pos += 4;
+
+        // cursor type flag
+        let cursor_type_flag = bytes[pos];
+        pos += 1;
+
+        // iteration-count, always 1
+        let iteration_count_offset = 4;
+        pos += iteration_count_offset;
+
+        let mut stmt_cache = self.stmt_context.stmts.get_mut(&stmtID).unwrap();
+
+        let mut sql_statements = stmt_cache.get_statements();
+        let num_params = stmt_cache.get_num_params();
+
+        if num_params > 0 {
+            let mut param_values;
+            let mut param_types;
+
+            // null bitmaps
+            let null_bitmap_len = (num_params + 7) / 8;
+            if bytes.len() < (pos + null_bitmap_len + 1) {
+                return Err(MysqlError::new_global_error(
+                    mysql_error_code::CR_MALFORMED_PACKET as u16,
+                    format!("malformed packet error").as_str(),
+                ));
+            }
+            let end = pos + null_bitmap_len;
+            let null_bitmap = bytes[pos..end].to_vec();
+            pos += null_bitmap_len;
+
+            // new params bound flag
+            let new_params_bound_flag = bytes[pos];
+            pos += 1;
+            if (new_params_bound_flag == 0x01) {
+                let length = num_params * 2;
+
+                let end = pos + length;
+                param_types = bytes[pos..end].to_vec();
+                pos += length;
+                stmt_cache.set_param_types(param_types.as_slice());
+
+                param_values = bytes[pos..].to_vec();
+            } else {
+                param_types = stmt_cache.get_param_types();
+                param_values = bytes[pos..].to_vec();
+            }
+
+            let stmt_values =
+                parse_stmt_execute_args(null_bitmap, param_types, param_values).unwrap();
+            sql_statements = stmt_value(stmt_values, sql_statements);
+        }
+
+        self.execute_statement(sql_statements.clone()).await
+    }
+
+    pub async fn com_stmt_prepare(&mut self, sql: &str) -> MysqlResult<CoreOutput> {
+        let dialect = &GenericDialect {};
+        let df_statements = DFParser::parse_sql_with_dialect(sql, dialect).unwrap();
+
+        let mut com_stmt_prepare = ComStmtPrepare::new(
+            self.global_context.clone(),
+            self.session_context.clone(),
+            self.datafusion_context.clone(),
+        );
+        let result = com_stmt_prepare.execute(&mut self.stmt_context, df_statements).await;
+        match result {
+            Ok(stmt_prepare) => Ok(CoreOutput::ComStmtPrepare(stmt_prepare)),
+            Err(mysql_error) => Err(mysql_error),
+        }
+    }
+
     pub async fn execute_query(&mut self, sql: &str) -> MysqlResult<CoreOutput> {
         let mut new_sql = sql;
         if sql.starts_with("SET NAMES") {
@@ -781,6 +888,13 @@ impl Execution {
         let dialect = &GenericDialect {};
         let statements = DFParser::parse_sql_with_dialect(new_sql, dialect).unwrap();
 
+        self.execute_statement(statements).await
+    }
+
+    pub async fn execute_statement(
+        &mut self,
+        statements: Vec<Statement>,
+    ) -> MysqlResult<CoreOutput> {
         match &statements[0] {
             Statement::Statement(statement) => {
                 let statement = self.fix_statement(statement.clone());
@@ -792,7 +906,7 @@ impl Execution {
                                 let mut drop_column = DropColumn::new(
                                     self.global_context.clone(),
                                     self.session_context.clone(),
-                                    self.execution_context.clone(),
+                                    self.datafusion_context.clone(),
                                 );
                                 let result = drop_column.execute(table_name, column_name).await;
                                 match result {
@@ -806,7 +920,7 @@ impl Execution {
                                 let mut add_column = AddColumn::new(
                                     self.global_context.clone(),
                                     self.session_context.clone(),
-                                    self.execution_context.clone(),
+                                    self.datafusion_context.clone(),
                                 );
                                 let result = add_column.execute(table_name, column_def);
                                 match result {
@@ -832,7 +946,7 @@ impl Execution {
                         let mut create_db = CreateDb::new(
                             self.global_context.clone(),
                             self.session_context.clone(),
-                            self.execution_context.clone(),
+                            self.datafusion_context.clone(),
                         );
                         let result = create_db.execute(db_name);
                         match result {
@@ -852,10 +966,10 @@ impl Execution {
                         let mut create_table = CreateTable::new(
                             self.global_context.clone(),
                             self.session_context.clone(),
-                            self.execution_context.clone(),
+                            self.datafusion_context.clone(),
                         );
-                        let result = create_table
-                            .execute(table_name, columns, constraints, with_options);
+                        let result =
+                            create_table.execute(table_name, columns, constraints, with_options);
                         match result {
                             Ok(count) => Ok(CoreOutput::FinalCount(FinalCount::new(count, 0))),
                             Err(mysql_error) => Err(mysql_error),
@@ -871,9 +985,42 @@ impl Execution {
                         let mut insert = Insert::new(
                             self.global_context.clone(),
                             self.session_context.clone(),
-                            self.execution_context.clone(),
+                            self.datafusion_context.clone(),
                         );
                         let result = insert.execute(table_name, columns, overwrite, source);
+                        match result {
+                            Ok(count) => Ok(CoreOutput::FinalCount(FinalCount::new(count, 0))),
+                            Err(mysql_error) => Err(mysql_error),
+                        }
+                    }
+                    SQLStatement::Update {
+                        table_name,
+                        assignments,
+                        selection,
+                    } => {
+                        let mut update_set = Update::new(
+                            self.global_context.clone(),
+                            self.session_context.clone(),
+                            self.datafusion_context.clone(),
+                        );
+                        let result = update_set.execute(table_name, assignments, selection).await;
+                        match result {
+                            Ok(count) => Ok(CoreOutput::FinalCount(FinalCount::new(count, 0))),
+                            Err(mysql_error) => Err(mysql_error),
+                        }
+                    }
+                    SQLStatement::Delete {
+                        table_name,
+                        selection,
+                    } => {
+                        let mut delete_from = DeleteFrom::new(
+                            self.global_context.clone(),
+                            self.session_context.clone(),
+                            self.datafusion_context.clone(),
+                        );
+                        let result = delete_from
+                            .execute(table_name, selection)
+                            .await;
                         match result {
                             Ok(count) => Ok(CoreOutput::FinalCount(FinalCount::new(count, 0))),
                             Err(mysql_error) => Err(mysql_error),
@@ -883,7 +1030,7 @@ impl Execution {
                         let mut select_from = SelectFrom::new(
                             self.global_context.clone(),
                             self.session_context.clone(),
-                            self.execution_context.clone(),
+                            self.datafusion_context.clone(),
                         );
                         let result = select_from.execute(query).await;
                         match result {
@@ -900,7 +1047,7 @@ impl Execution {
                         let mut explain = Explain::new(
                             self.global_context.clone(),
                             self.session_context.clone(),
-                            self.execution_context.clone(),
+                            self.datafusion_context.clone(),
                         );
                         let result = explain.execute(verbose, analyze, &statement).await;
                         match result {
@@ -917,7 +1064,7 @@ impl Execution {
                             let mut drop_table = DropTable::new(
                                 self.global_context.clone(),
                                 self.session_context.clone(),
-                                self.execution_context.clone(),
+                                self.datafusion_context.clone(),
                             );
                             let result = drop_table.execute(table_name).await;
                             match result {
@@ -931,7 +1078,7 @@ impl Execution {
                             let mut drop_schema = DropSchema::new(
                                 self.global_context.clone(),
                                 self.session_context.clone(),
-                                self.execution_context.clone(),
+                                self.datafusion_context.clone(),
                             );
                             let result = drop_schema.execute(schema_name).await;
                             match result {
@@ -952,7 +1099,7 @@ impl Execution {
                         let mut show_columns = ShowColumns::new(
                             self.global_context.clone(),
                             self.session_context.clone(),
-                            self.execution_context.clone(),
+                            self.datafusion_context.clone(),
                         );
                         let result = show_columns.execute(&table_name).await;
                         match result {
@@ -969,7 +1116,7 @@ impl Execution {
                         let mut drop_schema = SetVariable::new(
                             self.global_context.clone(),
                             self.session_context.clone(),
-                            self.execution_context.clone(),
+                            self.datafusion_context.clone(),
                         );
                         let result = drop_schema.execute();
                         match result {
@@ -984,7 +1131,7 @@ impl Execution {
                             let mut show_create_table = ShowCreateTable::new(
                                 self.global_context.clone(),
                                 self.session_context.clone(),
-                                self.execution_context.clone(),
+                                self.datafusion_context.clone(),
                             );
                             let result = show_create_table.execute(&table_name).await;
                             match result {
@@ -1010,7 +1157,7 @@ impl Execution {
                             let mut show_databases = ShowDatabases::new(
                                 self.global_context.clone(),
                                 self.session_context.clone(),
-                                self.execution_context.clone(),
+                                self.datafusion_context.clone(),
                             );
                             let result = show_databases.execute().await;
                             match result {
@@ -1023,7 +1170,7 @@ impl Execution {
                             let mut show_grants = ShowGrants::new(
                                 self.global_context.clone(),
                                 self.session_context.clone(),
-                                self.execution_context.clone(),
+                                self.datafusion_context.clone(),
                             );
                             let result = show_grants.execute();
                             match result {
@@ -1036,7 +1183,7 @@ impl Execution {
                             let mut show_privileges = ShowPrivileges::new(
                                 self.global_context.clone(),
                                 self.session_context.clone(),
-                                self.execution_context.clone(),
+                                self.datafusion_context.clone(),
                             );
                             let result = show_privileges.execute();
                             match result {
@@ -1049,7 +1196,7 @@ impl Execution {
                             let mut show_engines = ShowEngines::new(
                                 self.global_context.clone(),
                                 self.session_context.clone(),
-                                self.execution_context.clone(),
+                                self.datafusion_context.clone(),
                             );
                             let result = show_engines.execute();
                             match result {
@@ -1062,7 +1209,7 @@ impl Execution {
                             let mut show_charset = ShowCharset::new(
                                 self.global_context.clone(),
                                 self.session_context.clone(),
-                                self.execution_context.clone(),
+                                self.datafusion_context.clone(),
                             );
                             let result = show_charset.execute();
                             match result {
@@ -1075,7 +1222,7 @@ impl Execution {
                             let mut show_collation = ShowCollation::new(
                                 self.global_context.clone(),
                                 self.session_context.clone(),
-                                self.execution_context.clone(),
+                                self.datafusion_context.clone(),
                             );
                             let result = show_collation.execute();
                             match result {
@@ -1083,8 +1230,10 @@ impl Execution {
                                 Err(mysql_error) => Err(mysql_error),
                             }
                         } else {
-                            let message =
-                                format!("Unsupported show statement, show variable: {:?}", variable);
+                            let message = format!(
+                                "Unsupported show statement, show variable: {:?}",
+                                variable
+                            );
                             log::error!("{}", message);
                             Err(MysqlError::new_global_error(67, message.as_str()))
                         }
@@ -1093,7 +1242,7 @@ impl Execution {
                         let mut show_tables = ShowTables::new(
                             self.global_context.clone(),
                             self.session_context.clone(),
-                            self.execution_context.clone(),
+                            self.datafusion_context.clone(),
                         );
                         let result = show_tables.execute(full, db_name).await;
                         match result {
@@ -1105,7 +1254,7 @@ impl Execution {
                         let mut show_variables = ShowVariables::new(
                             self.global_context.clone(),
                             self.session_context.clone(),
-                            self.execution_context.clone(),
+                            self.datafusion_context.clone(),
                         );
                         let result = show_variables.execute(filter).await;
                         match result {
@@ -1135,7 +1284,7 @@ impl Execution {
         let mut set_default_schema = SetDefaultSchema::new(
             self.global_context.clone(),
             self.session_context.clone(),
-            self.execution_context.clone(),
+            self.datafusion_context.clone(),
         );
         let result = set_default_schema.execute(schema_name);
         match result {
@@ -1155,17 +1304,19 @@ impl Execution {
         let mut com_field_list = ComFieldList::new(
             self.global_context.clone(),
             self.session_context.clone(),
-            self.execution_context.clone(),
+            self.datafusion_context.clone(),
         );
         let result = com_field_list.execute(table_name.clone());
         match result {
-            Ok((schema_name, table_name, table_def)) => Ok(CoreOutput::ComFieldList(schema_name, table_name, table_def)),
+            Ok((schema_name, table_name, table_def)) => {
+                Ok(CoreOutput::ComFieldList(schema_name, table_name, table_def))
+            }
             Err(mysql_error) => Err(mysql_error),
         }
     }
 
     pub fn optimize_from_datafusion(&self, logical_plan: &LogicalPlan) -> MysqlResult<LogicalPlan> {
-        let result = self.execution_context.optimize(logical_plan);
+        let result = self.datafusion_context.optimize(logical_plan);
         match result {
             Ok(logical_plan) => Ok(logical_plan),
             Err(datafusion_error) => Err(MysqlError::from(datafusion_error)),
